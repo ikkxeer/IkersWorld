@@ -12,16 +12,38 @@ import {
 import { building, lighthouse, pickable } from './village'
 import { decoratePlaza, exhibit } from './exhibits'
 import { exhibitSpots } from '../data/exhibits'
+import {
+  shape,
+  lanternPoints,
+  benchSites,
+  bushSites,
+  cafeTables,
+  campfire,
+  fenceRuns,
+  isPine,
+  lampSites,
+  parasolSite,
+  picnicSite,
+  rockSites,
+  treeSites,
+  tulipField,
+  pond,
+  beach,
+  palmSites,
+  telescopeSite,
+  shrine,
+  inShrine,
+  shrineFloor,
+  wellSite,
+} from '../data/island'
 import { walkable } from './navigation'
-import { createRiver, paintFalls } from './water'
+import { createPond, createRiver } from './water'
 import { createAmbience } from './ambience'
 
 const river = (z: number) =>
   -2.5 + Math.sin(z * 0.64) * 0.14 + Math.sin(z * 0.28) * 0.12
 const riverWidth = (z: number) =>
   0.66 + 0.09 * Math.cos(z * 0.72) + 0.035 * Math.cos(z * 1.8)
-const endZ = -10.5,
-  frontZ = 10.5
 
 function terrain(b: Batch) {
   const rand = seeded(71)
@@ -35,7 +57,7 @@ function terrain(b: Batch) {
         0.018 * Math.sin(a * 7) +
         0.012 * Math.cos(a * 11) +
         0.008 * Math.sin(a * 19)
-    coast.push([15.65 * Math.cos(a) * ripple, 11.25 * Math.sin(a) * ripple])
+    coast.push([shape.coastX * Math.cos(a) * ripple, shape.coastZ * Math.sin(a) * ripple])
   }
   b.horizontal(
     coast.map(([x, z]) => [x * 1.044, z * 1.052]),
@@ -44,6 +66,8 @@ function terrain(b: Batch) {
     '#f3d7a2',
     undefined,
     0.1,
+    4,
+    true,
   )
   b.horizontal(
     coast.map(([x, z]) => [x * 1.087, z * 1.088]),
@@ -52,6 +76,7 @@ function terrain(b: Batch) {
     '#efcc92',
     undefined,
     0.08,
+    4,
   )
   const nearRiver = (p: XZ, s: number) =>
     s * (p[0] - river(p[1])) - riverWidth(p[1])
@@ -81,28 +106,23 @@ function terrain(b: Batch) {
       const z = last + ((first - last) * j) / 34
       outline.push([river(z) + side * riverWidth(z), z])
     }
-    b.horizontal(outline, -0.28, 0.39, '#d4a36a', undefined, 0.155)
-    b.horizontal(outline, -0.12, 0.19, '#dbb87d', undefined, 0.105)
-    b.horizontal(outline, 0.005, 0.14, '#9fca72', b.kit.grass, 0.095)
+    b.horizontal(outline, -0.28, 0.39, '#d4a36a', undefined, 0.155, 4)
+    b.horizontal(outline, -0.12, 0.19, '#dbb87d', undefined, 0.105, 4)
+    b.horizontal(outline, 0.005, 0.14, '#8fbf66', b.kit.grass, 0.095, 5, true)
   }
-  // Short stepped waterfalls drop into the inlet at either end of the island.
-  for (const s of [-1, 1]) {
-    b.block(
-      [river(s * 10.54), -0.43, s * 10.56],
-      [1.28, 0.6, 0.24],
-      '#8bd1c4',
-      [0, 0.07 * s, 0],
-      true,
-      b.kit.water,
-    )
-    for (let i = 0; i < 5; i++)
-      b.ball(
-        [river(s * 10.57) + (i - 2) * 0.24, -0.74, s * 10.72],
-        [0.25, 0.08, 0.26],
-        '#c2ead3',
-        1,
-      )
-  }
+  // Boulders frame both river mouths where the stream spills to the beach.
+  for (const s of [-1, 1])
+    for (const side of [-1, 1])
+      for (let i = 0; i < 3; i++) {
+        const z = s * (shape.lip + 0.45 + i * 0.45)
+        b.ball(
+          [river(z) + side * (riverWidth(z) * (1.15 + i * 0.35) + 0.25), -0.38 - i * 0.12, z],
+          [0.32 - i * 0.05, 0.26 - i * 0.04, 0.3 - i * 0.04],
+          ['#b6ab99', '#c9bfae', '#a9a08f'][i],
+          1,
+          [0, i + side, 0.1],
+        )
+      }
   // Pebbled cliff faces keep the silhouette varied even at the waterline.
   for (let i = 0; i < 100; i++) {
     const a = rand() * Math.PI * 2,
@@ -180,7 +200,7 @@ function path(b: Batch, pts: XZ[], width: number, c = '#ecd3a0') {
     left.push([x - ((dz / l) * width) / 2, z + ((dx / l) * width) / 2])
     right.push([x + ((dz / l) * width) / 2, z - ((dx / l) * width) / 2])
   })
-  b.horizontal([...left, ...right.reverse()], 0.104, 0.02, c, b.kit.soil, 0.008)
+  b.horizontal([...left, ...right.reverse()], 0.104, 0.02, c, b.kit.soil, 0.008, 2, true)
   routes.push({ pts, width })
 }
 const bridgeWidth = 2.9
@@ -194,7 +214,8 @@ export function islandFloorHeight(x: number, z: number) {
     const across = (x - river(bridgeZ)) / bridgeWidth + 0.5
     if (across >= 0 && across <= 1) return bridgeTop(across)
   }
-  if (z > 10 && Math.abs(x - 2.5) < 0.9) return -0.06
+  if (z > shape.pierFrom + 0.15 && Math.abs(x - 2.5) < 0.9) return -0.06
+  if (inShrine(x, z)) return shrineFloor(x, z)
   // The bevel rises above the nominal top of the grass extrusion.
   return 0.1
 }
@@ -321,64 +342,94 @@ function tree(
   i: number,
   pine = false,
 ) {
-  b.ball([x, 0.1, z], [0.27 * s, 0.13 * s, 0.27 * s], bark, 1)
-  b.stick([x, 0, z], [x + 0.06 * s, 1.5 * s, z], 0.17 * s, bark, 10, 0.66)
+  const lean = ((i * 0.37) % 1) * 0.12 - 0.06
+  // Roots flaring out of the ground.
+  for (let r = 0; r < 4; r++) {
+    const a = (r / 4) * Math.PI * 2 + i
+    b.stick(
+      [x + Math.cos(a) * 0.3 * s, 0.07, z + Math.sin(a) * 0.3 * s],
+      [x + Math.cos(a) * 0.06 * s, 0.32 * s, z + Math.sin(a) * 0.06 * s],
+      0.075 * s,
+      bark,
+      6,
+      0.55,
+    )
+  }
   if (pine) {
-    // A plump cedar: stacked rounded tiers with a little tuft on top.
-    const tiers = ['#4f8d6d', '#5e9d73', '#76b07c', '#8cc086']
-    for (let j = 0; j < 4; j++)
-      b.cylinder(
-        [x, (0.95 + 0.48 * j) * s, z],
-        0.12 * s,
-        (1.02 - 0.2 * j) * s,
-        (0.95 - 0.08 * j) * s,
-        tiers[j],
-        12,
-        [0, i * 0.5 + j * 0.3, 0],
-        b.kit.leaf,
-      )
-    b.ball([x, 2.78 * s, z], [0.2 * s, 0.22 * s, 0.2 * s], tiers[3], 1, [0, 0, 0], b.kit.leaf)
+    b.stick([x, 0, z], [x + lean * s, 1.1 * s, z], 0.15 * s, bark, 8, 0.7)
+    // A plump cedar: drooping tiers with a scalloped skirt and a top tuft.
+    const tiers = ['#447f62', '#528f6a', '#66a374', '#7fb780']
+    const rim = leafDetail > 1 ? 9 : 6
+    for (let j = 0; j < 4; j++) {
+      const y = (0.95 + 0.47 * j) * s,
+        r = (1.02 - 0.21 * j) * s,
+        h = (0.9 - 0.08 * j) * s
+      const cx = x + lean * s * (1 + j * 0.25)
+      b.cylinder([cx, y, z], 0.1 * s, r * 0.92, h, tiers[j], 12, [0, i * 0.5 + j * 0.3, 0], b.kit.leaf)
+      for (let k = 0; k < rim; k++) {
+        const a = (k / rim) * Math.PI * 2 + j * 0.6 + i
+        // Flattened, overlapping lobes make a soft scalloped skirt.
+        b.ball(
+          [cx + Math.cos(a) * r * 0.78, y - h * 0.4, z + Math.sin(a) * r * 0.78],
+          [0.34 * s * (1 - j * 0.15), 0.1 * s, 0.26 * s * (1 - j * 0.15)],
+          tiers[j],
+          1,
+          [0, -a, 0.38],
+          b.kit.leaf,
+        )
+      }
+    }
+    b.ball([x + lean * s * 2, 2.85 * s, z], [0.2 * s, 0.25 * s, 0.2 * s], tiers[3], 1, [0, 0, 0], b.kit.leaf)
     return
   }
   const blossom = i % 7 === 5
   const cols = blossom
-    ? ['#f2a7b8', '#f7bfca', '#fbd5dc']
+    ? ['#e993a8', '#f4b2c2', '#fbd4dd']
     : i % 3 === 0
-      ? ['#6fa758', '#88bb62', '#a2cc6f']
+      ? ['#5f9a4c', '#7cb15a', '#9fcb6c']
       : i % 3 === 1
-        ? ['#66a96a', '#7fbb70', '#9fcd7e']
-        : ['#7db267', '#97c472', '#b1d482']
+        ? ['#5a9c5e', '#73b268', '#98c97a']
+        : ['#6aa65a', '#86ba66', '#aad37d']
+  const top = 1.5 * s
+  b.stick([x, 0, z], [x + lean * s, top, z], 0.17 * s, bark, 10, 0.66)
   for (const side of [-1, 1])
     b.stick(
-      [x, 1.05 * s, z],
-      [x + side * 0.5 * s, 1.6 * s, z + 0.07 * s],
-      0.085 * s,
+      [x + lean * s * 0.7, 1.0 * s, z],
+      [x + side * 0.55 * s, 1.62 * s, z + 0.12 * s * side],
+      0.075 * s,
       bark,
       7,
-      0.62,
+      0.55,
     )
-  // A fluffy crown: one big puff ringed by smaller lobes and a top knot.
-  b.ball([x, 2.0 * s, z], [0.98 * s, 0.86 * s, 0.94 * s], cols[1], leafDetail, [0.1, i, 0], b.kit.leaf)
-  for (let k = 0; k < 5; k++) {
-    const a = (k * Math.PI * 2) / 5 + i * 0.7
+  // A fluffy crown: a shaded core wrapped in leafy clumps spread over a
+  // sphere, brighter where the sun catches the top.
+  const cx = x + lean * s * 1.2,
+    cy = 2.05 * s
+  b.ball([cx, cy, z], [0.9 * s, 0.78 * s, 0.86 * s], cols[0], 1, [0.1, i, 0], b.kit.leaf)
+  const clumps = leafDetail > 1 ? 14 : 9
+  for (let k = 0; k < clumps; k++) {
+    // Fibonacci sphere, skipping the very bottom.
+    const yN = 1 - ((k + 0.5) / clumps) * 1.55
+    const ring = Math.sqrt(Math.max(0, 1 - yN * yN))
+    const a = k * 2.39996 + i
+    const size = (0.42 + 0.1 * ((k * 0.618 + i * 0.3) % 1)) * s
     b.ball(
-      [x + Math.cos(a) * 0.62 * s, (1.68 + (k % 2) * 0.22) * s, z + Math.sin(a) * 0.55 * s],
-      [0.6 * s, 0.55 * s, 0.6 * s],
-      cols[k % 2 ? 0 : 2],
-      leafDetail,
-      [0, a, 0.1],
+      [cx + Math.cos(a) * ring * 0.78 * s, cy + yN * 0.62 * s, z + Math.sin(a) * ring * 0.74 * s],
+      [size, size * 0.86, size],
+      cols[yN > 0.35 ? 2 : yN > -0.2 ? 1 : 0],
+      1,
+      [0, a, 0.2],
       b.kit.leaf,
     )
   }
-  b.ball([x + 0.08 * s, 2.62 * s, z - 0.05 * s], [0.58 * s, 0.5 * s, 0.56 * s], cols[2], leafDetail, [0, i, 0], b.kit.leaf)
   if (blossom || i % 3 === 0)
     for (let j = 0; j < 7; j++) {
       const a = j * 2.4 + i,
-        dx = Math.sin(a) * 0.98 * s,
-        dz = Math.cos(a) * 0.9 * s
+        dx = Math.sin(a) * 1.0 * s,
+        dz = Math.cos(a) * 0.94 * s
       b.ball(
-        [x + dx, 1.7 * s + (j % 3) * 0.2 * s, z + dz],
-        blossom ? [0.11 * s, 0.1 * s, 0.11 * s] : [0.15 * s, 0.16 * s, 0.15 * s],
+        [cx + dx, (1.75 + (j % 3) * 0.22) * s, z + dz],
+        blossom ? [0.1 * s, 0.09 * s, 0.1 * s] : [0.14 * s, 0.15 * s, 0.14 * s],
         blossom ? '#fff1f3' : j % 2 ? '#f29a5e' : '#e2784f',
         1,
       )
@@ -391,7 +442,7 @@ function tulip(b: Batch, x: number, z: number, c: string, r: number) {
   b.ball([x + 0.04, h * 0.55, z], [0.1, 0.03, 0.035], '#7ba561', 0, [0, r * 3, 0.5], b.kit.petals)
   for (let j = 0; j < 3; j++) {
     const a = (j * Math.PI * 2) / 3 + r
-    b.ball([x + Math.cos(a) * 0.03, h + 0.04, z + Math.sin(a) * 0.03], [0.05, 0.075, 0.05], c, 1, [0, a, 0], b.kit.petals)
+    b.ball([x + Math.cos(a) * 0.03, h + 0.04, z + Math.sin(a) * 0.03], [0.05, 0.075, 0.05], c, 0, [0, a, 0], b.kit.petals)
   }
 }
 function flower(b: Batch, x: number, z: number, c: string, r: number) {
@@ -464,16 +515,17 @@ function mailbox(kit: ModelKit) {
   return b.finish()
 }
 function pier(b: Batch) {
-  for (let i = 0; i < 12; i++)
+  const boards = Math.round((shape.pierTo - shape.pierFrom) / 0.28)
+  for (let i = 0; i < boards; i++)
     b.block(
-      [2.5, -0.14, 9.98 + i * 0.28],
+      [2.5, -0.14, shape.pierFrom + 0.1 + i * 0.28],
       [1.78, 0.16, 0.26],
       i % 3 ? '#b98d59' : '#caa06b',
       [0, 0, 0],
       true,
     )
   for (const s of [-1, 1])
-    for (const z of [10.12, 11.6, 12.96]) {
+    for (let z = shape.pierFrom + 0.25; z < shape.pierTo; z += 1.45) {
       b.stick(
         [2.5 + s * 0.8, -1.06, z],
         [2.5 + s * 0.8, 0.18, z],
@@ -484,7 +536,7 @@ function pier(b: Batch) {
     }
   // Small moored wooden dinghy, with a recessed hull and two transverse seats.
   const x = 4.05,
-    z = 11.68
+    z = shape.pierFrom + 2.3
   const hull: XZ[] = [
     [-0.42, -0.63],
     [-0.32, -0.97],
@@ -502,7 +554,7 @@ function pier(b: Batch) {
   b.horizontal(poly(0.84), -0.46, 0.012, '#765742')
   for (const dz of [-0.43, 0.36])
     b.block([x, -0.409, z + dz], [0.72, 0.08, 0.17], '#d2a873')
-  b.stick([3.25, -0.09, 11.6], [3.8, -0.43, 11.1], 0.022, trim, 5)
+  b.stick([3.25, -0.09, z], [3.8, -0.43, z - 0.5], 0.022, trim, 5)
 }
 function bird(kit: ModelKit) {
   const b = new Batch(kit)
@@ -527,7 +579,46 @@ function bird(kit: ModelKit) {
 /* Cosy outdoor props.                                                       */
 
 /** Stone-ringed fire pit with log seats around it. */
-function campfire(b: Batch, x: number, z: number) {
+function campfireCircle(b: Batch, x: number, z: number) {
+  // A soft earthen clearing so the circle feels worn in by many evenings.
+  const clearing: XZ[] = []
+  for (let i = 0; i < 28; i++) {
+    const a = (i / 28) * Math.PI * 2,
+      r = 1.55 + 0.12 * Math.sin(a * 3) + 0.06 * Math.cos(a * 5)
+    clearing.push([x + Math.cos(a) * r, z + Math.sin(a) * r])
+  }
+  b.horizontal(clearing, 0.104, 0.02, '#e4c99a', b.kit.soil, 0.01, 2, true)
+  // Lantern posts and a sagging string of paper lanterns.
+  const lanterns = lanternPoints()
+  for (const [dx, dz] of campfire.posts) {
+    b.stick([x + dx, 0.1, z + dz], [x + dx, 1.75, z + dz], 0.05, timber, 7)
+    b.ball([x + dx, 1.78, z + dz], [0.07, 0.06, 0.07], trim, 1)
+  }
+  const [[ax, az], [bx, bz]] = campfire.posts
+  let prev: [number, number, number] = [x + ax, 1.66, z + az]
+  for (const point of [...lanterns, [x + bx, 1.66, z + bz] as [number, number, number]]) {
+    b.stick(prev, point, 0.008, '#6b5444', 4)
+    prev = point
+  }
+  lanterns.forEach(([lx, ly, lz], i) => {
+    b.stick([lx, ly, lz], [lx, ly - 0.08, lz], 0.006, '#6b5444', 4)
+    b.ball([lx, ly - 0.2, lz], [0.1, 0.13, 0.1], ['#ffd27a', '#ff9e8a', '#fff1c4', '#ffc46b', '#ffb3a1'][i % 5], 1, [0, 0, 0], b.kit.glass)
+    b.cylinder([lx, ly - 0.07, lz], 0.05, 0.05, 0.03, '#7a5a40', 8)
+  })
+  // Firewood, stacked and ready.
+  const [wx, wz] = campfire.woodpile
+  for (let row = 0; row < 3; row++)
+    for (let i = 0; i < 3 - row; i++) {
+      const dz = (i - (2 - row) / 2) * 0.17
+      b.stick([x + wx - 0.32, 0.18 + row * 0.15, z + wz + dz], [x + wx + 0.32, 0.18 + row * 0.15, z + wz + dz], 0.075, i % 2 ? '#a06c45' : '#8f5f3d', 8)
+      b.cylinder([x + wx + 0.325, 0.18 + row * 0.15, z + wz + dz], 0.07, 0.07, 0.01, '#e7c391', 8, [0, 0, Math.PI / 2])
+    }
+  // A ring of wildflowers around the clearing.
+  for (let i = 0; i < 9; i++) {
+    const a = (i / 9) * Math.PI * 2 + 0.4,
+      r = 1.72
+    flower(b, x + Math.cos(a) * r, z + Math.sin(a) * r, ['#fcf2c7', '#f09aa4', '#f6c768'][i % 3], (i * 0.37) % 1)
+  }
   for (let i = 0; i < 9; i++) {
     const a = (i / 9) * Math.PI * 2
     b.ball([x + Math.cos(a) * 0.36, 0.15, z + Math.sin(a) * 0.36], [0.12, 0.09, 0.11], i % 2 ? '#b8ad9c' : '#cfc4b0', 1, [0, a, 0])
@@ -537,11 +628,7 @@ function campfire(b: Batch, x: number, z: number) {
     const a = (i / 3) * Math.PI * 2 + 0.3
     b.stick([x + Math.cos(a) * 0.24, 0.14, z + Math.sin(a) * 0.24], [x - Math.cos(a) * 0.05, 0.3, z - Math.sin(a) * 0.05], 0.05, '#8a5a3a', 6)
   }
-  for (const [dx, dz, turn] of [
-    [-0.78, -0.12, 1.4],
-    [0.62, 0.48, -0.75],
-    [-0.12, 0.86, 0.15],
-  ]) {
+  for (const [dx, dz, turn] of campfire.logs) {
     const cx = x + dx,
       cz = z + dz
     const ex = Math.cos(turn) * 0.36,
@@ -622,6 +709,287 @@ function mossyRocks(b: Batch, x: number, z: number, s: number) {
   b.ball([x + 0.38 * s, 0.1 * s, z + 0.12 * s], [0.24 * s, 0.18 * s, 0.22 * s], '#cfc7b8', 1, [0, z, 0])
   b.ball([x - 0.05 * s, 0.32 * s, z - 0.04 * s], [0.3 * s, 0.1 * s, 0.26 * s], '#8fbb6d', 1, [0, x, 0.1])
 }
+/** Rows of tulips in a tilled bed, with a scarecrow keeping watch. */
+function tulipBed(b: Batch) {
+  const { center, width, depth } = tulipField
+  const [x, z] = center
+  const bed: XZ[] = []
+  for (let i = 0; i < 24; i++) {
+    const a = (i / 24) * Math.PI * 2
+    const c = Math.cos(a),
+      s = Math.sin(a)
+    // A rounded rectangle (superellipse).
+    bed.push([x + Math.sign(c) * Math.abs(c) ** 0.45 * (width / 2 + 0.3), z + Math.sign(s) * Math.abs(s) ** 0.45 * (depth / 2 + 0.3)])
+  }
+  b.horizontal(bed, 0.104, 0.02, '#b98a5e', b.kit.soil, 0.01, 2, true)
+  const rows = ['#f26d6d', '#f6c24d', '#f39ac4', '#fffaf0', '#b49ae6']
+  rows.forEach((colour, r) => {
+    const rz = z - depth / 2 + (r * depth) / (rows.length - 1)
+    for (let i = 0; i < 11; i++) {
+      const rx = x - width / 2 + (i * width) / 10
+      tulip(b, rx + ((i * 7 + r) % 3) * 0.03, rz, colour, ((i * 0.37 + r * 0.21) % 1))
+    }
+  })
+  // Scarecrow.
+  const sx = x + width / 2 + 0.75,
+    sz = z - 0.2
+  b.stick([sx, 0.1, sz], [sx, 1.55, sz], 0.05, timber, 6)
+  b.stick([sx - 0.55, 1.15, sz], [sx + 0.55, 1.15, sz], 0.04, timber, 6)
+  b.block([sx, 1.05, sz], [0.5, 0.45, 0.22], '#6f9bc8', [0, 0, 0], true)
+  b.ball([sx, 1.62, sz], [0.2, 0.2, 0.19], '#f3dfb0', 1)
+  b.cylinder([sx, 1.8, sz], 0.32, 0.32, 0.04, '#e0b75e', 14)
+  b.cylinder([sx, 1.9, sz], 0.13, 0.17, 0.16, '#e0b75e', 12)
+  for (const s of [-1, 1]) b.ball([sx + s * 0.07, 1.65, sz + 0.17], [0.025, 0.025, 0.015], '#4a3a30', 0)
+  b.ball([sx, 1.57, sz + 0.18], [0.05, 0.015, 0.01], '#c66b55', 0)
+}
+/** Rim stones, lily pads, a lotus and reeds around the pond. */
+function pondDressing(b: Batch) {
+  const [x, z] = pond.center
+  const r = pond.radius
+  for (let i = 0; i < 18; i++) {
+    const a = (i / 18) * Math.PI * 2
+    b.ball([x + Math.cos(a) * (r + 0.12), 0.13, z + Math.sin(a) * (r + 0.1)], [0.15 + (i % 3) * 0.03, 0.09, 0.13], i % 2 ? '#c9c0b0' : '#b3aa98', 1, [0, a, 0])
+  }
+  for (const [dx, dz, s] of [
+    [-0.45, 0.25, 0.26],
+    [0.35, -0.4, 0.3],
+    [0.55, 0.45, 0.22],
+    [-0.2, -0.55, 0.2],
+  ]) {
+    b.cylinder([x + dx, 0.128, z + dz], s, s, 0.012, '#6fae63', 16)
+    b.ball([x + dx + s * 0.4, 0.13, z + dz + s * 0.1], [s * 0.25, 0.012, s * 0.2], '#4f9d8f', 0)
+  }
+  // A pink lotus floating on one pad.
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2
+    b.ball([x + 0.55 + Math.cos(a) * 0.06, 0.19, z + 0.45 + Math.sin(a) * 0.06], [0.07, 0.05, 0.035], '#f4a3bf', 1, [0.5, a, 0])
+  }
+  b.ball([x + 0.55, 0.21, z + 0.45], [0.04, 0.035, 0.04], '#f6d36a', 1)
+  for (let i = 0; i < 7; i++) {
+    const a = 2.2 + i * 0.22
+    const rx = x + Math.cos(a) * (r + 0.35),
+      rz = z + Math.sin(a) * (r + 0.3)
+    const h = 0.5 + (i % 3) * 0.15
+    b.stick([rx, 0.1, rz], [rx + 0.04, h, rz], 0.015, '#7f9a52', 4)
+    b.ball([rx + 0.04, h, rz], [0.035, 0.09, 0.035], '#9a7246', 0)
+  }
+}
+/** A swaying palm: a curved, ringed trunk, drooping fronds and coconuts. */
+function palm(b: Batch, x: number, z: number, lean: number) {
+  let px = x,
+    py = 0.1
+  const dx = Math.cos(lean) * 0.12,
+    dz = Math.sin(lean) * 0.12
+  for (let i = 0; i < 9; i++) {
+    const nx = px + dx * (i / 4),
+      ny = py + 0.32
+    b.stick([px, py, z + dz * i * 0.5], [nx, ny, z + dz * (i + 1) * 0.5], 0.13 - i * 0.006, i % 2 ? '#b58a5c' : '#a27a4f', 8, 0.9)
+    px = nx
+    py = ny
+  }
+  const tz = z + dz * 4.5
+  for (let i = 0; i < 7; i++) {
+    const a = (i / 7) * Math.PI * 2
+    for (let k = 1; k <= 3; k++)
+      b.ball(
+        [px + Math.cos(a) * 0.32 * k, py - 0.06 * k * k, tz + Math.sin(a) * 0.32 * k],
+        [0.24, 0.035, 0.11],
+        k === 3 ? '#8fc86a' : '#6fae58',
+        1,
+        [0, -a, -0.25 * k],
+        b.kit.leaf,
+      )
+  }
+  for (let i = 0; i < 3; i++) b.ball([px + Math.cos(i * 2.1) * 0.12, py - 0.12, tz + Math.sin(i * 2.1) * 0.12], [0.09, 0.09, 0.09], '#7a5638', 1)
+}
+/** Sand, a sandcastle, shells, starfish and a beach ball. */
+function beachDressing(b: Batch) {
+  const [x, z] = beach.center
+  const sand: XZ[] = []
+  for (let i = 0; i < 30; i++) {
+    const a = (i / 30) * Math.PI * 2
+    const wobble = 1 + 0.08 * Math.sin(a * 3) + 0.05 * Math.cos(a * 5)
+    sand.push([x + Math.cos(a) * beach.radiusX * wobble, z + Math.sin(a) * beach.radiusZ * wobble])
+  }
+  b.horizontal(sand, 0.104, 0.02, '#f5e2b6', b.kit.soil, 0.012, 2, true)
+  const cx = x - 1.2,
+    cz = z + 0.3
+  b.cylinder([cx, 0.2, cz], 0.3, 0.34, 0.2, '#e8c98f', 10)
+  for (const [dx, dz] of [
+    [-0.28, -0.2],
+    [0.28, -0.2],
+    [0, 0.28],
+  ]) {
+    b.cylinder([cx + dx, 0.33, cz + dz], 0.1, 0.11, 0.3, '#ecd09a', 8)
+    b.cylinder([cx + dx, 0.54, cz + dz], 0.01, 0.12, 0.14, '#e2bd80', 8)
+  }
+  b.cylinder([cx, 0.45, cz], 0.14, 0.16, 0.3, '#ecd09a', 8)
+  b.stick([cx, 0.6, cz], [cx, 0.85, cz], 0.01, '#8a6a4a', 3)
+  b.prism([[0, 0], [0.16, 0.05], [0, 0.1]], 0.01, '#ef6c5c', [cx, 0.74, cz])
+  for (const [dx, dz, colour] of [
+    [0.9, 0.5, '#f29a6c'],
+    [-0.4, -0.7, '#f6c24d'],
+    [1.7, -0.3, '#ef8a8a'],
+  ] as const) {
+    for (let i = 0; i < 5; i++) {
+      const a = (i / 5) * Math.PI * 2
+      b.ball([x + dx + Math.cos(a) * 0.07, 0.125, z + dz + Math.sin(a) * 0.07], [0.07, 0.02, 0.03], colour, 0, [0, -a, 0])
+    }
+  }
+  for (const [dx, dz] of [
+    [0.2, -0.9],
+    [-1.9, 0.6],
+    [2.2, 0.4],
+  ])
+    b.ball([x + dx, 0.125, z + dz], [0.06, 0.03, 0.05], '#fdf1e6', 1, [0, dx, 0])
+  // A striped beach ball.
+  const bx = x + 0.6,
+    bz = z - 0.2
+  b.ball([bx, 0.3, bz], [0.2, 0.2, 0.2], '#fffaf0', 2)
+  b.ball([bx, 0.3, bz], [0.204, 0.08, 0.204], '#ef6c5c', 2, [0.4, 0, 0])
+  b.ball([bx, 0.3, bz], [0.08, 0.204, 0.204], '#5fb3c9', 2, [0, 0, 0.4])
+}
+/** A brass telescope on a tripod, pointed at the horizon. */
+function telescope(b: Batch, x: number, z: number) {
+  for (let i = 0; i < 3; i++) {
+    const a = (i / 3) * Math.PI * 2
+    b.stick([x + Math.cos(a) * 0.3, 0.1, z + Math.sin(a) * 0.3], [x, 0.95, z], 0.03, timber, 5)
+  }
+  b.stick([x + 0.35, 1.18, z + 0.1], [x - 0.4, 0.95, z - 0.12], 0.07, '#d7a94d', 10, 0.7)
+  b.cylinder([x + 0.37, 1.19, z + 0.1], 0.075, 0.075, 0.03, '#b8862e', 10, [0, 0, Math.PI / 2 - 0.3])
+}
+
+/** Rounded, slightly irregular flagstones set into the lawn along a line. */
+function steppingStones(b: Batch, pts: XZ[]) {
+  let k = 0
+  for (let i = 0; i < pts.length - 1; i++) {
+    const [ax, az] = pts[i],
+      [bx, bz] = pts[i + 1]
+    const span = Math.hypot(bx - ax, bz - az)
+    const nx = -(bz - az) / span,
+      nz = (bx - ax) / span
+    for (let d = 0; d < span; d += 0.5, k++) {
+      const side = (k % 2 ? 1 : -1) * 0.16
+      const x = ax + ((bx - ax) * d) / span + nx * side,
+        z = az + ((bz - az) * d) / span + nz * side
+      const s = 0.28 + ((k * 0.37) % 1) * 0.09
+      b.ball([x, 0.1, z], [s, 0.05, s * 0.82], k % 3 ? '#c6b2a4' : '#b9a497', 1, [0, k * 1.3, 0])
+      b.ball([x - 0.02, 0.125, z - 0.02], [s * 0.82, 0.03, s * 0.66], k % 3 ? '#d9c8ba' : '#cdbaab', 1, [0, k * 1.3, 0])
+    }
+  }
+}
+
+/**
+ * The mountain shrine: an octagonal stone tournament ring on a chamfered
+ * dais, a vermilion torii gate, rock spires crowned with little pines, a
+ * bronze gong, a straw-wrapped training post, stone lanterns and banners.
+ */
+function mountainShrine(b: Batch) {
+  const [cx, cz] = shrine.center
+  const r = shrine.radius
+  const octagon = (radius: number): XZ[] =>
+    Array.from({ length: 8 }, (_, i) => {
+      const a = (i / 8) * Math.PI * 2 + Math.PI / 8
+      return [cx + Math.cos(a) * radius, cz + Math.sin(a) * radius]
+    })
+  b.horizontal(octagon(r + 0.12), 0.16, 0.16, '#b9ad9c', undefined, 0.06, 2)
+  b.horizontal(octagon(r), 0.215, 0.06, '#e6dccb', undefined, 0.025, 1)
+  // Stone tiles: a grid of slightly varied slabs.
+  for (let i = -3; i <= 3; i++)
+    for (let j = -3; j <= 3; j++) {
+      const x = cx + i * 0.38,
+        z = cz + j * 0.38
+      if (Math.hypot(x - cx, z - cz) > r - 0.18) continue
+      b.block([x, 0.22, z], [0.35, 0.02, 0.35], (i + j) % 2 ? '#ddd2bf' : '#d2c6b2', [0, 0, 0], true)
+    }
+  // A painted emblem in the middle: a sun ring with an original flame mark.
+  b.cylinder([cx, 0.235, cz], 0.5, 0.5, 0.012, '#d9534a', 32)
+  b.cylinder([cx, 0.242, cz], 0.42, 0.42, 0.012, '#f3e7cf', 32)
+  b.prism(
+    [
+      [0, -0.3],
+      [0.17, -0.05],
+      [0.07, 0.02],
+      [0.12, 0.3],
+      [-0.05, 0.08],
+      [-0.15, 0.1],
+      [-0.06, -0.1],
+    ],
+    0.012,
+    '#e08a2c',
+    [cx, 0.25, cz],
+    [-Math.PI / 2, 0, 0],
+  )
+  // Corner posts with gold caps on the octagon's points.
+  for (const [x, z] of octagon(r + 0.06)) {
+    b.cylinder([x, 0.34, z], 0.06, 0.07, 0.3, '#8a3a32', 8)
+    b.ball([x, 0.5, z], [0.07, 0.06, 0.07], '#e8b85a', 1)
+  }
+  // Steps up from the gate.
+  const [gx, gz] = shrine.gate
+  const toRing = shrine.gateYaw
+  for (let k = 0; k < 2; k++) {
+    const d = r + 0.25 + k * 0.22
+    b.block([cx - Math.sin(toRing) * d, 0.13 - k * 0.03, cz - Math.cos(toRing) * d], [0.9, 0.06, 0.24], '#cfc3ae', [0, toRing, 0], true)
+  }
+  // Torii gate.
+  const across = toRing + Math.PI / 2
+  const post = (side: number): [number, number] => [gx + Math.sin(across) * 0.78 * side, gz + Math.cos(across) * 0.78 * side]
+  for (const side of [-1, 1]) {
+    const [px, pz] = post(side)
+    b.cylinder([px, 0.95, pz], 0.08, 0.1, 1.75, '#d8432f', 10)
+    b.cylinder([px, 0.12, pz], 0.14, 0.15, 0.14, '#3a2a26', 10)
+  }
+  b.block([gx, 1.88, gz], [2.1, 0.11, 0.16], '#2a2422', [0, across - Math.PI / 2, 0], true)
+  b.block([gx, 1.74, gz], [1.95, 0.1, 0.14], '#d8432f', [0, across - Math.PI / 2, 0], true)
+  b.block([gx, 1.5, gz], [1.7, 0.08, 0.11], '#d8432f', [0, across - Math.PI / 2, 0], true)
+  b.block([gx, 1.62, gz], [0.1, 0.2, 0.12], '#d8432f', [0, across - Math.PI / 2, 0], true)
+  // Rock spires topped with tiny pines.
+  shrine.spires.forEach(([x, z, h], i) => {
+    const rocks = ['#a69886', '#b8aa96', '#9a8c7a']
+    const layers = Math.round(h / 0.45)
+    for (let k = 0; k < layers; k++) {
+      const t = k / layers
+      const w = (0.55 + 0.08 * h) * (1 - t * 0.45)
+      b.ball([x + Math.sin(k * 1.7 + i) * 0.06, 0.2 + t * h, z + Math.cos(k * 1.3 + i) * 0.06], [w, 0.34, w * 0.9], rocks[(k + i) % 3], 1, [0, k, 0])
+    }
+    b.ball([x, h + 0.25, z], [0.4, 0.14, 0.36], '#7fae63', 1, [0, i, 0], b.kit.leaf)
+    b.stick([x + 0.05, h + 0.25, z], [x + 0.1, h + 0.75, z], 0.04, bark, 6)
+    for (let k = 0; k < 3; k++)
+      b.cylinder([x + 0.1, h + 0.55 + k * 0.17, z], 0.03, 0.26 - k * 0.07, 0.24, ['#447f62', '#528f6a', '#66a374'][k], 9, [0, k, 0], b.kit.leaf)
+  })
+  // Bronze gong in a wooden frame, facing the ring.
+  const [ox, oz] = shrine.gong
+  for (const side of [-1, 1]) b.stick([ox, 0.1, oz + side * 0.45], [ox, 1.45, oz + side * 0.45], 0.05, timber, 7)
+  b.stick([ox, 1.42, oz - 0.55], [ox, 1.42, oz + 0.55], 0.055, timber, 7)
+  b.cylinder([ox, 0.85, oz], 0.36, 0.36, 0.05, '#c9963a', 24, [0, 0, Math.PI / 2])
+  b.cylinder([ox + 0.03, 0.85, oz], 0.15, 0.15, 0.02, '#e8b85a', 18, [0, 0, Math.PI / 2])
+  for (const side of [-1, 1]) b.stick([ox, 1.4, oz + side * 0.2], [ox, 1.18, oz + side * 0.12], 0.008, '#5a4030', 3)
+  b.stick([ox + 0.35, 0.1, oz + 0.3], [ox + 0.35, 0.7, oz + 0.3], 0.025, '#8a5a3a', 5)
+  b.ball([ox + 0.35, 0.72, oz + 0.3], [0.08, 0.08, 0.08], '#e6dccb', 1)
+  // Training post wrapped in straw.
+  const [tx, tz] = shrine.post
+  b.cylinder([tx, 0.65, tz], 0.12, 0.14, 1.2, '#9a6a45', 10)
+  for (const y of [0.85, 1.05]) b.cylinder([tx, y, tz], 0.16, 0.16, 0.14, '#e2c27a', 10)
+  b.stick([tx - 0.3, 0.75, tz], [tx + 0.3, 0.75, tz], 0.04, '#9a6a45', 6)
+  // Stone lanterns.
+  for (const [lx, lz] of shrine.lanterns) {
+    b.cylinder([lx, 0.18, lz], 0.18, 0.22, 0.16, '#b9ad9c', 8)
+    b.cylinder([lx, 0.45, lz], 0.07, 0.08, 0.4, '#c6baa8', 8)
+    b.block([lx, 0.72, lz], [0.3, 0.2, 0.3], '#cfc3ae', [0, 0.3, 0], true)
+    b.block([lx, 0.72, lz], [0.18, 0.12, 0.31], '#ffd28a', [0, 0.3, 0], false, b.kit.glass)
+    b.cylinder([lx, 0.88, lz], 0.03, 0.3, 0.14, '#b9ad9c', 8, [0, 0.3, 0])
+    b.ball([lx, 0.98, lz], [0.06, 0.06, 0.06], '#b9ad9c', 1)
+  }
+  // Tall banners in red and gold.
+  shrine.banners.forEach(([fx, fz], i) => {
+    b.stick([fx, 0.1, fz], [fx, 2.2, fz], 0.03, '#3a2a26', 6)
+    b.ball([fx, 2.22, fz], [0.05, 0.05, 0.05], '#e8b85a', 1)
+    b.block([fx + 0.16, 1.55, fz], [0.3, 0.95, 0.02], i % 2 ? '#e8b85a' : '#c8323a', [0, 0.4, 0])
+    b.block([fx + 0.16, 1.55, fz + 0.012], [0.12, 0.12, 0.01], i % 2 ? '#c8323a' : '#e8b85a', [0, 0.4, 0])
+  })
+}
+
 /** Plant little clumps of flowers along the verges of every path. */
 function verges(b: Batch, rand: () => number, low: boolean) {
   const palette = ['#fcf2c7', '#f09aa4', '#f6c768', '#b9a2d9', '#f6a77d', '#9ccbf0', '#ffffff']
@@ -638,7 +1006,7 @@ function verges(b: Batch, rand: () => number, low: boolean) {
           const off = width / 2 + 0.28 + rand() * 0.35
           const x = ax + ((bx - ax) * d) / span + nx * off * side,
             z = az + ((bz - az) * d) / span + nz * off * side
-          if (Math.abs(x - river(z)) < 1.35 || !walkable(x, z)) continue
+          if (Math.abs(x - river(z)) < 1.35 || !walkable(x, z) || inShrine(x, z)) continue
           if (x > -8.9 && x < -3.3 && z > 2.0 && z < 6.6) continue
           const c = palette[Math.floor(rand() * palette.length)],
             tall = rand() < 0.35
@@ -686,15 +1054,12 @@ export function createScenery(low: boolean) {
     ],
     1.4,
   )
-  path(
-    staticParts,
-    [
-      [-7, 1.12],
-      [-7.4, 0.25],
-      [-7.48, -1.84],
-    ],
-    1.21,
-  )
+  // Flagstones lead up to Iker's front door.
+  steppingStones(staticParts, [
+    [-7, 1.0],
+    [-7.4, 0.25],
+    [-7.55, -1.5],
+  ])
   path(
     staticParts,
     [
@@ -755,7 +1120,9 @@ export function createScenery(low: boolean) {
       [2.79, 4.74],
       [2.83, 6.52],
       [2.62, 8.64],
-      [2.48, 10.03],
+      [2.5, 10.6],
+      [2.5, 12.0],
+      [2.5, 13.2],
     ],
     1.13,
   )
@@ -774,135 +1141,67 @@ export function createScenery(low: boolean) {
     0.02,
     '#e3cfa2',
     staticParts.kit.soil,
+    0,
+    1,
+    true,
   )
+  // Paths out to the tulip field, the pond, the beach and the lookout.
+  path(staticParts, [[-8.48, 1.05], [-11.0, 0.4], [-11.1, -3.0], [-11.0, -5.9], [-9.6, -8.4]], 1.05)
+  path(staticParts, [[1.8, -2.6], [3.2, -4.6], [3.7, -7.0], [5.0, -8.9]], 1.0)
+  path(staticParts, [[9.7, 5.75], [10.6, 7.0], [11.0, 8.1]], 1.05)
+  path(staticParts, [[-13, 0.7], [-15.2, 0.85]], 1.1)
   decoratePlaza(staticParts)
   bridge(staticParts, 1)
   bridge(staticParts, 6.5)
   pier(staticParts)
   lighthouse(staticParts, 11.5, -5.75)
-  fence(staticParts, [
-    [-10.4, -4.7],
-    [-10.5, -3.45],
-    [-10.6, -2.12],
-    [-10.4, -1],
-    [-9.24, -0.9],
-  ])
-  fence(staticParts, [
-    [-5, -5.17],
-    [-4.37, -4.25],
-    [-4.36, -2.94],
-    [-4.28, -1.74],
-  ])
-  fence(staticParts, [
-    [4.15, -6.61],
-    [5.4, -6.31],
-    [6.4, -5.83],
-  ])
-  fence(staticParts, [
-    [7.23, 7.04],
-    [8.48, 7.01],
-    [9.65, 6.81],
-  ])
-  const lampSites: XZ[] = [
-    [-8.25, 0.03],
-    [0.82, -2.9],
-    [9.99, -0.27],
-    [6.85, 5.42],
-    [-8.55, 6.35],
-    [2.05, 8.72],
-  ]
+  for (const run of fenceRuns) fence(staticParts, run)
   for (const [x, z] of lampSites) lamp(staticParts, x, z)
   // Cosy corners: a campfire circle, a picnic, the old well and a beach nook.
-  const fireSite: XZ = [-0.45, 4.2]
-  campfire(staticParts, ...fireSite)
-  picnic(staticParts, 4.4, 3.5)
-  well(staticParts, 5.7, -4.9)
-  parasol(staticParts, 12.1, 4.1)
-  for (const [x, z, k] of [
-    [-12.7, -1.4, 1],
-    [11.9, -1.7, 0.8],
-    [-3.6, -8.2, 0.9],
-    [7.2, 8.25, 0.85],
-    [-9.9, -6.2, 0.7],
-    [13.1, 1.2, 0.75],
-  ])
-    mossyRocks(staticParts, x, z, k)
-  bench(staticParts, -5.92, -0.24)
-  bench(staticParts, 5.88, -0.14)
-  bench(staticParts, -9.96, 4.01)
-  for (const [x, z] of [
-    [5.8, 4.75],
-    [6.22, 3.08],
-  ]) {
+  const fireSite = campfire.fire
+  campfireCircle(staticParts, ...fireSite)
+  picnic(staticParts, ...picnicSite)
+  well(staticParts, ...wellSite)
+  parasol(staticParts, ...parasolSite)
+  for (const [x, z, k] of rockSites) mossyRocks(staticParts, x, z, k)
+  // The new corners of the island.
+  tulipBed(staticParts)
+  pondDressing(staticParts)
+  beachDressing(staticParts)
+  palmSites.forEach(([x, z], i) => palm(staticParts, x, z, 0.6 + i * 2.1))
+  telescope(staticParts, ...telescopeSite)
+  mountainShrine(staticParts)
+  path(staticParts, [[-8.6, 5.6], [-9.16, 6.38], [-9.75, 6.85]], 1.05)
+  group.add(createPond(...pond.center, pond.radius, kit.clock))
+  // Wildflowers scattered across the wide outer meadow.
+  for (let i = 0; i < (low ? 26 : 60); i++) {
+    const a = rand() * Math.PI * 2,
+      r = 0.72 + rand() * 0.24
+    const x = Math.cos(a) * shape.walkX * r,
+      z = Math.sin(a) * shape.walkZ * r
+    if (Math.abs(x - river(z)) < 1.4 || !walkable(x, z) || inShrine(x, z)) continue
+    const colour = ['#fcf2c7', '#f09aa4', '#f6c768', '#b9a2d9', '#ffffff', '#9ccbf0'][i % 6]
+    for (let k = 0; k < 3; k++) flower(staticParts, x + (rand() - 0.5) * 0.4, z + (rand() - 0.5) * 0.3, colour, rand())
+  }
+  for (const [x, z] of benchSites) bench(staticParts, x, z)
+  for (const [x, z] of cafeTables) {
     staticParts.cylinder([x, 0.53, z], 0.42, 0.42, 0.1, '#d2a57a', 12)
     staticParts.stick([x, 0.05, z], [x, 0.49, z], 0.071, timber)
     for (const s of [-1, 1]) {
-      staticParts.cylinder(
-        [x + s * 0.48, 0.27, z],
-        0.19,
-        0.19,
-        0.09,
-        '#bc895b',
-        8,
-      )
-      staticParts.stick(
-        [x + s * 0.48, 0.04, z],
-        [x + s * 0.48, 0.24, z],
-        0.046,
-        timber,
-      )
+      staticParts.cylinder([x + s * 0.48, 0.27, z], 0.19, 0.19, 0.09, '#bc895b', 8)
+      staticParts.stick([x + s * 0.48, 0.04, z], [x + s * 0.48, 0.24, z], 0.046, timber)
     }
   }
-  const treeSites: XZ[] = [
-    [-12, -3],
-    [-13.8, 0.1],
-    [-11.7, -5.42],
-    [-10.2, -6.25],
-    [-8.5, -6.68],
-    [-6.3, -7.15],
-    [-4.56, -8.85],
-    [-0.8, -8.68],
-    [2.78, -8.88],
-    [5.3, -7.69],
-    [7.4, -6.71],
-    [13.36, -2.26],
-    [13.8, -0.3],
-    [12.4, 2.29],
-    [10.5, 6.49],
-    [-11.42, 2.7],
-    [-11.13, 5.42],
-    [-9.27, 7.25],
-    [-6.91, 8.01],
-    [0.04, -3.17],
-    [4.24, -4.02],
-    [4.93, 1.98],
-    [0.43, 8.3],
-    [5.66, 8.11],
-  ]
+  /** Every tree's trunk and crown, for shaking and falling leaves. */
+  const crowns: [number, number, number][] = []
   treeSites.forEach(([x, z], i) => {
-    const pine = i % 5 === 1 || i % 7 === 3
-    tree(staticParts, x, z, 0.77 + rand() * 0.59, i, pine)
+    const pine = isPine(i)
+    const size = 0.77 + rand() * 0.59
+    tree(staticParts, x, z, size, i, pine)
+    crowns.push([x, z, (pine ? 1.9 : 2.1) * size])
     if (!pine && i % 4 === 1) mushrooms(staticParts, x + 0.72, z + 0.42, i)
   })
   verges(staticParts, rand, low)
-  const bushSites: XZ[] = [
-    [-8.78, -2],
-    [-5.48, -2],
-    [-10.24, 1.79],
-    [-5, -6.04],
-    [0.18, -4.25],
-    [2.9, -4.33],
-    [7.17, -1.83],
-    [10.47, -1.98],
-    [7.33, 2.17],
-    [8.78, 2.24],
-    [-5.31, 7.3],
-    [-11, 3.55],
-    [-0.42, 7.77],
-    [4.47, 7.84],
-    [10.67, 5.24],
-    [3.98, -2.01],
-  ]
   bushSites.forEach(([x, z], i) =>
     bush(
       staticParts,
@@ -947,9 +1246,9 @@ export function createScenery(low: boolean) {
   for (let i = 0; i < (low ? 60 : 125); i++) {
     const a = rand() * Math.PI * 2,
       r = 0.77 + rand() * 0.18,
-      x = Math.cos(a) * 15 * r,
-      z = Math.sin(a) * 10.3 * r
-    if (Math.abs(x - river(z)) < 1.13) continue
+      x = Math.cos(a) * shape.walkX * r,
+      z = Math.sin(a) * shape.walkZ * r
+    if (Math.abs(x - river(z)) < 1.13 || inShrine(x, z)) continue
     for (let j = 0; j < 2; j++)
       staticParts.ball(
         [x + j * 0.06, 0.12, z],
@@ -981,12 +1280,21 @@ export function createScenery(low: boolean) {
   add(pickable(sign(kit), 'map', 0, 2))
   group.add(staticParts.finish())
   const daylightGlow = { value: 1 }
-  group.add(createRiver(river, riverWidth, endZ - 0.35, frontZ + 0.35, kit.clock, daylightGlow))
-  paintFalls(kit.water, kit.clock)
+  group.add(createRiver(river, riverWidth, kit.clock, daylightGlow, shape.lip))
   const ambience = createAmbience({
+    kit,
+    crowns: crowns.filter((_, i) => !isPine(i)),
+    perches: [
+      [-9.6, -1.4],
+      [3.3, -1.3],
+      [-6.4, 1.85],
+      [6.3, 6.7],
+      [-3.7, 7.7],
+    ],
     low,
     lamps: lampSites,
     campfire: fireSite,
+    lanterns: lanternPoints(),
     chimneys: [
       [-7.85, 3.4, -3.43],
       [7.15, 3.4, 3.57],
@@ -996,8 +1304,8 @@ export function createScenery(low: boolean) {
   })
   group.add(ambience.group)
   const seabirds = [
-    [2.95, 12.52],
-    [-10.9, 6.15],
+    [3.3, shape.pierFrom + 1.7],
+    [-15.2, -2.6],
   ].map(([x, z], i) => {
     const g = bird(kit)
     g.position.set(x, i === 0 ? -0.05 : 0, z)
@@ -1029,9 +1337,32 @@ export function createScenery(low: boolean) {
       return { butterfly, x, z }
     })
   kit.clearTemplates()
+  let shakeStart = -10
+  let clock = 0
   return {
     group,
     interactives: objects,
+    crowns,
+    balloon: ambience.balloon,
+    popBalloon: ambience.popBalloon,
+    /** Shake the tree nearest to (x, z) if one is within reach. */
+    shake(x: number, z: number, reachLimit = 1.6) {
+      let best = -1,
+        bestDistance = reachLimit
+      crowns.forEach(([tx, tz], i) => {
+        const d = Math.hypot(tx - x, tz - z)
+        if (d < bestDistance) {
+          bestDistance = d
+          best = i
+        }
+      })
+      if (best < 0 || clock - shakeStart < 0.6) return null
+      const [tx, tz, top] = crowns[best]
+      kit.shake.value.set(tx, tz, 1)
+      shakeStart = clock
+      ambience.burst(tx, tz, top)
+      return crowns[best]
+    },
     animate: (
       time: number,
       night: number,
@@ -1041,11 +1372,14 @@ export function createScenery(low: boolean) {
       floor = 0,
     ) => {
       kit.clock.value = time
+      clock = time
+      kit.shake.value.z = Math.max(0, 1 - (time - shakeStart) / 0.9)
       kit.walker.value.set(px, pz)
       kit.walkerFloor.value = floor
       kit.motion.value = reduced ? 0 : 1
       kit.glass.emissiveIntensity = 0.04 + night * 1.6
       daylightGlow.value = 1 - night * 0.7
+      kit.daylight.value = reduced ? 0 : 1 - night
       ambience.update(time, night, px, pz, reduced)
       if (reduced) return
       seabirds.forEach((g, i) => {

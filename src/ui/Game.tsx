@@ -12,6 +12,8 @@ export default function Game({
   guide,
   exhibit,
   openLabel,
+  title = false,
+  outfit,
 }: {
   controller: RefObject<VillageController | null>
   events: VillageEvents
@@ -21,9 +23,15 @@ export default function Game({
   guide: string
   exhibit?: { index: number; name: string; tags: string[]; nearby: boolean }
   openLabel: string
+  /** Start on the title screen (read once, when the engine boots). */
+  title?: boolean
+  /** Outfit to start in (read once, when the engine boots). */
+  outfit?: string
 }) {
   const canvas = useRef<HTMLCanvasElement>(null),
-    blocked = useRef(paused)
+    blocked = useRef(paused),
+    titleAtBoot = useRef(title),
+    outfitAtBoot = useRef(outfit)
   const workshopSign = useRef<HTMLSpanElement>(null)
   const guideSign = useRef<HTMLSpanElement>(null)
   const exhibitSign = useRef<HTMLDivElement>(null)
@@ -41,6 +49,8 @@ export default function Game({
           signs: [workshopSign.current, guideSign.current],
           exhibit: exhibitSign.current,
           iris: iris.current,
+          title: titleAtBoot.current,
+          outfit: outfitAtBoot.current,
         })
         controller.current.pause(blocked.current)
         ready()

@@ -81,6 +81,53 @@ export function makeInterior() {
       )
     }
   }
+  // Cosy touches: wainscoting, a wall clock, framed pictures and a reading lamp.
+  room.block([0, 0.32, -2.885], [8.4, 0.58, 0.03], '#c3d29f')
+  room.block([0, 0.62, -2.86], [8.4, 0.07, 0.07], trim, [0, 0, 0], true)
+  room.block([-4.035, 0.32, 0], [0.03, 0.58, 5.9], '#b8c893')
+  room.block([-4.01, 0.62, 0], [0.07, 0.07, 5.9], trim, [0, 0, 0], true)
+  room.cylinder([1.35, 2.28, -2.86], 0.24, 0.24, 0.07, timber, 18, [Math.PI / 2, 0, 0])
+  room.cylinder([1.35, 2.28, -2.82], 0.2, 0.2, 0.03, '#fbf1da', 18, [Math.PI / 2, 0, 0])
+  room.block([1.35, 2.34, -2.8], [0.025, 0.13, 0.012], '#5b4436')
+  room.block([1.4, 2.28, -2.8], [0.1, 0.022, 0.012], '#5b4436')
+  for (const [z, w, colour] of [
+    [-1.05, 0.56, '#f3b57c'],
+    [0.05, 0.42, '#8fc7c1'],
+    [-0.5, 0.3, '#e7a1a6'],
+  ] as const) {
+    const y = z === -0.5 ? 2.55 : 2.05
+    room.block([-4.02, y, z], [0.05, w + 0.12, w], timber, [0, 0, 0], true)
+    room.block([-3.99, y, z], [0.02, w, w - 0.12], colour)
+    room.ball([-3.975, y - w * 0.12, z], [0.01, w * 0.2, w * 0.28], '#fff6df', 0)
+  }
+  const shade = new T.MeshStandardMaterial({
+    vertexColors: true,
+    emissive: '#ffcf80',
+    emissiveIntensity: 0.85,
+  })
+  room.cylinder([3.35, 0.04, 0.4], 0.2, 0.22, 0.06, timber, 12)
+  room.stick([3.35, 0.05, 0.4], [3.35, 1.5, 0.4], 0.025, '#6b4f3c', 6)
+  room.cylinder([3.35, 1.62, 0.4], 0.17, 0.28, 0.32, '#fde8b6', 14, [0, 0, 0], shade)
+  const lampLight = new T.PointLight('#ffc77d', 3, 4.5, 1.6)
+  lampLight.position.set(3.35, 1.45, 0.4)
+  scene.add(lampLight)
+  // The wardrobe: a painted cabinet with a mirrored door and a wizard hat
+  // left on top, where the visitor changes outfits.
+  const closet = new Batch(kit)
+  closet.block([0, 1.0, 0], [1.22, 1.96, 0.52], '#a8724f', [0, 0, 0], true)
+  closet.block([0, 2.02, 0.02], [1.34, 0.12, 0.6], '#8a5a3c', [0, 0, 0], true)
+  closet.block([0, 0.08, 0.02], [1.3, 0.12, 0.58], '#8a5a3c', [0, 0, 0], true)
+  closet.block([-0.29, 1.05, 0.27], [0.5, 1.6, 0.04], '#c28a5f', [0, 0, 0], true)
+  closet.block([0.29, 1.05, 0.27], [0.5, 1.6, 0.04], '#c28a5f', [0, 0, 0], true)
+  closet.block([0.29, 1.05, 0.3], [0.38, 1.4, 0.02], '#cfe7ee', [0, 0, 0], false, kit.glass)
+  closet.block([0.22, 1.35, 0.315], [0.06, 0.5, 0.01], '#f4fbff')
+  for (const x of [-0.07, 0.07]) closet.ball([x, 1.05, 0.31], [0.035, 0.035, 0.035], '#f2c94c', 1)
+  closet.block([-0.29, 1.35, 0.295], [0.36, 0.5, 0.012], '#b37d55')
+  closet.block([-0.29, 0.7, 0.295], [0.36, 0.5, 0.012], '#b37d55')
+  closet.cylinder([0.1, 2.1, 0.02], 0.32, 0.33, 0.03, '#5b3f8f', 16)
+  closet.cylinder([0.1, 2.35, 0.02], 0.01, 0.18, 0.48, '#5b3f8f', 12, [0, 0, 0.2])
+  closet.ball([-0.38, 2.14, 0.05], [0.12, 0.06, 0.1], '#ff6f9f', 1)
+  const wardrobe = pickable(closet.finish(), 'wardrobe', -1.8, -2.58)
   const album = new Batch(kit)
   album.cylinder([0, 0.42, 0], 0.53, 0.53, 0.14, wood, 20)
   album.cylinder([0, 0.2, 0], 0.14, 0.21, 0.4, timber, 12)
@@ -93,7 +140,7 @@ export function makeInterior() {
     true,
   )
   const profile = pickable(album.finish(), 'about', 0.12, -1.62)
-  return finishRoom(scene, room, [profile])
+  return finishRoom(scene, room, [profile, wardrobe])
 }
 
 function finishRoom(scene: T.Scene, room: Batch, objects: T.Group[]) {

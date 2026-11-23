@@ -1,6 +1,7 @@
 import * as T from 'three'
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js'
-import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
+import { mergeGeometries, mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js'
+import { TessellateModifier } from 'three/addons/modifiers/TessellateModifier.js'
 import { noiseGLSL } from './shaderBits'
 
 export type XYZ = [number, number, number]
@@ -61,6 +62,10 @@ export class ModelKit {
   readonly walker = { value: new T.Vector2(100, 100) }
   readonly motion = { value: 1 }
   readonly walkerFloor = { value: 0 }
+  /** 1 by day, 0 at night: drives the drifting cloud shadows. */
+  readonly daylight = { value: 1 }
+  /** (x, z, strength) of the tree currently being shaken. */
+  readonly shake = { value: new T.Vector3(0, 0, 0) }
   constructor() {
     for (const [material, flower] of [
       [this.leaf, false],
@@ -72,27 +77,53 @@ export class ModelKit {
           walker: this.walker,
           motion: this.motion,
           walkerFloor: this.walkerFloor,
+          shake: this.shake,
         })
         shader.vertexShader =
-          'uniform float islandTime; uniform float motion; uniform vec2 walker;\nvarying float leafUp;\n' +
+          'uniform float islandTime; uniform float motion; uniform vec2 walker; uniform vec3 shake;\nvarying float leafUp;\nvarying vec3 leafWorld;\n' +
           (flower ? '' : 'varying vec3 leafViewPosition;\n') +
           shader.vertexShader
         shader.vertexShader = shader.vertexShader.replace(
           '#include <begin_vertex>',
           `#include <begin_vertex>
           leafUp = normalize(mat3(modelMatrix) * objectNormal).y;
+          leafWorld = (modelMatrix * vec4(position, 1.)).xyz;
           vec2 here = (modelMatrix * vec4(position, 1.)).xz;
-          float sway = sin(islandTime * 1.45 + here.x * .9 + here.y * .68);
+          // Gusts roll across the island: the breeze swells and settles.
+          float gust = .7 + .5 * sin(islandTime * .27 + here.x * .08 - here.y * .05);
+          float sway = sin(islandTime * 1.45 + here.x * .9 + here.y * .68) * gust;
           transformed.x += motion * sway * ${flower ? '.023' : '.035'} * clamp(position.y, 0., 3.);
+          transformed.z += motion * sin(islandTime * 1.1 + here.y * .7) * gust * ${flower ? '.01' : '.018'} * clamp(position.y, 0., 3.);
+          // A shaken tree rattles its crown.
+          float shaken = shake.z * (1. - smoothstep(.7, 1.7, length(here - shake.xy))) * clamp(position.y - .9, 0., 2.);
+          transformed.x += shaken * sin(islandTime * 41.) * .085;
+          transformed.z += shaken * cos(islandTime * 33.) * .06;
           ${flower ? 'vec2 away = here - walker; transformed.xz += motion * away / max(length(away), .1) * (1. - smoothstep(.2, 1.8, length(away))) * .18;' : 'leafViewPosition = (modelViewMatrix * vec4(transformed, 1.)).xyz;'}`,
         )
         // Sunlit crowns, cool undersides: soft painted volume on foliage.
+        // Leaf clusters: a soft cellular pattern of brighter clumps with
+        // darker hollows between them, like hand-painted foliage.
+        const clumps = flower
+          ? ''
+          : `
+            vec2 lp = vec2(leafWorld.x + leafWorld.y * .6, leafWorld.z - leafWorld.y * .45) * 3.1;
+            vec2 li = floor(lp), lf = fract(lp);
+            float nearest = 1.5;
+            for (int y = -1; y <= 1; y++)
+              for (int x = -1; x <= 1; x++) {
+                vec2 o = vec2(float(x), float(y));
+                vec2 centre = o + vec2(islandHash(li + o), islandHash(li + o + 7.)) - lf;
+                nearest = min(nearest, length(centre));
+              }
+            float leafFade = 1. - smoothstep(.35, .9, length(fwidth(lp)));
+            diffuseColor.rgb *= mix(1., mix(1.06, .88, smoothstep(.3, .85, nearest)), leafFade);`
         shader.fragmentShader =
-          'varying float leafUp;\n' +
+          'varying float leafUp;\nvarying vec3 leafWorld;\n' +
+          noiseGLSL +
           shader.fragmentShader.replace(
             '#include <color_fragment>',
             `#include <color_fragment>
-            diffuseColor.rgb *= mix(vec3(.8, .87, .94), vec3(1.13, 1.11, .9), leafUp * .5 + .5);`,
+            diffuseColor.rgb *= mix(vec3(.8, .87, .94), vec3(1.13, 1.11, .9), leafUp * .5 + .5);` + clumps,
           )
         if (!flower) {
           // Reveal the player's silhouette through greenery between them and the camera.
@@ -115,8 +146,8 @@ export class ModelKit {
       }
       material.customProgramCacheKey = () => (flower ? 'flowers' : 'leaves')
     }
-    paintGround(this.grass, 'grass')
-    paintGround(this.soil, 'soil')
+    paintGround(this.grass, 'grass', this.clock, this.daylight)
+    paintGround(this.soil, 'soil', this.clock, this.daylight)
     cartoon(this.matte, 0.14, 0.05)
     cartoon(this.leaf, 0.2, 0.06)
     cartoon(this.petals, 0.16, 0.06)
@@ -124,7 +155,13 @@ export class ModelKit {
   template(id: string, make: () => T.BufferGeometry) {
     let g = this.templates.get(id)
     if (!g) {
-      g = make()
+      // Weld each reusable shape once (UVs dropped so seams don't split it):
+      // every copy is then already indexed and merging stays cheap.
+      const raw = make()
+      for (const attr of Object.keys(raw.attributes))
+        if (attr !== 'position' && attr !== 'normal') raw.deleteAttribute(attr)
+      g = mergeVertices(raw, 1e-4)
+      if (g !== raw) raw.dispose()
       this.templates.set(id, g)
     }
     return g
@@ -135,8 +172,15 @@ export class ModelKit {
   }
 }
 
-function paintGround(material: T.MeshStandardMaterial, kind: 'grass' | 'soil') {
+function paintGround(
+  material: T.MeshStandardMaterial,
+  kind: 'grass' | 'soil',
+  clock: { value: number },
+  daylight: { value: number },
+) {
   material.onBeforeCompile = (shader) => {
+    shader.uniforms.groundTime = clock
+    shader.uniforms.groundDay = daylight
     shader.vertexShader =
       'varying vec3 vGroundWorld;\n' +
       shader.vertexShader.replace(
@@ -149,12 +193,32 @@ function paintGround(material: T.MeshStandardMaterial, kind: 'grass' | 'soil') {
         ? `vec2 p = vGroundWorld.xz;
           vec3 g = diffuseColor.rgb * mix(.9, 1.09, islandFbm(p * .42));
           g = mix(g, g * vec3(1.07, 1.1, .84) + vec3(.02, .02, 0.), smoothstep(.56, .82, islandNoise(p * .17 + 3.)) * .7);
-          vec2 cell = floor(p * 6.5);
-          vec2 local = fract(p * 6.5) - .5;
-          float fleck = step(.86, islandHash(cell)) * smoothstep(.34, .08, length(local * vec2(1.6, .7)));
-          g = mix(g, g * vec3(.78, .9, .68), fleck * .6);
-          float clover = step(.955, islandHash(cell + 7.)) * smoothstep(.3, .1, length(local));
-          g = mix(g, g * 1.18 + .035, clover * .7);
+          // Leafy confetti: two layers of tiny rotated triangles in a few
+          // tones (deep green, yellow-green, pale and the odd warm orange).
+          vec3 base = g;
+          for (int layer = 0; layer < 3; layer++) {
+            vec2 uv = p * 2.1 + float(layer) * vec2(.5, .37);
+            vec2 cell = floor(uv) + float(layer) * 17.;
+            vec2 f = fract(uv) - .5 - (vec2(islandHash(cell + 1.), islandHash(cell + 2.)) - .5) * .42;
+            float h = islandHash(cell);
+            float a = h * 6.2832;
+            vec2 q = mat2(cos(a), -sin(a), sin(a), cos(a)) * f;
+            float r = .13 + .07 * islandHash(cell + 5.);
+            // Equilateral triangle distance.
+            q.x = abs(q.x) - r;
+            q.y = q.y + r / 1.7320508;
+            if (q.x + 1.7320508 * q.y > 0.) q = vec2(q.x - 1.7320508 * q.y, -1.7320508 * q.x - q.y) / 2.;
+            q.x -= clamp(q.x, -2. * r, 0.);
+            float d = -length(q) * sign(q.y);
+            float fade = 1. - smoothstep(.12, .4, length(fwidth(uv)));
+            float mask = (1. - smoothstep(0., .018, d)) * step(.3, h) * fade;
+            float tone = islandHash(cell + 9.);
+            vec3 col = tone < .45 ? base * vec3(.68, .82, .6)
+              : tone < .8 ? base * vec3(1.2, 1.17, .82)
+              : tone < .94 ? base * vec3(1.06, 1.2, .98) + .03
+              : vec3(.98, .62, .32) * base.g * 1.35;
+            g = mix(g, col, mask * .85);
+          }
           diffuseColor.rgb = g;`
         : `vec2 p = vGroundWorld.xz;
           vec3 c = diffuseColor.rgb * mix(.93, 1.06, islandFbm(p * 1.4));
@@ -163,12 +227,16 @@ function paintGround(material: T.MeshStandardMaterial, kind: 'grass' | 'soil') {
           float pebble = step(.62, islandHash(cell)) * smoothstep(.13, .08, length(local * vec2(1., 1.4)));
           c = mix(c, c * (islandHash(cell + 9.) > .5 ? 1.12 : .86), pebble);
           diffuseColor.rgb = c;`
+    // Soft cloud shadows drift slowly across the island by day.
+    const clouds = `
+      float cloudShade = smoothstep(.5, .72, islandFbm(vGroundWorld.xz * .055 + vec2(groundTime * .035, groundTime * .012)));
+      diffuseColor.rgb *= 1. - cloudShade * .17 * groundDay;`
     shader.fragmentShader =
-      'varying vec3 vGroundWorld;\n' +
+      'varying vec3 vGroundWorld;\nuniform float groundTime;\nuniform float groundDay;\n' +
       noiseGLSL +
       shader.fragmentShader.replace(
         '#include <color_fragment>',
-        '#include <color_fragment>\n' + paint,
+        '#include <color_fragment>\n' + paint + clouds,
       )
   }
   material.customProgramCacheKey = () => 'island-' + kind
@@ -190,10 +258,17 @@ export class Batch {
     material: T.Material = this.kit.matte,
     quat?: T.Quaternion,
   ) {
-    const geo = source.index ? source.toNonIndexed() : source.clone()
+    const geo = source.clone()
     for (const attr of Object.keys(geo.attributes))
       if (attr !== 'position' && attr !== 'normal') geo.deleteAttribute(attr)
     if (!geo.attributes.normal) geo.computeVertexNormals()
+    // Everything in a batch is indexed so the merge keeps shared vertices.
+    if (!geo.index) {
+      const count = geo.attributes.position.count
+      const order = new (count > 65535 ? Uint32Array : Uint16Array)(count)
+      for (let i = 0; i < count; i++) order[i] = i
+      geo.setIndex(new T.BufferAttribute(order, 1))
+    }
     const size = geo.attributes.position.count
     const colors = new Float32Array(size * 3),
       rgb = new T.Color(color)
@@ -229,7 +304,18 @@ export class Batch {
     this.put(
       this.kit.template(
         'ico' + detail,
-        () => new T.IcosahedronGeometry(1, detail),
+        () => {
+          // Smooth (radial) normals everywhere, so shared corners can be
+          // welded into an index and small blobs shade softly.
+          const g = new T.IcosahedronGeometry(1, detail)
+          const p = g.attributes.position
+          const n = new T.Vector3()
+          for (let i = 0; i < p.count; i++) {
+            n.fromBufferAttribute(p, i).normalize()
+            g.attributes.normal.setXYZ(i, n.x, n.y, n.z)
+          }
+          return g
+        },
       ),
       c,
       p,
@@ -290,6 +376,8 @@ export class Batch {
     r: XYZ = zero,
     bevel = 0,
     mat?: T.Material,
+    bevelSegments = 1,
+    tessellate = false,
   ) {
     const sh = new T.Shape()
     outline.forEach(([x, y], i) => {
@@ -302,11 +390,17 @@ export class Batch {
       bevelEnabled: bevel > 0,
       bevelSize: bevel,
       bevelThickness: bevel,
-      bevelSegments: 1,
+      bevelSegments,
       curveSegments: 4,
     })
-    this.put(g, c, p, unit, r, mat)
-    g.dispose()
+    // Large flat shapes are split into small triangles so the curved-world
+    // bend (applied per vertex) follows the surface instead of cutting chords.
+    const fine = tessellate ? new TessellateModifier(1.4, 10).modify(g) : g
+    for (const attr of Object.keys(fine.attributes))
+      if (attr !== 'position' && attr !== 'normal') fine.deleteAttribute(attr)
+    const welded = mergeVertices(fine, 1e-4)
+    this.put(welded, c, p, unit, r, mat)
+    for (const geometry of new Set([g, fine, welded])) geometry.dispose()
   }
   horizontal(
     points: XZ[],
@@ -315,6 +409,8 @@ export class Batch {
     c: string,
     mat?: T.Material,
     bevel = 0,
+    bevelSegments = 1,
+    tessellate = false,
   ) {
     this.prism(
       points.map(([x, z]) => [x, -z]),
@@ -324,6 +420,8 @@ export class Batch {
       [-Math.PI / 2, 0, 0],
       bevel,
       mat,
+      bevelSegments,
+      tessellate,
     )
   }
   finish() {
@@ -332,7 +430,10 @@ export class Batch {
       parts.forEach((g) => g.dispose())
       if (geometry) {
         const mesh = new T.Mesh(geometry, material)
-        mesh.castShadow = true
+        // Ground and tiny flowers only receive shadows: casting them would
+        // re-render the whole lawn and hundreds of petals in the shadow pass.
+        const k = this.kit
+        mesh.castShadow = material !== k.grass && material !== k.soil && material !== k.petals
         mesh.receiveShadow = true
         this.group.add(mesh)
       }

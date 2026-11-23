@@ -15,6 +15,7 @@ import {
   type Lang,
   type Zone,
 } from '../data/village'
+import { beach, campfire, fishingSpot, pond, shrine, telescopeSite, tulipField } from '../data/island'
 const icons = {
   about: House,
   tech: FlaskConical,
@@ -36,7 +37,11 @@ export function ZoneIcon({ id, size = 20 }: { id: Zone; size?: number }) {
   return <Icon size={size} strokeWidth={2.2} />
 }
 function xy(x: number, z: number) {
-  return [100 + x * 5.45, 68 + z * 4.9]
+  return [100 + x * 4.38, 68 + z * 3.88]
+}
+/** The strokes below were drawn for the original, smaller island. */
+function remap([px, py]: number[]) {
+  return xy((px - 100) / 5.45, (py - 68) / 4.9)
 }
 function cartography(canvas: HTMLCanvasElement) {
   const ctx = canvas.getContext('2d')
@@ -83,26 +88,23 @@ function cartography(canvas: HTMLCanvasElement) {
   shore(0, -2, '#a3c577', 0.94)
   function line(points: number[][], color: string, width: number) {
     c.beginPath()
-    points.forEach(([x, y], i) => (i ? c.lineTo(x, y) : c.moveTo(x, y)))
+    points.map(remap).forEach(([x, y], i) => (i ? c.lineTo(x, y) : c.moveTo(x, y)))
     c.lineCap = 'round'
     c.lineJoin = 'round'
     c.lineWidth = width
     c.strokeStyle = color
     c.stroke()
   }
-  line(
-    [
-      [80, 20],
-      [85, 32],
-      [82, 45],
-      [87, 61],
-      [83, 78],
-      [89, 91],
-      [83, 111],
-    ],
-    '#77c5c4',
-    7,
-  )
+  // The stream crosses the whole island, coast to coast.
+  const stream: number[][] = []
+  for (let z = -14.4; z <= 14.4; z += 0.8)
+    stream.push(xy(-2.5 + Math.sin(z * 0.64) * 0.14 + Math.sin(z * 0.28) * 0.12, z))
+  c.beginPath()
+  stream.forEach(([x, y], i) => (i ? c.lineTo(x, y) : c.moveTo(x, y)))
+  c.lineCap = 'round'
+  c.lineWidth = 6
+  c.strokeStyle = '#77c5c4'
+  c.stroke()
   line(
     [
       [52, 55],
@@ -135,12 +137,17 @@ function cartography(canvas: HTMLCanvasElement) {
     '#e9d397',
     3,
   )
-  for (const y of [72, 98]) {
+  for (const z of [1, 6.5]) {
+    const [bx, by] = xy(-3.7, z)
     c.fillStyle = '#956f40'
-    c.fillRect(80, y - 2, 13, 4)
+    c.fillRect(bx, by - 2, 11, 4)
     c.fillStyle = '#f0cb8e'
-    for (let j = 0; j < 5; j++) c.fillRect(81 + j * 2.4, y - 2, 1.6, 4)
+    for (let j = 0; j < 4; j++) c.fillRect(bx + 1 + j * 2.5, by - 2, 1.6, 4)
   }
+  // The long pier reaching south from the beach.
+  const [qx, qy] = xy(2.5, 12.9)
+  c.fillStyle = '#b98d59'
+  c.fillRect(qx - 2, qy, 4, 18)
   for (let i = 0; i < 54; i++) {
     const a = rnd() * Math.PI * 2,
       r = 0.75 + rnd() * 0.15,
@@ -154,6 +161,26 @@ function cartography(canvas: HTMLCanvasElement) {
     c.beginPath()
     c.arc(x - 0.5, y - 1, 1.7, 0, 7)
     c.fill()
+  }
+  // Points of interest: little stickers for the activities and corners.
+  c.textAlign = 'center'
+  c.textBaseline = 'middle'
+  c.font = '8px system-ui, "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif'
+  for (const [icon, [lx, lz]] of [
+    ['🎣', [fishingSpot[0], fishingSpot[1] - 0.6]],
+    ['🔥', campfire.fire],
+    ['🐸', pond.center],
+    ['🌷', tulipField.center],
+    ['🏖️', beach.center],
+    ['🔭', telescopeSite],
+    ['⛩️', shrine.center],
+  ] as const) {
+    const [x, y] = xy(lx, lz)
+    c.fillStyle = '#fffaf0d9'
+    c.beginPath()
+    c.arc(x, y, 5.2, 0, 7)
+    c.fill()
+    c.fillText(icon, x, y + 0.4)
   }
   for (const id of zones) {
     const [x, y] = xy(...anchors[id])

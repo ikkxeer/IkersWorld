@@ -139,6 +139,21 @@ export default function Journal({
                 </span>
               </div>
               <div className="keyrow">
+                <Footprints />
+                <b>{t.run}</b>
+                <kbd>Shift</kbd>
+              </div>
+              <div className="keyrow">
+                <Hand />
+                <b>{t.wave}</b>
+                <kbd>Q</kbd>
+              </div>
+              <div className="keyrow">
+                <ZoomIn />
+                <b>{t.photo}</b>
+                <kbd>P</kbd>
+              </div>
+              <div className="keyrow">
                 <Hand />
                 <b>{t.interact}</b>
                 <kbd>E</kbd>

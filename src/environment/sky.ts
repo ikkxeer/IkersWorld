@@ -15,10 +15,10 @@ export function makeSky(scene: T.Scene, low: boolean) {
   sun.castShadow = true
   sun.shadow.mapSize.set(low ? 512 : 1024, low ? 512 : 1024)
   Object.assign(sun.shadow.camera, {
-    left: -23,
-    right: 23,
-    top: 19,
-    bottom: -19,
+    left: -28,
+    right: 28,
+    top: 23,
+    bottom: -23,
     near: 0.1,
     far: 75,
   })
@@ -28,14 +28,14 @@ export function makeSky(scene: T.Scene, low: boolean) {
   sun.shadow.radius = 3
   scene.add(hemi, sun)
   const sea = new T.Mesh(
-    new T.PlaneGeometry(350, 350),
+    new T.PlaneGeometry(240, 240, 96, 96),
     new T.MeshStandardMaterial({ color: 0x66bfc6, roughness: 0.55 }),
   )
   const seaClock = { value: 0 }
   paintSea(sea.material, seaClock)
   sea.rotation.x = -Math.PI / 2
   sea.position.y = -0.88
-  sea.receiveShadow = true
+  sea.receiveShadow = false
   scene.add(sea)
   let seed = 735
   function random() {
@@ -43,6 +43,7 @@ export function makeSky(scene: T.Scene, low: boolean) {
     return seed / 4294967296
   }
   const cloudMat = new T.MeshLambertMaterial({ color: 0xfffaf0 })
+  cloudMat.userData.noBend = true
   const cloudGeo = new T.IcosahedronGeometry(1, 2)
   const clouds = new T.Group()
   for (let i = 0; i < 12; i++) {
@@ -72,12 +73,14 @@ export function makeSky(scene: T.Scene, low: boolean) {
     transparent: true,
     fog: false,
   })
+  starMat.userData.noBend = true
   const stars = new T.Points(sg, starMat)
   scene.add(stars)
   const orb = new T.Mesh(
     new T.SphereGeometry(2.2, 20, 12),
     new T.MeshBasicMaterial({ color: '#fff6c4', fog: false }),
   )
+  orb.material.userData.noBend = true
   scene.add(orb)
   // Small luminous points hover just above the meadow when the local sun sets.
   const fliesGeometry = new T.BufferGeometry()
@@ -100,6 +103,36 @@ export function makeSky(scene: T.Scene, low: boolean) {
   })
   const flies = new T.Points(fliesGeometry, flyMaterial)
   scene.add(flies)
+  // Shooting stars streak across the night sky every so often.
+  const streakCanvas = document.createElement('canvas')
+  streakCanvas.width = 128
+  streakCanvas.height = 8
+  const sc = streakCanvas.getContext('2d')
+  if (sc) {
+    const g = sc.createLinearGradient(0, 0, 128, 0)
+    g.addColorStop(0, 'rgba(255,255,255,0)')
+    g.addColorStop(0.85, 'rgba(255,248,220,0.9)')
+    g.addColorStop(1, 'rgba(255,255,255,1)')
+    sc.fillStyle = g
+    sc.fillRect(0, 2, 128, 4)
+  }
+  const streakMaterial = new T.MeshBasicMaterial({
+    map: new T.CanvasTexture(streakCanvas),
+    transparent: true,
+    depthWrite: false,
+    blending: T.AdditiveBlending,
+    fog: false,
+    opacity: 0,
+  })
+  streakMaterial.userData.noBend = true
+  const streak = new T.Mesh(new T.PlaneGeometry(6, 0.12), streakMaterial)
+  streak.visible = false
+  scene.add(streak)
+  let nightLevel = 0
+  let nextStreak = 8
+  let streakStart = -10
+  const streakFrom = new T.Vector3(),
+    streakDir = new T.Vector3()
   function update(date: Date) {
     const s = daylight(date)
     sky.set(s.a[1]).lerp(tmp.set(s.b[1]), s.mix)
@@ -116,9 +149,16 @@ export function makeSky(scene: T.Scene, low: boolean) {
     )
     hemi.intensity = 1.65 - s.night * 0.94
     hemi.color.set('#fff3d8').lerp(tmp.set('#b6cfff'), s.night)
+    // Golden hour: rosy sky light, violet bounce from the ground and a
+    // peachy sun, like a storybook sunset.
+    const golden = Math.max(0, 1 - Math.abs(s.hour - 7) / 1.6, 1 - Math.abs(s.hour - 18.7) / 1.7)
+    hemi.color.lerp(tmp.set('#ffc0c8'), golden * 0.7)
+    hemi.groundColor.set('#b7d08c').lerp(tmp.set('#9d86bd'), golden * 0.75 + s.night * 0.3)
+    sun.color.lerp(tmp.set('#ffa98a'), golden * 0.5)
     flies.visible = s.night > 0.18
     flyMaterial.opacity = s.night
     starMat.opacity = s.night
+    nightLevel = s.night
     orb.material.color.set(s.night > 0.55 ? '#e5e9ff' : '#ffebae')
     orb.position.set(
       Math.cos(angle) * 24,
@@ -130,6 +170,19 @@ export function makeSky(scene: T.Scene, low: boolean) {
   return {
     update,
     animate: (t: number) => {
+      if (nightLevel > 0.6 && t > nextStreak) {
+        streakStart = t
+        nextStreak = t + 7 + random() * 12
+        streakFrom.set(-30 + random() * 50, 16 + random() * 10, -34 - random() * 10)
+        streakDir.set(1, -0.45 - random() * 0.2, 0).normalize()
+        streak.rotation.z = Math.atan2(streakDir.y, streakDir.x)
+      }
+      const age = (t - streakStart) / 0.9
+      streak.visible = age >= 0 && age < 1
+      if (streak.visible) {
+        streak.position.copy(streakFrom).addScaledVector(streakDir, age * 22)
+        streakMaterial.opacity = Math.sin(Math.PI * age) * nightLevel
+      }
       if (flies.visible) {
         for (let i = 0; i < fireflies.length; i += 3) {
           fireflies[i] = resting[i] + Math.sin(t * 0.67 + i) * 0.22
