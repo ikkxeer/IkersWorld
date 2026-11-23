@@ -1,6 +1,6 @@
 # Iker’s World
 
-Un portfolio jugable de Iker Aramburu Muñoz. La cámara sobrevuela la costa y aterriza en el muelle, que da acceso a una isla 3D con una casa, un laboratorio, seis expositores de proyectos, una estación, una cafetería y un buzón.
+Un portfolio jugable. La cámara sobrevuela la costa y aterriza en el muelle, que da acceso a una isla 3D con una casa, un laboratorio, seis expositores de proyectos, una estación, una cafetería y un buzón.
 
 ## Desarrollo local
 
