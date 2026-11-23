@@ -142,6 +142,11 @@ export default function Journal({
               </div>
               <div className="keyrow">
                 <Footprints />
+                <b>{t.jump}</b>
+                <kbd>{t.space}</kbd>
+              </div>
+              <div className="keyrow">
+                <Footprints />
                 <b>{t.run}</b>
                 <kbd>Shift</kbd>
               </div>

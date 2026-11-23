@@ -1,6 +1,6 @@
 import type { Lang, Zone } from './village'
 import { anchors, destinations } from './village'
-import { beach, campfire, fishingSpot, pond, shrine, telescopeSite, tulipField } from './island'
+import { beach, campfire, fishingSpot, pond, shrine, tideOrgan, telescopeSite, tulipField } from './island'
 
 type XZ = [number, number]
 export type PlaceKind = 'building' | 'activity' | 'nook'
@@ -19,6 +19,7 @@ export type PlaceIcon =
   | 'telescope'
   | 'droplets'
   | 'shirt'
+  | 'music'
 
 /** Everything the map can show and take you to. */
 export interface MapPlace {
@@ -137,6 +138,16 @@ export const places: MapPlace[] = [
       es: 'Un rincón tranquilo con farolillos y cerezos. Entrena en el ring y toca el gong.',
       ca: 'Un racó tranquil amb fanalets i cirerers. Entrena al ring i toca el gong.',
       en: 'A quiet corner of lanterns and cherry trees. Train in the ring and strike the gong.',
+    },
+  },
+  {
+    id: 'tide-organ', kind: 'activity', icon: 'music', color: '#278a89',
+    at: tideOrgan.center, stand: [20.9, -2.9],
+    name: { es: 'Órgano de las Mareas', ca: 'Orgue de les Marees', en: 'Tide Organ' },
+    blurb: {
+      es: 'Cruza la pasarela del faro. Pisa las placas de colores o salta sobre ellas para tocar el órgano.',
+      ca: 'Travessa la passarel·la del far. Trepitja les plaques de colors o salta-hi per tocar l’orgue.',
+      en: 'Cross the lighthouse boardwalk. Step or jump onto the coloured plates to play the organ.',
     },
   },
   {

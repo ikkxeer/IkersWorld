@@ -2,6 +2,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react'
 import {
   Coffee,
+  Music2,
   Droplets,
   Fish,
   Flame,
@@ -24,6 +25,7 @@ import {
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import {
+  tideOrgan,
   beach,
   bushSites,
   isPine,
@@ -57,10 +59,11 @@ const placeIcons: Record<PlaceIcon, LucideIcon> = {
   telescope: Telescope,
   droplets: Droplets,
   shirt: Shirt,
+  music: Music2,
 }
 
 /** The world's extent on the map (x across, z down). */
-const WORLD = { x: -31.5, z: -16.5, w: 54, h: 36 }
+const WORLD = { x: -31.5, z: -16.5, w: 58, h: 36 }
 
 const pts = (list: XZ[]) => list.map(([x, z]) => `${x.toFixed(2)},${z.toFixed(2)}`).join(' ')
 
@@ -165,6 +168,9 @@ export const AtlasArt = memo(function AtlasArt({ detail = true }: { detail?: boo
       {[1, 6.5].map((z) => (
         <rect key={z} x={riverAt(z) - 1.45} y={z - 0.72} width={2.9} height={1.44} rx="0.15" fill="#c99a62" stroke="#8a5a3a" strokeWidth="0.08" />
       ))}
+      <path d={`M ${tideOrgan.bridgeStart} ${tideOrgan.center[1]} H ${tideOrgan.center[0]}`} stroke="#bc9364" strokeWidth={tideOrgan.bridgeWidth} />
+      <circle cx={tideOrgan.center[0]} cy={tideOrgan.center[1]} r={tideOrgan.radius} fill="#b7895d" stroke="#876648" strokeWidth=".12" />
+      {tideOrgan.pads.map(p => <circle key={p.hz} cx={p.x} cy={p.z} r=".42" fill={p.color} />)}
       <rect x={islet.bridgeTo - 0.2} y={islet.bridgeZ - islet.bridgeWidth / 2} width={islet.bridgeFrom - islet.bridgeTo + 0.4} height={islet.bridgeWidth} rx="0.15" fill="#c99a62" stroke="#8a5a3a" strokeWidth="0.08" />
       <rect x={1.6} y={shape.pierFrom} width={1.8} height={shape.pierTo - shape.pierFrom} rx="0.12" fill="#c99a62" stroke="#8a5a3a" strokeWidth="0.08" />
       {/* Trees and shrubs */}

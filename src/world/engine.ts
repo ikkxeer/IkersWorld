@@ -5,9 +5,9 @@ import { createPostFX } from './postfx'
 import { daylight } from '../environment/daylight'
 import { bendScene, projectCurved, unbendRay, worldCurve, worldCurveFocus } from './curve'
 import { anchors, destinations } from '../data/village'
-import { benchSites, campfire, fishingSpot, shape, shrine } from '../data/island'
+import { benchSites, campfire, fishingSpot, shape, shrine, tideOrgan } from '../data/island'
 import { createFishing } from './fishing'
-import { play } from '../audio/sfx'
+import { organNote, play } from '../audio/sfx'
 import { createVisitor, createGuide, createCat, angleDelta } from './character'
 import { makeGallery, makeInterior } from './interior'
 import { createScenery, islandFloorHeight } from './scenery'
@@ -104,6 +104,9 @@ export function startVillage(
     play(wood ? 'stepWood' : 'step', strength)
   })
   /** Walking out to the end of the pier before casting. */
+  const jumpDuration = 0.64
+  let jumpTime = jumpDuration
+  let organKey = -1
   let anglingWalk = false
   function beginFishing() {
     if (inside || rest) return
@@ -176,6 +179,7 @@ export function startVillage(
   /** Teleport to a spot (through the iris), facing a point, with a hop. */
   function jump(stand: [number, number], look: [number, number], arrived?: () => void) {
     const move = () => {
+      jumpTime = jumpDuration
       const [x, z] = stand
       visitor.group.position.set(x, islandFloorHeight(x, z), z)
       goal = []
@@ -389,6 +393,7 @@ export function startVillage(
   }
   function setInside(value: Interior) {
     if (inside === value) return
+    jumpTime = jumpDuration
     if (value) doorstep.copy(visitor.group.position)
     inside = value
     snapCamera = true
@@ -638,6 +643,7 @@ export function startVillage(
     }, arrived)
   }
   function activate(target: Target, exhibit?: number) {
+    if (jumpTime < jumpDuration) return
     if (target === 'wardrobe') {
       faceTowards(target)
       events.wardrobe?.()
@@ -689,6 +695,12 @@ export function startVillage(
         e.target instanceof HTMLSelectElement
       )
         return
+      if (e.code === 'Space' && !attract && landed &&
+          !(e.target instanceof HTMLElement && e.target.closest('button, input, textarea, select, a, [contenteditable=true]'))) {
+        e.preventDefault()
+        if (!e.repeat && jumpTime >= jumpDuration && !rest && !training && !fishing.active() && !anglingWalk)
+          jumpTime = 0
+      }
       if (e.key === 'Shift') running = true
       if (movement.includes(e.code)) {
         e.preventDefault()
@@ -950,8 +962,21 @@ export function startVillage(
       }
     }
     cozy = T.MathUtils.damp(cozy, rest?.stage === 'seated' || fishing.active() || training?.stage === 'power' ? 1 : 0, 1.6, dt)
+    if (jumpTime < jumpDuration && !paused && !iris.active()) {
+      jumpTime = Math.min(jumpDuration, jumpTime + dt)
+      if (jumpTime === jumpDuration) play('land')
+    }
+    const jumpPhase = jumpTime / jumpDuration
+    const jumpHeight = 3.6 * jumpPhase * (1 - jumpPhase)
+    const key = !inside && !attract && landed && jumpTime === jumpDuration
+      ? tideOrgan.pads.findIndex(pad => Math.hypot(pad.x - p.x, pad.z - p.z) < 0.43) : -1
+    if (key !== organKey) {
+      organKey = key
+      scenery.lightOrganKey(key)
+      if (key >= 0) organNote(tideOrgan.pads[key].hz)
+    }
     const onRug = Math.abs(p.x) < 1.73 && Math.abs(p.z - 0.1) < 1.27
-    p.y = (inside ? (inside === 'about' && onRug ? 0.09 : 0.01) : islandFloorHeight(p.x, p.z)) + hopLift
+    p.y = (inside ? (inside === 'about' && onRug ? 0.09 : 0.01) : islandFloorHeight(p.x, p.z)) + hopLift + jumpHeight
     // Shrine training: arrive in the centre of the ring, face the camera, power up.
     if (training && !paused) {
       training.t += dt
@@ -1048,6 +1073,7 @@ export function startVillage(
       speed,
       turn,
       dust: !inside,
+      jumpHeight,
     })
     if (catReplyAt > 0 && elapsed > catReplyAt) {
       catReplyAt = -1

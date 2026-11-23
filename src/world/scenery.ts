@@ -34,6 +34,8 @@ import {
   beach,
   palmSites,
   telescopeSite,
+  tideOrgan,
+  onOrganDeck,
   shrine,
   inShrine,
   shrineFloor,
@@ -219,6 +221,7 @@ export function islandFloorHeight(x: number, z: number) {
     if (across >= 0 && across <= 1) return bridgeTop(across)
   }
   if (z > shape.pierFrom + 0.15 && Math.abs(x - 2.5) < 0.9) return -0.06
+  if (onOrganDeck(x, z)) return 0.17
   if (onBridge(x, z)) return bridgeDeck(x)
   if (inShrine(x, z)) return shrineFloor(x, z)
   // The bevel rises above the nominal top of the grass extrusion.
@@ -1135,6 +1138,35 @@ function verges(b: Batch, rand: () => number, low: boolean) {
     }
 }
 
+/** Each coloured key feeds a rank of hollow brass pipes at the back of the deck. */
+function buildTideOrgan(b: Batch, group: T.Group) {
+  const [cx, cz] = tideOrgan.center
+  for (let x = tideOrgan.bridgeStart; x < cx; x += 0.25) {
+    b.block([x, 0.10, cz], [0.24, 0.14, tideOrgan.bridgeWidth], wood)
+  }
+  for (const x of [17.8, 19.05, cx])
+    for (const side of [-1, 1])
+      b.cylinder([x, -0.62, cz + side * 0.65], 0.09, 0.11, 1.6, timber)
+  b.cylinder([cx, -0.06, cz], tideOrgan.radius, tideOrgan.radius, 0.46, wood, 48)
+  b.cylinder([cx, -0.25, cz], tideOrgan.radius + 0.02, tideOrgan.radius, 0.09, '#397979', 48)
+  return tideOrgan.pads.map(({x, z, color}, i) => {
+    b.cylinder([x, 0.18, z], 0.48, 0.5, 0.035, '#946e38', 28)
+    const key = new T.Mesh(new T.CylinderGeometry(0.42, 0.43, 0.04, 32),
+      new T.MeshStandardMaterial({color, emissive: color, emissiveIntensity: 0.12}))
+    key.position.set(x, 0.205, z)
+    group.add(key)
+    for (let j = -1; j <= 1; j++) {
+      const px = x + j * 0.19, pz = z - 0.72
+      const h = 0.96 + 0.33 * (2 - i) + 0.24 * (1 - Math.abs(j))
+      b.cylinder([px, 0.17 + h / 2, pz], 0.088, 0.105, h, '#cb9b54', 16)
+      b.cylinder([px, 0.17 + h, pz], 0.128, 0.10, 0.10, '#f2c980', 16)
+      b.cylinder([px, 0.224 + h, pz], 0.09, 0.09, 0.009, '#493c37', 16)
+      b.cylinder([px, 0.48, pz], 0.109, 0.109, 0.12, color, 16)
+    }
+    return key
+  })
+}
+
 export function createScenery(low: boolean) {
   const kit = new ModelKit(),
     group = new T.Group(),
@@ -1143,6 +1175,7 @@ export function createScenery(low: boolean) {
     rand = seeded(602)
   leafDetail = low ? 1 : 2
   routes.length = 0
+  const organKeys = buildTideOrgan(staticParts, group)
   terrain(staticParts)
   meadow(staticParts)
   for (const { pts, width } of pathways) path(staticParts, pts, width)
@@ -1367,6 +1400,12 @@ export function createScenery(low: boolean) {
   return {
     group,
     interactives: objects,
+    lightOrganKey(index: number) {
+      organKeys.forEach((key, i) => {
+        key.material.emissiveIntensity = i === index ? 1.8 : 0.12
+        key.position.y = i === index ? 0.19 : 0.205
+      })
+    },
     crowns,
     balloon: ambience.balloon,
     popBalloon: ambience.popBalloon,

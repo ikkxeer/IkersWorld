@@ -12,6 +12,7 @@ export interface Locomotion {
   /** Signed yaw (radians) still to turn before facing the travel direction. */
   turn: number
   /** Kick up little dust puffs on footfalls (outdoors only). */
+  jumpHeight?: number
   dust?: boolean
 }
 
@@ -1244,6 +1245,7 @@ export function createVisitor(initialOutfit?: string): IslandCharacter {
     previous = time
     const scale = group.scale.x || 1
     const speed = move?.speed ?? 0
+    const liftOff = (move?.jumpHeight ?? 0) / scale
     const travelled = (move?.distance ?? 0) / scale
     const nowMoving = travelled > 1e-5 && speed > 0.08
 
@@ -1359,7 +1361,7 @@ export function createVisitor(initialOutfit?: string): IslandCharacter {
         // Footfall: the phase just wrapped past heel strike.
         const prior = (before + index * 0.5) % 1
         const landed = footPhase < STANCE && prior > footPhase
-        if (landed && leg.planted === false) {
+        if (landed && !liftOff && leg.planted === false) {
           if (move?.dust && !reduced && pace > 0.45) kickDust(leg.shoe, 0.7 + 0.5 * pace)
           if (!reduced) landing.kick(-0.09 * pace)
           footstep?.(Math.min(1.4, 0.5 + pace * 0.6))
@@ -1469,7 +1471,7 @@ export function createVisitor(initialOutfit?: string): IslandCharacter {
 
     legs.forEach((leg) => {
       hip.set(leg.side * HIP_X, -0.02, 0).applyMatrix4(pelvis.matrix)
-      ankle.set(leg.side * FOOT_X, ANKLE_Y + leg.pose.y, leg.pose.z)
+      ankle.set(leg.side * FOOT_X, ANKLE_Y + leg.pose.y + liftOff * 0.18, leg.pose.z - liftOff * 0.12)
       const solved = solveLeg(leg, hip, ankle)
       leg.shoe.position.copy(solved)
       leg.shoe.rotation.set(leg.pose.pitch, leg.side * 0.08, 0)
@@ -1611,6 +1613,8 @@ export function createVisitor(initialOutfit?: string): IslandCharacter {
     /* ---- Contact shadow ---- */
     const air = (pelvis.position.y - PELVIS_Y) * 3
     shadow.scale.set(1 - air, 0.85 * (1 - air), 1)
+    shadow.position.y = 0.015 - liftOff
+    shadow.scale.multiplyScalar(1 / (1 + liftOff * 0.65))
     shadow.position.x = pelvis.position.x * 0.5
 
     updateDust(dt)

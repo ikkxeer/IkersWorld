@@ -19,6 +19,24 @@ export const shape = {
   pierFrom: 12.95,
   pierTo: 17.45,
 }
+/** Timber boardwalk and circular instrument deck east of the lighthouse. */
+export const tideOrgan = {
+  center: [21, -4] as XZ,
+  radius: 2.35,
+  bridgeStart: 16.4,
+  bridgeWidth: 1.3,
+  pads: [
+    { x: 20, z: -4.35, color: '#58cbb8', hz: 392 },
+    { x: 21.1, z: -4.95, color: '#ffc467', hz: 494 },
+    { x: 22.15, z: -4.12, color: '#ed8f94', hz: 587 },
+  ],
+}
+export function onOrganDeck(x: number, z: number) {
+  const [cx, cz] = tideOrgan.center
+  return Math.hypot(x - cx, z - cz) < tideOrgan.radius - 0.13 ||
+    (x >= tideOrgan.bridgeStart && x <= cx && Math.abs(z - cz) < tideOrgan.bridgeWidth / 2 - 0.08)
+}
+
 /** Where the visitor fishes from: the end of the pier, facing the sea. */
 export const fishingSpot: XZ = [2.5, 17.05]
 
@@ -287,6 +305,7 @@ export function propColliders() {
         out.push([ax + ((bx - ax) * s) / steps, az + ((bz - az) * s) / steps, 0.16])
     }
   out.push([...wellSite, 0.62], [...parasolSite, 0.25], [parasolSite[0] + 0.73, parasolSite[1] + 0.2, 0.42])
+  for (const {x, z} of tideOrgan.pads) out.push([x, z - 0.72, 0.32])
   for (const [x, z] of palmSites) out.push([x, z, 0.3])
   out.push([...telescopeSite, 0.3])
   // Shrine: gate posts, spires, gong, training post, lanterns, banners.
