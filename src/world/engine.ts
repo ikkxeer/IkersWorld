@@ -2,7 +2,7 @@ import * as T from 'three'
 import { makeSky } from '../environment/sky'
 import { makeIris } from './iris'
 import { anchors, destinations } from '../data/village'
-import { createVisitor, createGuide } from './character'
+import { createVisitor, createGuide, angleDelta } from './character'
 import { makeGallery, makeInterior } from './interior'
 import { createScenery, islandFloorHeight } from './scenery'
 import { walkable, route, type Point } from './navigation'
@@ -39,10 +39,14 @@ export function startVillage(
   const scenery = createScenery(low),
     visitor = createVisitor(),
     guide = createGuide()
-  guide.group.position.set(1, 0, 8.3)
+  const [guideX, guideZ] = anchors.npc
+  guide.group.position.set(guideX, islandFloorHeight(guideX, guideZ), guideZ)
+  // Pip waits beside the path at the foot of the pier, watching new arrivals.
+  guide.group.rotation.y = Math.atan2(2.5 - guideX, 10.4 - guideZ)
   guide.group.scale.setScalar(1.4)
   guide.group.userData.zone = 'npc'
-  scene.add(scenery.group, visitor.group, guide.group)
+  const dust = visitor.effects ?? new T.Group()
+  scene.add(scenery.group, visitor.group, guide.group, dust)
   visitor.group.position.set(2.5, -0.06, 11.6)
   visitor.group.scale.setScalar(1.33)
   const outdoorPickables = [...scenery.interactives, guide.group]
@@ -65,7 +69,9 @@ export function startVillage(
     inside = value
     snapCamera = true
     const destination = value ? rooms[value].scene : scene
-    destination.add(visitor.group)
+    destination.add(visitor.group, dust)
+    velocity.set(0, 0)
+    visitor.settle()
     if (value) visitor.group.position.set(0, 0, 1.16)
     else visitor.group.position.copy(doorstep)
     visitor.group.rotation.y = value ? Math.PI : 0
@@ -118,7 +124,10 @@ export function startVillage(
     stick = new T.Vector2()
   const right = new T.Vector2(27, -8).normalize(),
     forward = new T.Vector2(-8, -27).normalize(),
-    step = new T.Vector2()
+    step = new T.Vector2(),
+    wish = new T.Vector2(),
+    velocity = new T.Vector2(),
+    steerTarget = new T.Vector3()
   let paused = false,
     zoom = 1,
     reach: Target | null = null,
@@ -356,7 +365,10 @@ export function startVillage(
       lastLight = stamp
     }
     const p = visitor.group.position
-    let distance = 0
+    let distance = 0,
+      turn = 0
+    const pace = inside ? 2.6 : 3.1
+    wish.set(0, 0)
     if (!paused && !iris.active()) {
       const dx =
         Number(keys.has('KeyD') || keys.has('ArrowRight')) -
@@ -370,46 +382,76 @@ export function startVillage(
       if (step.lengthSq() > 0.001) {
         goal = []
         ring.visible = false
+        wish.copy(step)
+        if (wish.lengthSq() > 1) wish.normalize()
+        wish.multiplyScalar(pace)
       } else {
+        // Waypoints are released a little early so corners are rounded off.
         while (
           goal.length > 1 &&
-          Math.hypot(goal[0][0] - p.x, goal[0][1] - p.z) < 0.13
+          Math.hypot(goal[0][0] - p.x, goal[0][1] - p.z) < 0.3
         )
           goal.shift()
         if (goal.length) {
-          step.set(goal[0][0] - p.x, goal[0][1] - p.z)
-          if (step.length() < 0.055) {
+          wish.set(goal[0][0] - p.x, goal[0][1] - p.z)
+          const remaining = wish.length()
+          if (goal.length === 1 && remaining < 0.04) {
             goal.shift()
-            step.set(0, 0)
+            wish.set(0, 0)
+          } else {
+            // Ease off over the last stretch instead of stopping dead.
+            const brake =
+              goal.length === 1 ? T.MathUtils.clamp(remaining / 0.75, 0.3, 1) : 1
+            wish.setLength(pace * brake)
           }
         }
       }
-      if (step.lengthSq() > 0.0001) {
-        const pace = inside ? 2.8 : 3.2
-        const travel = goal.length
-          ? Math.min(step.length(), dt * pace)
-          : dt * pace
-        step.setLength(travel)
-        const ox = p.x,
-          oz = p.z
-        if (canWalk(p.x + step.x, p.z)) p.x += step.x
-        if (canWalk(p.x, p.z + step.y)) p.z += step.y
-        step.set(p.x - ox, p.z - oz)
-        distance = step.length()
-        if (distance < 0.0002) goal = []
-        if (distance > 0.0002) {
-          const target = Math.atan2(step.x, step.y),
-            rot = visitor.group.rotation.y
-          visitor.group.rotation.y +=
-            Math.atan2(Math.sin(target - rot), Math.cos(target - rot)) *
-            Math.min(1, dt * 14)
-        }
+    }
+    // Accelerate and brake over a fraction of a second so starts, stops and
+    // changes of direction carry a little weight.
+    const speeding = wish.lengthSq() >= velocity.lengthSq()
+    const response = 1 - Math.exp(-dt * (speeding ? 9 : 12))
+    velocity.x += (wish.x - velocity.x) * response
+    velocity.y += (wish.y - velocity.y) * response
+    if (wish.lengthSq() === 0 && velocity.lengthSq() < 0.01) velocity.set(0, 0)
+    if (velocity.lengthSq() > 0) {
+      step.copy(velocity).multiplyScalar(dt)
+      if (goal.length === 1) {
+        const remaining = Math.hypot(goal[0][0] - p.x, goal[0][1] - p.z)
+        if (step.length() > remaining) step.setLength(remaining)
       }
+      const ox = p.x,
+        oz = p.z
+      if (canWalk(p.x + step.x, p.z)) p.x += step.x
+      else velocity.x = 0
+      if (canWalk(p.x, p.z + step.y)) p.z += step.y
+      else velocity.y = 0
+      step.set(p.x - ox, p.z - oz)
+      distance = step.length()
+      if (goal.length && wish.lengthSq() > 0 && distance < 0.0002) goal = []
+    }
+    const speed = distance > 0.0002 ? Math.min(velocity.length(), distance / Math.max(dt, 1e-3)) : 0
+    if (velocity.length() > 0.2) {
+      // Turn progressively towards the direction of travel.
+      const rot = visitor.group.rotation.y
+      turn = angleDelta(rot, Math.atan2(velocity.x, velocity.y))
+      const turned = turn * (1 - Math.exp(-dt * 11))
+      visitor.group.rotation.y = rot + turned
+      turn -= turned
     }
     const onRug = Math.abs(p.x) < 1.73 && Math.abs(p.z - 0.1) < 1.27
     p.y = inside ? (inside === 'about' && onRug ? 0.09 : 0.01) : islandFloorHeight(p.x, p.z)
-    visitor.animate(elapsed, distance > 0.0002, motion.matches, distance)
-    guide.animate(elapsed, false, motion.matches)
+    visitor.animate(elapsed, motion.matches, {
+      distance,
+      speed,
+      turn,
+      dust: !inside,
+    })
+    guide.animate(elapsed, motion.matches, undefined, inside ? null : p)
+    if (!motion.matches) {
+      guideMarker.position.y = 1.34 + Math.sin(elapsed * 2.4) * 0.045
+      guideMarker.rotation.y = elapsed * 1.3
+    }
     scenery.animate(elapsed, night, p.x, p.z, motion.matches, p.y)
     if (!motion.matches) atmosphere.animate(elapsed)
     if (
@@ -439,9 +481,22 @@ export function startVillage(
       inside ? 0.55 : 0,
       inside ? 0 : p.z * 0.65 * intro,
     )
+    // Around the iris, glide the camera so the visitor sits in the middle of
+    // the screen, right where the circle shrinks to and reopens from.
+    const steer = iris.framing()
+    if (steer > 0) {
+      steerTarget.set(p.x, p.y + 0.9, p.z)
+      desired.lerp(steerTarget, steer)
+    }
     focus.lerp(
       desired,
-      motion.matches || inside || snapCamera ? 1 : 1 - Math.exp(-dt * 3),
+      snapCamera || (motion.matches && !steer)
+        ? 1
+        : steer > 0
+          ? 1 - Math.exp(-dt * 7)
+          : inside
+            ? 1
+            : 1 - Math.exp(-dt * 3),
     )
     snapCamera = false
     const streetSpan =
@@ -514,20 +569,7 @@ export function startVillage(
         view.exhibit.hidden = false
       }
     } else if (view.exhibit) view.exhibit.hidden = true
-    if (iris.active()) {
-      projected
-        .copy(p)
-        .addScaledVector(T.Object3D.DEFAULT_UP, 0.92)
-        .project(camera)
-      const width = canvas.clientWidth,
-        height = canvas.clientHeight
-      iris.draw(
-        T.MathUtils.clamp(((projected.x + 1) * width) / 2, 0, width),
-        T.MathUtils.clamp(((1 - projected.y) * height) / 2, 0, height),
-        width,
-        height,
-      )
-    }
+    if (iris.active()) iris.draw(canvas.clientWidth, canvas.clientHeight)
     renderer.render(inside ? rooms[inside].scene : scene, camera)
   }
   document.addEventListener(
@@ -574,6 +616,8 @@ export function startVillage(
         goal = []
         keys.clear()
         stick.set(0, 0)
+        velocity.set(0, 0)
+        visitor.settle()
         snapCamera = true
         setHover(null)
         visitor.group.rotation.y = Math.atan2(

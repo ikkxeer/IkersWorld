@@ -20,7 +20,7 @@ export const anchors: Record<Place, [number, number]> = {
   projects: [-5, 4],
   contact: [2, 5.5],
   map: [0, 2],
-  npc: [1, 8.3],
+  npc: [3.75, 8.95],
 }
 export const destinations: Record<Zone, [number, number]> = {
   about: [-7, -0.5],

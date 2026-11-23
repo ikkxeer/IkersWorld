@@ -1406,14 +1406,14 @@ kbd {
   position: absolute;
   z-index: 12;
   inset: 0;
+  will-change: background;
   background: radial-gradient(
     circle at var(--iris-x) var(--iris-y),
-    transparent max(0px, calc(var(--iris-radius) - 2px)),
-    #162620c9 var(--iris-radius),
-    #162620 calc(var(--iris-radius) + 3px)
+    transparent max(0px, calc(var(--iris-radius) - 1.5px)),
+    #070a09 var(--iris-radius)
   );
 }
 
 .house-iris.sealed {
-  background: #162620;
+  background: #070a09;
 }
