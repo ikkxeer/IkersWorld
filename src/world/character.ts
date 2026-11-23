@@ -31,6 +31,25 @@ export interface IslandCharacter {
   sit?: (seated: boolean) => void
   /** Float a little emote bubble above the head. */
   emote?: (kind: Emote) => void
+  /** Rod handling for the fishing activity. */
+  angler?: Angler
+  /** Drift down under an umbrella (the arrival), or land and fold it away. */
+  umbrella?: (open: boolean) => void
+  /** A big, happy landing: squash, dust and a sparkle. */
+  land?: () => void
+}
+
+export interface Angler {
+  /** Hold the rod out (true) or put it away (false). */
+  hold: (value: boolean) => void
+  /** Play the overhead cast. */
+  cast: () => void
+  /** A quick jerk of the rod when the fish is hooked. */
+  tug: () => void
+  /** Lift a fish proudly overhead (null puts it away). */
+  show: (colors: [string, string] | null, scale?: number) => void
+  /** World position of the rod tip, for the line. */
+  tip: (out: THREE.Vector3) => THREE.Vector3
 }
 
 export type Emote = 'note' | 'heart' | 'alert' | 'sparkle' | 'sleep'
@@ -510,6 +529,61 @@ export function createVisitor(): IslandCharacter {
     return { side, shoulder, elbow }
   })
 
+  /* ---------------------------- Fishing rod ---------------------------- */
+  // Held in the right fist; tilted up so it rises out of the hand.
+  const rodPivot = joint(arms[0].elbow, 0, -FOREARM, 0.015)
+  rodPivot.rotation.x = -0.95
+  const rodShape = sculpt(material)
+  rodShape.limb('#d0a067', 0.013, 1.0)
+  rodShape.oval('#6b4a35', [0, -0.04, 0], [0.028, 0.08, 0.028])
+  rodShape.oval('#dfe3e6', [0.035, -0.16, 0], [0.04, 0.04, 0.022])
+  for (const y of [-0.45, -0.75]) rodShape.oval('#f3c54d', [0, y, 0], [0.02, 0.012, 0.02])
+  rodShape.mesh(rodPivot)
+  const rodTip = joint(rodPivot, 0, -1.02, 0)
+  rodPivot.visible = false
+  // The catch, lifted overhead.
+  const trophy = joint(group, 0, 1.56, 0.08)
+  let trophyMesh: THREE.Mesh | null = null
+  function buildFish([body, fin]: [string, string]) {
+    const fish = sculpt(material)
+    fish.oval(body, [0, 0, 0], [0.22, 0.1, 0.065])
+    fish.oval(fin, [0.02, -0.035, 0], [0.17, 0.05, 0.062])
+    fish.oval(body, [-0.24, 0.035, 0], [0.07, 0.06, 0.02], [0, 0, 0.6])
+    fish.oval(body, [-0.24, -0.035, 0], [0.07, 0.06, 0.02], [0, 0, -0.6])
+    fish.oval(fin, [0, 0.1, 0], [0.09, 0.04, 0.015], [0, 0, -0.2])
+    for (const side of [-1, 1]) {
+      fish.oval('#ffffff', [0.14, 0.025, side * 0.05], [0.028, 0.028, 0.012])
+      fish.oval(ink, [0.148, 0.025, side * 0.058], [0.015, 0.017, 0.008])
+    }
+    return fish.mesh(trophy)
+  }
+
+  /* ------------------------------ Umbrella ---------------------------- */
+  // Held aloft in the right hand for the drift down through the clouds.
+  const brolly = joint(arms[0].elbow, 0, -FOREARM, 0.01)
+  const brollyShape = sculpt(material)
+  brollyShape.limb('#8a5a3a', 0.014, 0.62)
+  brollyShape.oval('#8a5a3a', [0.03, 0.04, 0], [0.035, 0.03, 0.03])
+  // The canopy opens towards -Y, which points up while the arm is raised.
+  const canopy = (colour: string, from: number, to: number, lift = 0) =>
+    brollyShape.turned(
+      colour,
+      [0, -0.6 - lift, 0],
+      Array.from({ length: 7 }, (_, i) => {
+        const t = from + ((to - from) * i) / 6
+        return [0.54 * Math.sin(t * Math.PI * 0.5), -0.3 * Math.cos(t * Math.PI * 0.5)] as [number, number]
+      }),
+    )
+  canopy('#ef6c5c', 0, 1)
+  canopy('#fdf3dc', 0.42, 0.62, 0.004)
+  for (let i = 0; i < 12; i++) {
+    const a = (i / 12) * TAU
+    brollyShape.oval(i % 2 ? '#ef6c5c' : '#fdf3dc', [Math.cos(a) * 0.53, -0.6, Math.sin(a) * 0.53], [0.075, 0.035, 0.075])
+  }
+  brollyShape.oval('#f6c24d', [0, -0.93, 0], [0.04, 0.05, 0.04])
+  brollyShape.mesh(brolly)
+  brolly.visible = false
+
   /* ------------------------------ Legs --------------------------------- */
   const legs = [-1, 1].map((side) => {
     const thigh = sculpt(material)
@@ -689,6 +763,15 @@ export function createVisitor(): IslandCharacter {
   const bubbles = emotes(group, 1.32)
   let seated = false
   let sitW = 0
+  let holding = false
+  let rodW = 0
+  let castT = 1
+  let tugT = 1
+  let showing = false
+  let showW = 0
+  let floating = false
+  let floatW = 0
+  let brollyScale = 0
   let nextNote = 0
   const nod = spring(120, 10)
   const curlPitch = spring(90, 5)
@@ -754,6 +837,12 @@ export function createVisitor(): IslandCharacter {
     walk = damp(walk, moving ? 1 : 0, moving ? 9 : 6, dt)
     pace = damp(pace, clamp(speed / TOP_SPEED, 0, 1.9), 10, dt)
     sitW = damp(sitW, seated ? 1 : 0, reduced ? 14 : 4.5, dt)
+    rodW = damp(rodW, holding ? 1 : 0, 9, dt)
+    showW = damp(showW, showing ? 1 : 0, 7, dt)
+    floatW = damp(floatW, floating ? 1 : 0, floating ? 20 : 6, dt)
+    brollyScale = damp(brollyScale, floating ? 1 : 0, floating ? 12 : 9, dt)
+    castT = Math.min(1, castT + dt / 0.75)
+    tugT = Math.min(1, tugT + dt / 0.35)
     const sitting = ease(clamp(sitW, 0, 1))
     // Running: longer strides, pumping arms and a keener lean.
     const run = clamp((pace - 1.05) / 0.6, 0, 1)
@@ -766,7 +855,7 @@ export function createVisitor(): IslandCharacter {
     lastYaw = group.rotation.y
 
     /* ---- Idle actions: little bits of personality when standing still ---- */
-    if (moving || reduced || seated || sitW > 0.02) {
+    if (moving || reduced || seated || sitW > 0.02 || holding || showing || floating) {
       idleSince = time
       nextAction = time + 6 + random() * 4
       action = null
@@ -848,6 +937,15 @@ export function createVisitor(): IslandCharacter {
       })
     }
 
+    /* ---- Floating: legs dangle and kick lazily under the umbrella ---- */
+    if (floatW > 0.001)
+      legs.forEach((leg, index) => {
+        const kick = Math.sin(time * 3.1 + index * Math.PI)
+        leg.pose.z = lerp(leg.pose.z, 0.05 * kick, floatW)
+        leg.pose.y = lerp(leg.pose.y, 0.05 + 0.03 * kick, floatW)
+        leg.pose.pitch = lerp(leg.pose.pitch, 0.35 + 0.25 * kick, floatW)
+      })
+
     /* ---- Body rhythm: a springy, bouncy trot ---- */
     const w = walk
     const cycle = phase * TAU
@@ -918,6 +1016,29 @@ export function createVisitor(): IslandCharacter {
         rest + side * (wave + 0.12 * stretching) + (reduced ? 0 : 0.03 * shift * side),
       )
       elbow.rotation.x = lerp(-0.22 - 0.6 * forwardness * amount - 0.12 * w - 0.85 * run * w, -0.15, stretching)
+      if (rodW > 0.001) {
+        // Rod out over the water: the back-swing and flick of a cast, and a
+        // sharp tug when something bites.
+        // Raise the rod up over the shoulder, then flick it out over the water.
+        const raise = castT < 0.45 ? ease(castT / 0.45) * 1.35 : 1.35 - ease(Math.min(1, (castT - 0.45) / 0.22)) * 1.8
+        const swing = -(castT < 1 ? raise * (1 - Math.max(0, (castT - 0.7) / 0.3)) : 0) - (tugT < 1 ? 0.5 * Math.sin(tugT * Math.PI) : 0)
+        const rodArm = index === 0
+        shoulder.rotation.x = lerp(shoulder.rotation.x, rodArm ? -0.9 + swing : -0.75 + swing * 0.6, rodW)
+        shoulder.rotation.z = lerp(shoulder.rotation.z, rodArm ? side * 0.12 : -side * 0.1, rodW)
+        elbow.rotation.x = lerp(elbow.rotation.x, rodArm ? -0.6 : -1.05, rodW)
+      }
+      if (floatW > 0.001) {
+        // One hand grips the umbrella overhead, the other waves at the island.
+        const wave = Math.sin(time * 5) * 0.35
+        shoulder.rotation.x = lerp(shoulder.rotation.x, index === 0 ? -2.95 : -0.4, floatW)
+        shoulder.rotation.z = lerp(shoulder.rotation.z, index === 0 ? side * 0.08 : side * (1.25 + wave), floatW)
+        elbow.rotation.x = lerp(elbow.rotation.x, index === 0 ? -0.12 : -0.5, floatW)
+      }
+      if (showW > 0.001) {
+        shoulder.rotation.x = lerp(shoulder.rotation.x, -2.85, showW)
+        shoulder.rotation.z = lerp(shoulder.rotation.z, side * 0.22, showW)
+        elbow.rotation.x = lerp(elbow.rotation.x, -0.25, showW)
+      }
       if (sitting > 0) {
         // Warm both hands at the fire, then rest them on the knees for a while.
         const warm = reduced ? 1 : smoothstep01(Math.sin(time * 0.21) * 3 + 0.5)
@@ -960,7 +1081,14 @@ export function createVisitor(): IslandCharacter {
 
     /* ---- Face ---- */
     const cosy = sitting > 0.9 && !reduced && Math.sin(time * 0.45) > 0.82
-    const happy = busy > 0.45 || cosy
+    const happy = busy > 0.45 || cosy || showW > 0.5 || (floatW > 0.5 && Math.sin(time * 0.9) > 0.3)
+    brolly.visible = brollyScale > 0.02
+    brolly.scale.set(Math.max(0.001, brollyScale), 1, Math.max(0.001, brollyScale))
+    rodPivot.visible = rodW > 0.05
+    trophy.visible = showW > 0.05
+    trophy.scale.setScalar(Math.max(0.001, showW))
+    trophy.position.y = 1.56 + (reduced ? 0 : Math.sin(time * 6) * 0.02 * showW)
+    trophy.rotation.z = reduced ? 0 : Math.sin(time * 9) * 0.12 * showW
     if (sitting > 0.95 && !reduced && time > nextNote) {
       bubbles.show(random() < 0.2 ? 'heart' : 'note')
       nextNote = time + 2.6 + random() * 2.4
@@ -1003,6 +1131,44 @@ export function createVisitor(): IslandCharacter {
       if (value) nextNote = previous + 1.5
     },
     emote: (kind: Emote) => bubbles.show(kind),
+    umbrella(open: boolean) {
+      floating = open
+      if (open) brollyScale = 1
+    },
+    land() {
+      floating = false
+      landing.kick(-1.2)
+      nod.kick(3)
+      for (const leg of legs) kickDust(leg.shoe, 1.6)
+      bubbles.show('sparkle')
+    },
+    angler: {
+      hold(value: boolean) {
+        holding = value
+      },
+      cast() {
+        castT = 0
+      },
+      tug() {
+        tugT = 0
+      },
+      show(colors, scale = 1) {
+        if (trophyMesh) {
+          trophy.remove(trophyMesh)
+          trophyMesh.geometry.dispose()
+          trophyMesh = null
+        }
+        showing = !!colors
+        if (colors) {
+          trophyMesh = buildFish(colors)
+          trophyMesh.scale.setScalar(scale)
+          bubbles.show('sparkle')
+        }
+      },
+      tip(out: THREE.Vector3) {
+        return rodTip.getWorldPosition(out)
+      },
+    },
   }
 }
 

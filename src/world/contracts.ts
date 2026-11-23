@@ -1,7 +1,9 @@
 import type { Place, Zone } from '../data/village'
+import type { AnglerUpdate } from './fishing'
+export type { AnglerUpdate }
 export type Interior = 'about' | 'tech' | false
 /** 'campfire' is handled in-world (the visitor sits down), never as a panel. */
-export type Target = Place | 'exit' | 'campfire'
+export type Target = Place | 'exit' | 'campfire' | 'fishing'
 export interface VillageEvents {
   open: (place: Place, project?: number) => void
   position: (
@@ -13,6 +15,10 @@ export interface VillageEvents {
   hover: (place: Target | null, project?: number) => void
   inside: (value: Interior) => void
   fail: () => void
+  /** Progress of the fishing activity, for the HUD. */
+  angler?: (update: AnglerUpdate) => void
+  /** A popped gift balloon reveals one of the projects. */
+  gift?: (project: number) => void
 }
 export interface VillageController {
   pause: (value: boolean) => void

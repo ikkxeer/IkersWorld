@@ -5,6 +5,23 @@
  */
 type XZ = [number, number]
 
+/** The island's footprint: everything that depends on its size reads this. */
+export const shape = {
+  /** Radii of the coastline ellipse. */
+  coastX: 19.4,
+  coastZ: 14.2,
+  /** Radii of the walkable lawn inside it. */
+  walkX: 18.4,
+  walkZ: 12.6,
+  /** Where the river spills over the cliff at either end (|z|). */
+  lip: 13.25,
+  /** The pier runs south from the shore: start and end along z (x = 2.5). */
+  pierFrom: 12.95,
+  pierTo: 17.45,
+}
+/** Where the visitor fishes from: the end of the pier, facing the sea. */
+export const fishingSpot: XZ = [2.5, 17.05]
+
 export const treeSites: XZ[] = [
   [-12, -3],
   [-13.8, 0.1],
@@ -29,6 +46,20 @@ export const treeSites: XZ[] = [
   [4.24, -4.02],
   [4.93, 1.98],
   [5.66, 8.11],
+  // The outer ring of the enlarged island.
+  [-16.1, -3.9],
+  [-15.2, 5.1],
+  [-12.6, 8.9],
+  [-6.1, 10.9],
+  [-0.4, 11.7],
+  [9.2, -10.9],
+  [15.6, -5.2],
+  [16.6, 3.6],
+  [12.3, -9.3],
+  [-13.4, -8.2],
+  [-2.9, -11.4],
+  [7.4, 11.0],
+  [14.9, 7.4],
 ]
 /** Conifers keep the same rhythm as before: every 5th from 1, every 7th from 3. */
 export const isPine = (i: number) => i % 5 === 1 || i % 7 === 3
@@ -50,6 +81,11 @@ export const bushSites: XZ[] = [
   [4.47, 7.84],
   [10.67, 5.24],
   [3.98, -2.01],
+  [-14.6, -6.2],
+  [-9.7, 10.4],
+  [16.2, -1.5],
+  [4.2, -11.4],
+  [-4.4, 10.3],
 ]
 
 export const lampSites: XZ[] = [
@@ -59,12 +95,17 @@ export const lampSites: XZ[] = [
   [6.85, 5.42],
   [-8.55, 6.35],
   [2.05, 8.72],
+  [1.45, 12.15],
+  [11.9, 6.9],
+  [-6.3, -9.6],
 ]
 
 export const benchSites: XZ[] = [
   [-5.92, -0.24],
   [5.88, -0.14],
   [-9.96, 4.01],
+  // The western lookout, facing the open sea.
+  [-15.9, 1.6],
 ]
 
 export const cafeTables: XZ[] = [
@@ -108,8 +149,20 @@ export const fenceRuns: XZ[][] = [
 ]
 
 export const wellSite: XZ = [5.7, -4.9]
-export const parasolSite: XZ = [12.1, 4.1]
+export const parasolSite: XZ = [12.3, 9.0]
 export const picnicSite: XZ = [4.4, 3.5]
+
+/** New corners of the enlarged island. */
+export const tulipField = { center: [-8.6, -10.1] as XZ, width: 4.6, depth: 2.2 }
+export const pond = { center: [6.6, -10.2] as XZ, radius: 1.35 }
+export const beach = { center: [11.2, 9.1] as XZ, radiusX: 3.1, radiusZ: 1.35 }
+export const palmSites: XZ[] = [
+  [9.2, 9.8],
+  [13.6, 8.0],
+  [10.6, 7.6],
+]
+export const telescopeSite: XZ = [-16.6, 0.2]
+
 
 /** The campfire circle: the fire pit and the three log seats around it. */
 export const campfire = {
@@ -157,6 +210,14 @@ export function propColliders() {
         out.push([ax + ((bx - ax) * s) / steps, az + ((bz - az) * s) / steps, 0.16])
     }
   out.push([...wellSite, 0.62], [...parasolSite, 0.25], [parasolSite[0] + 0.73, parasolSite[1] + 0.2, 0.42])
+  for (const [x, z] of palmSites) out.push([x, z, 0.3])
+  out.push([...telescopeSite, 0.3])
+  // The pond is water: walk around it.
+  const [px, pz] = pond.center
+  for (let i = 0; i < 10; i++) {
+    const a = (i / 10) * Math.PI * 2
+    out.push([px + Math.cos(a) * pond.radius * 0.55, pz + Math.sin(a) * pond.radius * 0.55, pond.radius * 0.62])
+  }
   const [fx, fz] = campfire.fire
   out.push([fx, fz, 0.55])
   for (const [dx, dz] of campfire.posts) out.push([fx + dx, fz + dz, 0.16])

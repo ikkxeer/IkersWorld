@@ -39,7 +39,7 @@ export function bendMaterial(material: T.Material) {
 
 export function bendScene(root: T.Object3D) {
   root.traverse((o) => {
-    if (o instanceof T.Mesh || o instanceof T.Points || o instanceof T.Sprite)
+    if (o instanceof T.Mesh || o instanceof T.Points || o instanceof T.Sprite || o instanceof T.Line)
       for (const m of [o.material].flat()) bendMaterial(m)
   })
 }

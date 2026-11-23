@@ -21,7 +21,11 @@ import {
   Check,
   X,
   Footprints,
+  Fish,
+  Gift,
 } from 'lucide-react'
+import type { CSSProperties } from 'react'
+import { fishKinds } from './data/fish'
 import {
   copy,
   placeKeys,
@@ -34,11 +38,13 @@ import { portfolio } from './data/portfolio'
 import { daylight } from './environment/daylight'
 import { useAmbience } from './hooks/useAmbience'
 import type {
+  AnglerUpdate,
   Target,
   VillageController,
   VillageEvents,
 } from './world/contracts'
 import Game from './ui/Game'
+import Arrival from './ui/Arrival'
 import Journal from './ui/Panel'
 import VillageMap, { ZoneIcon } from './ui/Map'
 const languageNames = { es: 'Español', ca: 'Català', en: 'English' }
@@ -61,6 +67,7 @@ function placeName(
     return portfolio(lang).projects[exhibit].name
   if (place === 'exit') return inside === 'tech' ? t.leaveLab : t.leaveHouse
   if (place === 'campfire') return t.campfire
+  if (place === 'fishing') return t.fishing
   if (place === 'about' && inside) return t.album
   if (place === 'tech') return exhibit === undefined ? t.workshopSign : stations[exhibit][lang]
   return place === 'map'
@@ -70,6 +77,58 @@ function placeName(
       : place
         ? t[placeKeys[place]]
         : t.path
+}
+function FishingHud({
+  update,
+  lang,
+  pull,
+}: {
+  update: AnglerUpdate
+  lang: Lang
+  pull: () => void
+}) {
+  const t = copy[lang]
+  if (update.stage === 'caught') {
+    const kind = fishKinds.find((f) => f.id === update.fish)
+    if (!kind) return null
+    return (
+      <div className="catch-card" role="status">
+        <span className="catch-fish" style={{ '--fish': kind.colors[0], '--fin': kind.colors[1] } as CSSProperties}>
+          <Fish size={34} strokeWidth={2.2} />
+        </span>
+        <div>
+          <small>
+            {t.fishCaught}…
+            {update.isNew && <em>{t.fishNew}</em>}
+          </small>
+          <b>
+            {kind.name[lang]} · {update.size} cm
+          </b>
+          <p>{kind.quip[lang]}</p>
+          <span className="catch-count">
+            {t.fishCollection} {update.count}/{update.total}
+          </span>
+        </div>
+      </div>
+    )
+  }
+  if (update.stage === 'bite')
+    return (
+      <button className="prompt bite" onClick={pull}>
+        <kbd>E</kbd>
+        {t.fishBite}
+      </button>
+    )
+  if (update.stage === 'lost')
+    return <div className="prompt">{update.reason === 'early' ? t.fishEarly : t.fishLate}</div>
+  if (update.stage === 'waiting')
+    return (
+      <button className="prompt" onClick={pull}>
+        <Fish size={18} />
+        {t.fishWait} · <kbd>E</kbd> {t.fishReel}
+      </button>
+    )
+  return null
 }
 function Clock({ lang }: { lang: Lang }) {
   const [date, setDate] = useState(() => new Date())
@@ -109,15 +168,18 @@ function App() {
   const [mode, setMode] = useState<'game' | 'light'>('game'),
     [panel, setPanel] = useState<Panel | null>(deep),
     [project, setProject] = useState<number | null>(null)
-  const [pos, setPos] = useState<[number, number]>([2.5, 11.6]),
+  const [pos, setPos] = useState<[number, number]>([2.5, 14.65]),
     [near, setNear] = useState<{ target: Target; exhibit?: number } | null>(
       null,
     ),
     [hover, setHover] = useState<{ target: Target; exhibit?: number } | null>(
       null,
     ),
-    [inside, setInside] = useState<Interior>(false)
+    [inside, setInside] = useState<Interior>(false),
+    [angler, setAngler] = useState<AnglerUpdate | null>(null),
+    [gift, setGift] = useState<number | null>(null)
   const [ready, setReady] = useState(false),
+    [arrivalGone, setArrivalGone] = useState(false),
     [intro, setIntro] = useState(!deep)
   const ctl = useRef<VillageController | null>(null),
     pending = useRef<Zone | null>(null),
@@ -188,6 +250,12 @@ function App() {
         setHover(target ? { target, exhibit } : null)
       },
       inside: setInside,
+      gift(index) {
+        setGift(index)
+      },
+      angler(update) {
+        setAngler(update.stage === 'done' ? null : update)
+      },
       fail() {
         setMode('light')
         setInside(false)
@@ -260,6 +328,17 @@ function App() {
     window.addEventListener('keydown', action)
     return () => window.removeEventListener('keydown', action)
   }, [menu, panel, intro, open, inside])
+  useEffect(() => {
+    if (gift === null) return
+    const id = setTimeout(() => setGift(null), 9000)
+    return () => clearTimeout(id)
+  }, [gift])
+  // Let the loading screen fade out while the 3D arrival takes over.
+  useEffect(() => {
+    if (!ready) return
+    const id = setTimeout(() => setArrivalGone(true), 800)
+    return () => clearTimeout(id)
+  }, [ready])
   const hasCover = light || !ready
   return (
     <main className={'screen ' + 'playing' + (light ? ' light-mode' : '')}>
@@ -332,9 +411,7 @@ function App() {
           </div>
         </div>
       </header>
-      {!ready && !light && !panel && (
-        <div className="loading">{t.loading3D}</div>
-      )}
+      {!arrivalGone && !light && <Arrival label={t.loading3D} leaving={ready} />}
       {light && !panel && (
         <section className="light-home">
           <h1>{t.light}</h1>
@@ -389,7 +466,34 @@ function App() {
               {placeName(hover.target, lang, hover.exhibit, inside)}
             </div>
           )}
-          {near && near.target !== 'projects' ? (
+          {gift !== null && !panel && (() => {
+            const all = portfolio(lang).projects
+            const index = gift % all.length
+            return (
+              <div className="catch-card gift-card" role="status">
+                <span className="catch-fish" style={{ '--fish': '#ef6c5c', '--fin': '#f6c24d' } as CSSProperties}>
+                  <Gift size={30} strokeWidth={2.2} />
+                </span>
+                <div>
+                  <small>{t.giftTitle}</small>
+                  <p>{t.giftBody}</p>
+                  <b>{all[index].name}</b>
+                  <button
+                    className="primary small"
+                    onClick={() => {
+                      setGift(null)
+                      open('projects', index)
+                    }}
+                  >
+                    {t.open}
+                  </button>
+                </div>
+              </div>
+            )
+          })()}
+          {angler ? (
+            <FishingHud update={angler} lang={lang} pull={() => ctl.current?.interact()} />
+          ) : near && near.target !== 'projects' ? (
             <button className="prompt" onClick={() => ctl.current?.interact()}>
               <kbd>E</kbd>
               {placeName(near.target, lang, near.exhibit, inside)}

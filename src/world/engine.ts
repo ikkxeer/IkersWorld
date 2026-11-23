@@ -3,7 +3,8 @@ import { makeSky } from '../environment/sky'
 import { makeIris } from './iris'
 import { bendScene, projectCurved, unbendRay, worldCurve, worldCurveFocus } from './curve'
 import { anchors, destinations } from '../data/village'
-import { campfire } from '../data/island'
+import { campfire, fishingSpot, shape } from '../data/island'
+import { createFishing } from './fishing'
 import { createVisitor, createGuide, createCat, angleDelta } from './character'
 import { makeGallery, makeInterior } from './interior'
 import { createScenery, islandFloorHeight } from './scenery'
@@ -55,12 +56,12 @@ export function startVillage(
   const [guideX, guideZ] = anchors.npc
   guide.group.position.set(guideX, islandFloorHeight(guideX, guideZ), guideZ)
   // Pip waits beside the path at the foot of the pier, watching new arrivals.
-  guide.group.rotation.y = Math.atan2(2.5 - guideX, 10.4 - guideZ)
+  guide.group.rotation.y = Math.atan2(2.5 - guideX, shape.pierFrom + 0.8 - guideZ)
   guide.group.scale.setScalar(1.4)
   guide.group.userData.zone = 'npc'
   const dust = visitor.effects ?? new T.Group()
   scene.add(scenery.group, visitor.group, guide.group, dust)
-  visitor.group.position.set(2.5, -0.06, 11.6)
+  visitor.group.position.set(2.5, -0.06, shape.pierFrom + 1.7)
   visitor.group.scale.setScalar(1.36)
   // An invisible hit area makes the campfire circle clickable and reachable.
   const [fireX, fireZ] = campfire.fire
@@ -74,7 +75,88 @@ export function startVillage(
   fireHit.position.y = 0.5
   fireSpot.add(fireHit)
   scene.add(fireSpot)
-  const outdoorPickables = [...scenery.interactives, guide.group, fireSpot]
+  // The end of the pier is a fishing spot.
+  const fishSpot = new T.Group()
+  fishSpot.position.set(fishingSpot[0], 0, fishingSpot[1])
+  fishSpot.userData.zone = 'fishing'
+  const fishHit = new T.Mesh(new T.CylinderGeometry(0.75, 0.75, 1, 10), new T.MeshBasicMaterial({ visible: false }))
+  fishHit.position.y = 0.4
+  fishSpot.add(fishHit)
+  scene.add(fishSpot)
+  const fishing = createFishing({
+    angler: visitor.angler!,
+    emote: (kind) => visitor.emote?.(kind),
+    report: (update) => events.angler?.(update),
+    waterY: -0.86,
+  })
+  scene.add(fishing.group)
+  /** Walking out to the end of the pier before casting. */
+  let anglingWalk = false
+  function beginFishing() {
+    if (inside || rest) return
+    const p = visitor.group.position
+    if (Math.hypot(p.x - fishingSpot[0], p.z - fishingSpot[1]) < 0.35) {
+      faceYaw = 0
+      fishing.begin(p, 0)
+      return
+    }
+    goal = route([p.x, p.z], fishingSpot)
+    if (!goal.length) goal = [fishingSpot]
+    anglingWalk = true
+    ring.visible = false
+  }
+  const outdoorPickables = [...scenery.interactives, guide.group, fireSpot, fishSpot]
+
+  /* ------------------------- Arrival from the sky ------------------------ */
+  // The visitor drifts down through a cloud bank under an umbrella and lands
+  // softly on the pier. Skipped with reduced motion or a deep link.
+  const FALL = 4.8
+  const FALL_HEIGHT = 24
+  const landingSpot = new T.Vector3(2.5, islandFloorHeight(2.5, shape.pierFrom + 1.7), shape.pierFrom + 1.7)
+  let fallT = motion.matches ? FALL + 3 : 0
+  let landed = motion.matches
+  const cloudBank = new T.Group()
+  const cloudPuff = new T.IcosahedronGeometry(1, 2)
+  const cloudMaterial = new T.MeshLambertMaterial({
+    color: '#ffffff',
+    emissive: '#eef3ff',
+    emissiveIntensity: 0.55,
+    transparent: true,
+    opacity: 0.95,
+    depthWrite: false,
+  })
+  for (let i = 0; i < 22; i++) {
+    const a = i * 2.4,
+      r = 2.2 + ((i * 0.618) % 1) * 4.5
+    const cluster = new T.Group()
+    cluster.position.set(landingSpot.x + Math.cos(a) * r, 5 + ((i * 0.37) % 1) * 17, landingSpot.z + Math.sin(a) * r * 0.7)
+    for (let j = 0; j < 4; j++) {
+      const puff = new T.Mesh(cloudPuff, cloudMaterial)
+      puff.position.set((j - 1.5) * 0.9, Math.sin(j * 1.7) * 0.3, Math.cos(j * 2.3) * 0.4)
+      puff.scale.set(1.1 + (j % 2) * 0.5, 0.75 + (j % 3) * 0.2, 1)
+      cluster.add(puff)
+    }
+    cluster.scale.setScalar(0.8 + ((i * 0.29) % 1) * 0.9)
+    cloudBank.add(cluster)
+  }
+  cloudBank.visible = !landed
+  scene.add(cloudBank)
+  const landingShadow = new T.Mesh(
+    new T.CircleGeometry(0.42, 24),
+    new T.MeshBasicMaterial({ color: '#24382e', transparent: true, opacity: 0, depthWrite: false }),
+  )
+  landingShadow.rotation.x = -Math.PI / 2
+  landingShadow.position.set(landingSpot.x, landingSpot.y + 0.03, landingSpot.z)
+  scene.add(landingShadow)
+  function skipArrival() {
+    if (landed) return
+    fallT = FALL + 3
+    landed = true
+    visitor.umbrella?.(false)
+    visitor.group.rotation.z = 0
+    cloudBank.visible = false
+    landingShadow.visible = false
+  }
   /** Log seats: where to sit (fire side of the log) and where to step off. */
   const seats = campfire.logs.map(([dx, dz]) => {
     const lx = fireX + dx,
@@ -168,6 +250,7 @@ export function startVillage(
     destination.add(visitor.group, dust)
     velocity.set(0, 0)
     rest = null
+    fishing.cancel()
     visitor.settle()
     if (value) visitor.group.position.set(0, 0, 1.16)
     else visitor.group.position.copy(doorstep)
@@ -231,7 +314,6 @@ export function startVillage(
     project: number | undefined
   let goal: Point[] = [],
     elapsed = 0,
-    arrivalTime = 0,
     last = 0,
     night = atmosphere.update(new Date()),
     lastLight = 0,
@@ -292,12 +374,30 @@ export function startVillage(
     (e) => {
       if (
         paused ||
+        !landed ||
         iris.active() ||
         e.button !== 0 ||
         Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 12
       )
         return
+      // Popping the gift balloon takes priority over everything else.
+      const drifting = inside ? null : scenery.balloon()
+      if (drifting) {
+        const box = canvas.getBoundingClientRect()
+        projectCurved(projected.set(drifting.position.x, drifting.position.y + 0.9, drifting.position.z), camera)
+        const sx = ((projected.x + 1) * box.width) / 2,
+          sy = ((1 - projected.y) * box.height) / 2
+        if (Math.hypot(e.clientX - box.left - sx, e.clientY - box.top - sy) < 70 && scenery.popBalloon()) {
+          visitor.emote?.('heart')
+          events.gift?.(Math.floor(Math.random() * 6))
+          return
+        }
+      }
       const o = resolve(e)
+      if (fishing.active()) {
+        fishing.press()
+        return
+      }
       if (rest && rest.stage !== 'approach') {
         standUp()
         return
@@ -366,7 +466,7 @@ export function startVillage(
     arrived?: () => void,
   ) {
     if (iris.active() || enter === inside) return
-    arrivalTime = 3.5
+    skipArrival()
     goal = []
     keys.clear()
     stick.set(0, 0)
@@ -381,8 +481,10 @@ export function startVillage(
     }, arrived)
   }
   function activate(target: Target, exhibit?: number) {
-    arrivalTime = 3.5
-    if (target === 'campfire') {
+    if (target === 'fishing') {
+      if (fishing.active()) fishing.press()
+      else beginFishing()
+    } else if (target === 'campfire') {
       if (rest) standUp()
       else beginRest()
     } else if (target === 'exit') crossDoor(false)
@@ -390,8 +492,9 @@ export function startVillage(
     else events.open(target, exhibit)
   }
   function interact() {
-    if (paused || iris.active()) return
-    if (rest && rest.stage !== 'approach') standUp()
+    if (paused || iris.active() || !landed) return
+    if (fishing.active()) fishing.press()
+    else if (rest && rest.stage !== 'approach') standUp()
     else if (reach) activate(reach, project)
     else if (!inside) shakeTree(visitor.group.position.x, visitor.group.position.z)
   }
@@ -412,6 +515,7 @@ export function startVillage(
         e.preventDefault()
         keys.add(e.code)
         if (rest?.stage === 'seated') standUp()
+        fishing.cancel()
       }
       if (e.code === 'KeyE' && !e.repeat) interact()
       if (e.code === 'Equal') changeZoom(0.1)
@@ -490,8 +594,10 @@ export function startVillage(
           ? 1.8
           : zone === 'campfire'
             ? 2.3
-            : 3.5
-      if (rest) break
+            : zone === 'fishing'
+              ? 1.6
+              : 3.5
+      if (rest || fishing.active()) break
       // The campfire circle is wide: measure from its rim, not its centre.
       const effective = zone === 'campfire' ? dist - 0.75 : dist
       if (dist <= limit && effective < best) {
@@ -519,7 +625,6 @@ export function startVillage(
     const dt = Math.min(0.14, Math.max(0, (stamp - (last || stamp)) / 1000))
     last = stamp
     elapsed += dt
-    if (!paused) arrivalTime += dt
     if (stamp - lastLight > 8000) {
       night = atmosphere.update(new Date())
       lastLight = stamp
@@ -528,7 +633,7 @@ export function startVillage(
     let distance = 0,
       turn = 0
     const pace = (inside ? 2.6 : 3.1) * (running && !inside ? 1.75 : 1)
-    const free = !rest || rest.stage === 'approach'
+    const free = (!rest || rest.stage === 'approach') && !fishing.active() && landed
     wish.set(0, 0)
     if (!paused && !iris.active() && free) {
       const dx =
@@ -546,6 +651,7 @@ export function startVillage(
         rest = null
         pendingShake = null
         faceYaw = null
+        anglingWalk = false
         wish.copy(step)
         if (wish.lengthSq() > 1) wish.normalize()
         wish.multiplyScalar(pace)
@@ -642,9 +748,17 @@ export function startVillage(
         } else if (leaving && t >= 1) rest = null
       }
     }
-    cozy = T.MathUtils.damp(cozy, rest?.stage === 'seated' ? 1 : 0, 1.6, dt)
+    cozy = T.MathUtils.damp(cozy, rest?.stage === 'seated' || fishing.active() ? 1 : 0, 1.6, dt)
     const onRug = Math.abs(p.x) < 1.73 && Math.abs(p.z - 0.1) < 1.27
     p.y = (inside ? (inside === 'about' && onRug ? 0.09 : 0.01) : islandFloorHeight(p.x, p.z)) + hopLift
+    if (anglingWalk && !goal.length) {
+      anglingWalk = false
+      if (Math.hypot(fishingSpot[0] - p.x, fishingSpot[1] - p.z) < 0.4) {
+        faceYaw = 0
+        fishing.begin(p, 0)
+      }
+    }
+    fishing.update(dt, elapsed)
     if (pendingShake && !goal.length) {
       const [sx, sz] = pendingShake
       pendingShake = null
@@ -657,6 +771,30 @@ export function startVillage(
       if (Math.abs(delta) < 0.02) faceYaw = null
     }
     if (rest && rest.stage !== 'approach') speed = distance / Math.max(dt, 1e-3)
+    if (!landed && !inside) {
+      if (fallT === 0) visitor.umbrella?.(true)
+      if (!paused) fallT += dt
+      const u = Math.min(1, fallT / FALL)
+      const left = 1 - u
+      p.set(
+        landingSpot.x + Math.sin(fallT * 1.7) * 0.7 * left,
+        landingSpot.y + FALL_HEIGHT * left ** 1.7,
+        landingSpot.z + Math.cos(fallT * 1.3) * 0.3 * left,
+      )
+      visitor.group.rotation.y = Math.sin(fallT * 0.9) * 0.6 * left
+      visitor.group.rotation.z = Math.sin(fallT * 1.7 + 0.6) * 0.13 * left
+      landingShadow.material.opacity = 0.32 * T.MathUtils.smoothstep(u, 0.4, 1)
+      landingShadow.scale.setScalar(0.4 + 0.6 * u)
+      cloudMaterial.opacity = 0.95 * (1 - T.MathUtils.smoothstep(u, 0.7, 0.95))
+      if (u >= 1) {
+        landed = true
+        p.copy(landingSpot)
+        visitor.group.rotation.z = 0
+        visitor.land?.()
+        cloudBank.visible = false
+        landingShadow.visible = false
+      }
+    } else if (landed && fallT < FALL + 3 && !paused) fallT += dt
     visitor.animate(elapsed, motion.matches, {
       distance,
       speed,
@@ -685,25 +823,34 @@ export function startVillage(
       ring.scale.setScalar(1)
       if (!goal.length) ring.visible = false
     }
-    const intro =
-      motion.matches || inside
-        ? 1
-        : T.MathUtils.smoothstep(arrivalTime, 0.15, 3.5)
+    // 0 while drifting down, easing to 1 after touchdown.
+    const intro = motion.matches || inside ? 1 : T.MathUtils.smoothstep(fallT, FALL + 0.35, FALL + 2.1)
     const aspect = canvas.clientWidth / Math.max(1, canvas.clientHeight)
     const closeToPlaza =
       1 - T.MathUtils.smoothstep(Math.hypot(p.x + 5.7, p.z - 4.6), 2.6, 7.9)
-    const follow = aspect < 0.9 ? 0.81 : 0.53 + 0.16 * closeToPlaza
+    const follow = aspect < 0.9 ? 0.88 : 0.74 + 0.1 * closeToPlaza
     desired.set(
-      inside ? 0 : p.x * follow * intro,
+      inside ? 0 : p.x * follow,
       inside ? 0.55 : 0,
-      inside ? 0 : p.z * 0.65 * intro,
+      inside ? 0 : p.z * 0.84,
     )
+    if (intro < 1) {
+      // Keep the falling visitor centred, then ease back to the usual framing.
+      steerTarget.set(p.x, p.y + 0.75, p.z)
+      desired.lerp(steerTarget, 1 - intro)
+    }
     if (!inside) {
       // Look a little ahead of the visitor, and settle in close by the fire.
       desired.x += velocity.x * 0.16 * intro
       desired.z += velocity.y * 0.12 * intro
-      desired.x += (fireX * follow - desired.x) * 0.45 * cozy
-      desired.z += (fireZ * 0.65 - desired.z) * 0.45 * cozy
+      if (fishing.active()) {
+        // Frame the water in front of the pier so the bobber stays in view.
+        desired.x += (p.x - desired.x) * 0.85 * cozy
+        desired.z += (p.z + 1.3 - desired.z) * 0.85 * cozy
+      } else {
+        desired.x += (fireX * follow - desired.x) * 0.45 * cozy
+        desired.z += (fireZ * 0.84 - desired.z) * 0.45 * cozy
+      }
     }
     // Around the iris, glide the camera so the visitor sits in the middle of
     // the screen, right where the circle shrinks to and reopens from.
@@ -720,22 +867,21 @@ export function startVillage(
         ? 1
         : steer > 0
           ? 1 - Math.exp(-dt * 7)
-          : inside
+          : inside || intro < 0.02
             ? 1
-            : 1 - Math.exp(-dt * 3),
+            : 1 - Math.exp(-dt * (intro < 1 ? 6 : 3)),
     )
     snapCamera = false
     const streetSpan =
       aspect < 0.9 ? 10.15 - closeToPlaza * 1.3 : 8.25 - closeToPlaza * 1.15
     const span = inside
       ? Math.max(4.2, 4.8 / aspect) / zoom
-      : (streetSpan / zoom) * (1 - 0.2 * cozy) + (1 - intro) * (aspect < 0.9 ? 14 : 8)
-    const orbit = (1 - intro) * 1.05
-    cameraOffset.set(
-      8 * Math.cos(orbit) - 27 * Math.sin(orbit),
-      19 + 16 * (1 - intro),
-      27 * Math.cos(orbit) + 8 * Math.sin(orbit),
-    )
+      : T.MathUtils.lerp(
+          (aspect < 0.9 ? 7 : 4.6) + 3.2 * Math.min(1, fallT / FALL),
+          (streetSpan / zoom) * (1 - 0.2 * cozy),
+          intro,
+        )
+    cameraOffset.set(8, 19, 27)
     // A gentle diorama curve outdoors; rooms stay flat.
     worldCurve.value = inside ? 0 : 0.0072
     worldCurveFocus.value = cameraOffset.length()
@@ -833,6 +979,7 @@ export function startVillage(
     Object.assign(window, {
       __island: {
         teleport(x: number, z: number, yaw = 0) {
+          skipArrival()
           visitor.group.position.set(x, islandFloorHeight(x, z), z)
           visitor.group.rotation.y = yaw
           velocity.set(0, 0)
@@ -840,7 +987,7 @@ export function startVillage(
           visitor.settle()
           snapCamera = true
         },
-        state: () => ({ rest: rest?.stage ?? null, reach, x: visitor.group.position.x, z: visitor.group.position.z }),
+        state: () => ({ rest: rest?.stage ?? null, fishing: fishing.stage(), reach, x: visitor.group.position.x, z: visitor.group.position.z }),
       },
     })
   frame = requestAnimationFrame(tick)
@@ -862,7 +1009,7 @@ export function startVillage(
     },
     travel(id, arrived) {
       if (iris.active()) return
-      arrivalTime = 3.5
+        skipArrival()
       if (id === 'about' || id === 'tech') {
         if (inside !== id) crossDoor(id, undefined, arrived)
         else arrived?.()
@@ -876,6 +1023,7 @@ export function startVillage(
         stick.set(0, 0)
         velocity.set(0, 0)
         rest = null
+        fishing.cancel()
         visitor.settle()
         snapCamera = true
         setHover(null)

@@ -513,6 +513,94 @@ kbd {
 .prompt:active {
   transform: translateX(-50%) !important;
 }
+.prompt.bite {
+  background: #fff1c9;
+  border-color: #d9773f;
+  color: #8a3a1c;
+  font-size: 1.08rem;
+  animation: bite-pulse 0.5s ease-in-out infinite alternate;
+}
+@keyframes bite-pulse {
+  from {
+    transform: translateX(-50%) scale(1);
+  }
+  to {
+    transform: translateX(-50%) scale(1.08);
+  }
+}
+.catch-card {
+  position: absolute;
+  left: 50%;
+  bottom: 104px;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  padding: 14px 18px;
+  width: max-content;
+  max-width: min(440px, 92vw);
+  background: #fffae9f7;
+  border: 2px solid #647e60;
+  border-radius: 20px;
+  box-shadow: 0 4px 0 #2c483f67;
+  animation: catch-pop 0.55s cubic-bezier(0.2, 1.6, 0.4, 1) both;
+}
+.catch-card small {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-weight: 800;
+  color: #5d7457;
+}
+.catch-card em {
+  font-style: normal;
+  background: #f6c24d;
+  color: #5b3a12;
+  border-radius: 999px;
+  padding: 1px 9px;
+  font-size: 0.75rem;
+}
+.catch-card b {
+  display: block;
+  font-family: 'Lilita One', system-ui, sans-serif;
+  font-weight: 400;
+  font-size: 1.25rem;
+  color: #2f4a3c;
+}
+.catch-card p {
+  margin: 2px 0 6px;
+  font-size: 0.9rem;
+  line-height: 1.3;
+}
+.gift-card {
+  bottom: auto;
+  top: 96px;
+}
+.gift-card .primary {
+  margin-top: 6px;
+}
+.catch-count {
+  font-size: 0.78rem;
+  font-weight: 800;
+  color: #6b7f66;
+}
+.catch-fish {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  color: #fff;
+  background: radial-gradient(circle at 35% 30%, var(--fin), var(--fish));
+  box-shadow: inset 0 -4px 0 #0002;
+}
+@keyframes catch-pop {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(18px) scale(0.8);
+  }
+}
 .intro-toast {
   bottom: 105px;
   display: flex;
@@ -1416,4 +1504,150 @@ kbd {
 
 .house-iris.sealed {
   background: #070a09;
+}
+
+/* ------------------------------ Arrival screen ------------------------------ */
+.arrival {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(180deg, #8fd0ee 0%, #c4e9f7 48%, #fdf0dc 100%);
+  transition: opacity 0.7s ease, transform 0.9s ease;
+}
+.arrival.leaving {
+  opacity: 0;
+  transform: scale(1.08);
+  pointer-events: none;
+}
+.arrival-clouds {
+  position: absolute;
+  inset: -40% -10%;
+  background-repeat: repeat;
+  animation: arrival-rise linear infinite;
+}
+.arrival-clouds.far {
+  opacity: 0.55;
+  background-image: radial-gradient(ellipse 90px 34px at 25% 30%, #fff 60%, transparent 62%),
+    radial-gradient(ellipse 70px 28px at 70% 60%, #fff 60%, transparent 62%),
+    radial-gradient(ellipse 110px 36px at 45% 85%, #fff 60%, transparent 62%);
+  background-size: 420px 360px;
+  animation-duration: 16s;
+}
+.arrival-clouds.mid {
+  opacity: 0.85;
+  background-image: radial-gradient(ellipse 150px 55px at 25% 40%, #fff 60%, transparent 62%),
+    radial-gradient(ellipse 120px 48px at 80% 75%, #fffaf2 60%, transparent 62%);
+  background-size: 640px 520px;
+  animation-duration: 9s;
+}
+.arrival-clouds.near {
+  opacity: 0.95;
+  background-image: radial-gradient(ellipse 200px 80px at 28% 50%, #fff 60%, transparent 62%),
+    radial-gradient(ellipse 180px 70px at 72% 12%, #fff 60%, transparent 62%);
+  background-size: 900px 820px;
+  animation-duration: 5.5s;
+}
+@keyframes arrival-rise {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(-50%);
+  }
+}
+.arrival-hero {
+  position: relative;
+  width: min(200px, 42vw);
+  margin-top: -6vh;
+  transform-origin: 50% 12%;
+  animation: arrival-sway 3.2s ease-in-out infinite;
+  filter: drop-shadow(0 10px 14px #3a6c7a33);
+}
+@keyframes arrival-sway {
+  0%,
+  100% {
+    transform: rotate(-6deg) translateY(-6px);
+  }
+  50% {
+    transform: rotate(6deg) translateY(6px);
+  }
+}
+.arrival-legs {
+  transform-origin: 70px 186px;
+  animation: arrival-kick 0.9s ease-in-out infinite alternate;
+}
+@keyframes arrival-kick {
+  to {
+    transform: rotate(7deg);
+  }
+}
+.arrival-wave {
+  transform-origin: 92px 160px;
+  animation: arrival-wave 0.7s ease-in-out infinite alternate;
+}
+@keyframes arrival-wave {
+  to {
+    transform: rotate(-16deg);
+  }
+}
+.arrival-scarf {
+  animation: arrival-flutter 0.35s ease-in-out infinite alternate;
+  transform-origin: 80px 152px;
+}
+@keyframes arrival-flutter {
+  to {
+    transform: rotate(-9deg) scaleX(1.06);
+  }
+}
+.arrival-text {
+  position: absolute;
+  bottom: 12vh;
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  color: #2f4a3c;
+  text-align: center;
+}
+.arrival-text strong {
+  font-family: 'Lilita One', system-ui, sans-serif;
+  font-weight: 400;
+  font-size: clamp(2rem, 6vw, 3.2rem);
+  color: #fffaf0;
+  text-shadow: 0 3px 0 #4f8f86, 0 6px 18px #2f6d7a55;
+}
+.arrival-text span {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 7px 16px;
+  font-weight: 850;
+  background: #fffae9f2;
+  border: 2px solid #647e60;
+  border-radius: 999px;
+  box-shadow: 0 3px 0 #2c483f55;
+}
+.arrival-text i {
+  display: inline-flex;
+  gap: 4px;
+}
+.arrival-text b {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #ef6c5c;
+  animation: arrival-dot 0.9s ease-in-out infinite;
+}
+.arrival-text b:nth-child(2) {
+  animation-delay: 0.15s;
+}
+.arrival-text b:nth-child(3) {
+  animation-delay: 0.3s;
+}
+@keyframes arrival-dot {
+  50% {
+    transform: translateY(-5px);
+  }
 }

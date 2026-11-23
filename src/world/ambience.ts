@@ -1,5 +1,6 @@
 import * as T from 'three'
 import { Batch, ModelKit, type XZ } from './modelKit'
+import { pond } from '../data/island'
 
 /** A soft round sprite texture, drawn once and shared by every glow. */
 export function softDot(inner: string, outer: string) {
@@ -211,7 +212,7 @@ export function createAmbience({ kit, crowns, perches, low, lamps, campfire, lan
       return pivot
     })
     group.add(gull)
-    return { gull, wings, radius: 19 + i * 3.5, height: 4.2 + i * 1.1, speed: 0.12 - i * 0.02, offset: i * 2.1 }
+    return { gull, wings, radius: 24 + i * 3.5, height: 4.2 + i * 1.1, speed: 0.12 - i * 0.02, offset: i * 2.1 }
   })
 
   /* --------------------------- Falling leaves -------------------------- */
@@ -285,8 +286,100 @@ export function createAmbience({ kit, crowns, perches, low, lamps, campfire, lan
 
   const nearest: { x: number; z: number; d: number }[] = lamps.map(([x, z]) => ({ x, z, d: 0 }))
 
+  /* ------------------------------- Frogs -------------------------------- */
+  // Two frogs sun themselves on lily pads and plop into the pond if you
+  // come too close, popping back up a little later.
+  const frogShape = new Batch(kit)
+  frogShape.ball([0, 0.07, 0], [0.11, 0.07, 0.1], '#79b85a', 1)
+  frogShape.ball([0, 0.05, 0.04], [0.08, 0.045, 0.07], '#e9f1c4', 1)
+  for (const s of [-1, 1]) {
+    frogShape.ball([s * 0.05, 0.13, 0.05], [0.035, 0.035, 0.035], '#79b85a', 1)
+    frogShape.ball([s * 0.055, 0.14, 0.075], [0.016, 0.018, 0.012], '#2f2624', 0)
+    frogShape.ball([s * 0.1, 0.03, -0.03], [0.05, 0.025, 0.07], '#6aa64e', 1)
+  }
+  const frogGeometry = (frogShape.finish().children[0] as T.Mesh).geometry
+  const [pondX, pondZ] = pond.center
+  const frogs = [
+    [-0.45, 0.25, 0.4],
+    [0.35, -0.4, -2.2],
+  ].map(([dx, dz, yaw], i) => {
+    const frog = new T.Mesh(frogGeometry, kit.matte)
+    frog.castShadow = true
+    const home = new T.Vector3(pondX + dx, 0.14, pondZ + dz)
+    frog.position.copy(home)
+    frog.rotation.y = yaw
+    frog.scale.setScalar(1.3)
+    group.add(frog)
+    return { frog, home, yaw, hop: 1, away: 0, seed: i * 2.3 }
+  })
+  const plopRings = Array.from({ length: 2 }, () => {
+    const ring = new T.Mesh(
+      new T.RingGeometry(0.8, 1, 24),
+      new T.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0, depthWrite: false }),
+    )
+    ring.rotation.x = -Math.PI / 2
+    ring.visible = false
+    group.add(ring)
+    return { ring, age: 1 }
+  })
+
+  /* --------------------------- Gift balloon ------------------------------ */
+  // Now and then a bunch of balloons drifts over the island carrying a gift.
+  const balloon = new T.Group()
+  const balloonColours = ['#ef6c5c', '#f6c24d', '#5fb3c9']
+  balloonColours.forEach((colour, i) => {
+    const b = new T.Mesh(new T.SphereGeometry(0.32, 16, 12), new T.MeshStandardMaterial({ color: colour, roughness: 0.35 }))
+    b.scale.y = 1.15
+    b.position.set((i - 1) * 0.42, 1.25 + (i % 2) * 0.22, (i % 2) * 0.12)
+    balloon.add(b)
+    const string = new T.Mesh(new T.CylinderGeometry(0.006, 0.006, 0.9, 4), new T.MeshBasicMaterial({ color: '#ffffff' }))
+    string.position.set((i - 1) * 0.21, 0.7, 0)
+    string.rotation.z = -(i - 1) * 0.42
+    balloon.add(string)
+  })
+  const gift = new T.Mesh(new T.BoxGeometry(0.42, 0.36, 0.42), new T.MeshStandardMaterial({ color: '#fdf3dc', roughness: 0.6 }))
+  gift.position.y = 0.18
+  const ribbon = new T.Mesh(new T.BoxGeometry(0.44, 0.38, 0.1), new T.MeshStandardMaterial({ color: '#ef6c5c' }))
+  ribbon.position.y = 0.18
+  const ribbon2 = ribbon.clone()
+  ribbon2.rotation.y = Math.PI / 2
+  balloon.add(gift, ribbon, ribbon2)
+  balloon.visible = false
+  group.add(balloon)
+  let balloonStart = 22
+  let balloonPopped = false
+  /** Each flight crosses just north of wherever the visitor is. */
+  const lane = new T.Vector2()
+  const confetti = Array.from({ length: low ? 14 : 28 }, (_, i) => {
+    const bit = new T.Mesh(
+      new T.PlaneGeometry(0.09, 0.05),
+      new T.MeshBasicMaterial({ color: ['#ef6c5c', '#f6c24d', '#5fb3c9', '#83cdb0', '#f39ac4'][i % 5], side: T.DoubleSide }),
+    )
+    bit.visible = false
+    group.add(bit)
+    return { bit, v: new T.Vector3(), spin: new T.Vector3(), age: 1 }
+  })
+
   let lastTime = 0
+  let clockTime = 0
   return {
+    /** Where the gift balloon is (null when it is not flying). */
+    balloon: () => (balloon.visible && !balloonPopped ? balloon : null),
+    /** Pop the gift balloon: confetti, and it drifts away. */
+    popBalloon() {
+      if (!balloon.visible || balloonPopped) return false
+      balloonPopped = true
+      const at = balloon.position
+      confetti.forEach((c) => {
+        c.bit.visible = true
+        c.age = 0
+        c.bit.position.set(at.x, at.y + 1.2, at.z)
+        c.v.set((Math.random() - 0.5) * 4, 1.5 + Math.random() * 3, (Math.random() - 0.5) * 4)
+        c.spin.set(Math.random() * 9, Math.random() * 9, Math.random() * 9)
+      })
+      balloonStart = clockTime + 70 + Math.random() * 40
+      return true
+    },
     group,
     /** A shaken tree lets go of a handful of leaves. */
     burst(x: number, z: number, height: number) {
@@ -301,6 +394,82 @@ export function createAmbience({ kit, crowns, perches, low, lamps, campfire, lan
     update(time: number, night: number, px: number, pz: number, reduced: boolean) {
       const dt = Math.min(0.1, Math.max(0, time - lastTime))
       lastTime = time
+      clockTime = time
+
+      // Frogs: breathe, and plop into the water when someone comes close.
+      frogs.forEach((f) => {
+        const near = Math.hypot(px - f.home.x, pz - f.home.z) < 2.3
+        if (near && f.away <= 0 && f.hop >= 1 && !reduced) {
+          f.hop = 0
+          f.away = 5 + Math.random() * 3
+        }
+        if (f.hop < 1) {
+          f.hop = Math.min(1, f.hop + dt / 0.55)
+          const k = f.hop
+          f.frog.position.set(f.home.x + Math.sin(f.yaw) * 0.6 * k, 0.14 + Math.sin(Math.PI * k) * 0.35 - (k > 0.85 ? (k - 0.85) * 2 : 0), f.home.z + Math.cos(f.yaw) * 0.6 * k)
+          if (f.hop >= 1) {
+            f.frog.visible = false
+            const r = plopRings.find((p) => p.age >= 1) ?? plopRings[0]
+            r.ring.position.set(f.frog.position.x, 0.13, f.frog.position.z)
+            r.age = 0
+            r.ring.visible = true
+          }
+        } else if (f.away > 0) {
+          f.away -= dt
+          if (f.away <= 0 && !near) {
+            f.frog.visible = true
+            f.frog.position.copy(f.home)
+          } else if (f.away <= 0) f.away = 1
+        } else {
+          const breath = reduced ? 1 : 1 + Math.max(0, Math.sin(time * 3 + f.seed)) * 0.08
+          f.frog.scale.set(1.3, 1.3 * breath, 1.3)
+        }
+      })
+      for (const r of plopRings) {
+        if (r.age >= 1) continue
+        r.age = Math.min(1, r.age + dt / 1.2)
+        r.ring.scale.setScalar(0.1 + r.age * 0.45)
+        r.ring.material.opacity = 0.8 * (1 - r.age)
+        if (r.age >= 1) r.ring.visible = false
+      }
+
+      // The gift balloon crosses the island on a gentle breeze.
+      const flight = time - balloonStart
+      if (flight > 0 && flight < 46 && !reduced && night < 0.6) {
+        if (!balloon.visible) {
+          balloonPopped = false
+          lane.set(px, pz - 2.5)
+        }
+        balloon.visible = true
+        const k = flight / 46
+        if (balloonPopped) {
+          balloon.position.y += dt * 2.4
+          balloon.children.forEach((c) => {
+            if (c === gift || c === ribbon || c === ribbon2) c.visible = false
+          })
+          if (balloon.position.y > 16) balloon.visible = false
+        } else {
+          balloon.children.forEach((c) => (c.visible = true))
+          balloon.position.set(lane.x - 18 + 36 * k, 3.6 + Math.sin(time * 0.8) * 0.35, lane.y + Math.sin(k * Math.PI * 2) * 1.5)
+          balloon.rotation.z = Math.sin(time * 1.1) * 0.08
+        }
+      } else if (flight >= 46) {
+        balloon.visible = false
+        balloonStart = time + 60 + Math.random() * 40
+      } else if (flight < 0) balloon.visible = false
+      for (const c of confetti) {
+        if (c.age >= 1) continue
+        c.age = Math.min(1, c.age + dt / 2.2)
+        c.v.y -= 3.5 * dt
+        c.v.multiplyScalar(1 - dt * 0.6)
+        c.bit.position.addScaledVector(c.v, dt)
+        c.bit.rotation.x += c.spin.x * dt
+        c.bit.rotation.y += c.spin.y * dt
+        if (c.age >= 1 || c.bit.position.y < 0.1) {
+          c.bit.visible = false
+          c.age = 1
+        }
+      }
       const dusk = T.MathUtils.smoothstep(night, 0.12, 0.6)
 
       // Lamps: halos everywhere, real light near the visitor.
@@ -371,11 +540,11 @@ export function createAmbience({ kit, crowns, perches, low, lamps, campfire, lan
 
       // Fish shadows swim upstream with a lazy wiggle.
       fish.forEach(({ body, start, speed, lane }) => {
-        const z = 9.6 - ((start + time * speed) % 19.2)
+        const z = 12.4 - ((start + time * speed) % 24.8)
         const x = river(z) + lane * riverWidth(z) * 0.9 + Math.sin(time * 0.9 + start) * 0.12
         body.position.set(x, -0.112, z)
         body.rotation.y = Math.PI + (reduced ? 0 : Math.sin(time * 5 + start) * 0.2)
-        body.visible = Math.abs(z) < 9.2
+        body.visible = Math.abs(z) < 12
       })
 
       // Leaves drift down from the crowns, rock side to side and settle.

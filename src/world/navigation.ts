@@ -1,6 +1,6 @@
 import { anchors, type Zone } from '../data/village'
 import { exhibitSpots } from '../data/exhibits'
-import { propColliders } from '../data/island'
+import { propColliders, shape } from '../data/island'
 export type Point = [number, number]
 // Narrow colliders leave the spaces between the six pedestals walkable.
 const ornaments: ([number, number] | [number, number, number])[] = [
@@ -33,11 +33,11 @@ const blocks: [Zone, number, number][] = [
   ['skills', 2.03, 1.52],
 ]
 export function walkable(x: number, z: number) {
-  if (Math.abs(x - 2.5) < 0.63 && z > 9.25 && z < 12.95) return true
+  if (Math.abs(x - 2.5) < 0.63 && z > shape.pierFrom - 0.4 && z < shape.pierTo - 0.3) return true
   const nearby = cells.get(cellKey(Math.floor(x), Math.floor(z)))
   if (nearby?.some(([ox, oz, r]) => (x - ox) ** 2 + (z - oz) ** 2 < r ** 2))
     return false
-  if ((x / 14.8) ** 2 + (z / 9.8) ** 2 > 1) return false
+  if ((x / shape.walkX) ** 2 + (z / shape.walkZ) ** 2 > 1) return false
   if (
     Math.abs(x + 2.5) < 1.05 &&
     Math.abs(z - 1) > 0.84 &&

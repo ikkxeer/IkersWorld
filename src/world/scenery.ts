@@ -13,6 +13,7 @@ import { building, lighthouse, pickable } from './village'
 import { decoratePlaza, exhibit } from './exhibits'
 import { exhibitSpots } from '../data/exhibits'
 import {
+  shape,
   lanternPoints,
   benchSites,
   bushSites,
@@ -25,10 +26,15 @@ import {
   picnicSite,
   rockSites,
   treeSites,
+  tulipField,
+  pond,
+  beach,
+  palmSites,
+  telescopeSite,
   wellSite,
 } from '../data/island'
 import { walkable } from './navigation'
-import { createRiver } from './water'
+import { createPond, createRiver } from './water'
 import { createAmbience } from './ambience'
 
 const river = (z: number) =>
@@ -48,7 +54,7 @@ function terrain(b: Batch) {
         0.018 * Math.sin(a * 7) +
         0.012 * Math.cos(a * 11) +
         0.008 * Math.sin(a * 19)
-    coast.push([15.65 * Math.cos(a) * ripple, 11.25 * Math.sin(a) * ripple])
+    coast.push([shape.coastX * Math.cos(a) * ripple, shape.coastZ * Math.sin(a) * ripple])
   }
   b.horizontal(
     coast.map(([x, z]) => [x * 1.044, z * 1.052]),
@@ -105,7 +111,7 @@ function terrain(b: Batch) {
   for (const s of [-1, 1])
     for (const side of [-1, 1])
       for (let i = 0; i < 3; i++) {
-        const z = s * (10.75 + i * 0.42)
+        const z = s * (shape.lip + 0.45 + i * 0.45)
         b.ball(
           [river(z) + side * (riverWidth(z) * (1.15 + i * 0.35) + 0.25), -0.38 - i * 0.12, z],
           [0.32 - i * 0.05, 0.26 - i * 0.04, 0.3 - i * 0.04],
@@ -205,7 +211,7 @@ export function islandFloorHeight(x: number, z: number) {
     const across = (x - river(bridgeZ)) / bridgeWidth + 0.5
     if (across >= 0 && across <= 1) return bridgeTop(across)
   }
-  if (z > 10 && Math.abs(x - 2.5) < 0.9) return -0.06
+  if (z > shape.pierFrom + 0.15 && Math.abs(x - 2.5) < 0.9) return -0.06
   // The bevel rises above the nominal top of the grass extrusion.
   return 0.1
 }
@@ -475,16 +481,17 @@ function mailbox(kit: ModelKit) {
   return b.finish()
 }
 function pier(b: Batch) {
-  for (let i = 0; i < 12; i++)
+  const boards = Math.round((shape.pierTo - shape.pierFrom) / 0.28)
+  for (let i = 0; i < boards; i++)
     b.block(
-      [2.5, -0.14, 9.98 + i * 0.28],
+      [2.5, -0.14, shape.pierFrom + 0.1 + i * 0.28],
       [1.78, 0.16, 0.26],
       i % 3 ? '#b98d59' : '#caa06b',
       [0, 0, 0],
       true,
     )
   for (const s of [-1, 1])
-    for (const z of [10.12, 11.6, 12.96]) {
+    for (let z = shape.pierFrom + 0.25; z < shape.pierTo; z += 1.45) {
       b.stick(
         [2.5 + s * 0.8, -1.06, z],
         [2.5 + s * 0.8, 0.18, z],
@@ -495,7 +502,7 @@ function pier(b: Batch) {
     }
   // Small moored wooden dinghy, with a recessed hull and two transverse seats.
   const x = 4.05,
-    z = 11.68
+    z = shape.pierFrom + 2.3
   const hull: XZ[] = [
     [-0.42, -0.63],
     [-0.32, -0.97],
@@ -513,7 +520,7 @@ function pier(b: Batch) {
   b.horizontal(poly(0.84), -0.46, 0.012, '#765742')
   for (const dz of [-0.43, 0.36])
     b.block([x, -0.409, z + dz], [0.72, 0.08, 0.17], '#d2a873')
-  b.stick([3.25, -0.09, 11.6], [3.8, -0.43, 11.1], 0.022, trim, 5)
+  b.stick([3.25, -0.09, z], [3.8, -0.43, z - 0.5], 0.022, trim, 5)
 }
 function bird(kit: ModelKit) {
   const b = new Batch(kit)
@@ -668,6 +675,156 @@ function mossyRocks(b: Batch, x: number, z: number, s: number) {
   b.ball([x + 0.38 * s, 0.1 * s, z + 0.12 * s], [0.24 * s, 0.18 * s, 0.22 * s], '#cfc7b8', 1, [0, z, 0])
   b.ball([x - 0.05 * s, 0.32 * s, z - 0.04 * s], [0.3 * s, 0.1 * s, 0.26 * s], '#8fbb6d', 1, [0, x, 0.1])
 }
+/** Rows of tulips in a tilled bed, with a scarecrow keeping watch. */
+function tulipBed(b: Batch) {
+  const { center, width, depth } = tulipField
+  const [x, z] = center
+  const bed: XZ[] = []
+  for (let i = 0; i < 24; i++) {
+    const a = (i / 24) * Math.PI * 2
+    const c = Math.cos(a),
+      s = Math.sin(a)
+    // A rounded rectangle (superellipse).
+    bed.push([x + Math.sign(c) * Math.abs(c) ** 0.45 * (width / 2 + 0.3), z + Math.sign(s) * Math.abs(s) ** 0.45 * (depth / 2 + 0.3)])
+  }
+  b.horizontal(bed, 0.104, 0.02, '#b98a5e', b.kit.soil, 0.01, 2, true)
+  const rows = ['#f26d6d', '#f6c24d', '#f39ac4', '#fffaf0', '#b49ae6']
+  rows.forEach((colour, r) => {
+    const rz = z - depth / 2 + (r * depth) / (rows.length - 1)
+    for (let i = 0; i < 11; i++) {
+      const rx = x - width / 2 + (i * width) / 10
+      tulip(b, rx + ((i * 7 + r) % 3) * 0.03, rz, colour, ((i * 0.37 + r * 0.21) % 1))
+    }
+  })
+  // Scarecrow.
+  const sx = x + width / 2 + 0.75,
+    sz = z - 0.2
+  b.stick([sx, 0.1, sz], [sx, 1.55, sz], 0.05, timber, 6)
+  b.stick([sx - 0.55, 1.15, sz], [sx + 0.55, 1.15, sz], 0.04, timber, 6)
+  b.block([sx, 1.05, sz], [0.5, 0.45, 0.22], '#6f9bc8', [0, 0, 0], true)
+  b.ball([sx, 1.62, sz], [0.2, 0.2, 0.19], '#f3dfb0', 1)
+  b.cylinder([sx, 1.8, sz], 0.32, 0.32, 0.04, '#e0b75e', 14)
+  b.cylinder([sx, 1.9, sz], 0.13, 0.17, 0.16, '#e0b75e', 12)
+  for (const s of [-1, 1]) b.ball([sx + s * 0.07, 1.65, sz + 0.17], [0.025, 0.025, 0.015], '#4a3a30', 0)
+  b.ball([sx, 1.57, sz + 0.18], [0.05, 0.015, 0.01], '#c66b55', 0)
+}
+/** Rim stones, lily pads, a lotus and reeds around the pond. */
+function pondDressing(b: Batch) {
+  const [x, z] = pond.center
+  const r = pond.radius
+  for (let i = 0; i < 18; i++) {
+    const a = (i / 18) * Math.PI * 2
+    b.ball([x + Math.cos(a) * (r + 0.12), 0.13, z + Math.sin(a) * (r + 0.1)], [0.15 + (i % 3) * 0.03, 0.09, 0.13], i % 2 ? '#c9c0b0' : '#b3aa98', 1, [0, a, 0])
+  }
+  for (const [dx, dz, s] of [
+    [-0.45, 0.25, 0.26],
+    [0.35, -0.4, 0.3],
+    [0.55, 0.45, 0.22],
+    [-0.2, -0.55, 0.2],
+  ]) {
+    b.cylinder([x + dx, 0.128, z + dz], s, s, 0.012, '#6fae63', 16)
+    b.ball([x + dx + s * 0.4, 0.13, z + dz + s * 0.1], [s * 0.25, 0.012, s * 0.2], '#4f9d8f', 0)
+  }
+  // A pink lotus floating on one pad.
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2
+    b.ball([x + 0.55 + Math.cos(a) * 0.06, 0.19, z + 0.45 + Math.sin(a) * 0.06], [0.07, 0.05, 0.035], '#f4a3bf', 1, [0.5, a, 0])
+  }
+  b.ball([x + 0.55, 0.21, z + 0.45], [0.04, 0.035, 0.04], '#f6d36a', 1)
+  for (let i = 0; i < 7; i++) {
+    const a = 2.2 + i * 0.22
+    const rx = x + Math.cos(a) * (r + 0.35),
+      rz = z + Math.sin(a) * (r + 0.3)
+    const h = 0.5 + (i % 3) * 0.15
+    b.stick([rx, 0.1, rz], [rx + 0.04, h, rz], 0.015, '#7f9a52', 4)
+    b.ball([rx + 0.04, h, rz], [0.035, 0.09, 0.035], '#9a7246', 0)
+  }
+}
+/** A swaying palm: a curved, ringed trunk, drooping fronds and coconuts. */
+function palm(b: Batch, x: number, z: number, lean: number) {
+  let px = x,
+    py = 0.1
+  const dx = Math.cos(lean) * 0.12,
+    dz = Math.sin(lean) * 0.12
+  for (let i = 0; i < 9; i++) {
+    const nx = px + dx * (i / 4),
+      ny = py + 0.32
+    b.stick([px, py, z + dz * i * 0.5], [nx, ny, z + dz * (i + 1) * 0.5], 0.13 - i * 0.006, i % 2 ? '#b58a5c' : '#a27a4f', 8, 0.9)
+    px = nx
+    py = ny
+  }
+  const tz = z + dz * 4.5
+  for (let i = 0; i < 7; i++) {
+    const a = (i / 7) * Math.PI * 2
+    for (let k = 1; k <= 3; k++)
+      b.ball(
+        [px + Math.cos(a) * 0.32 * k, py - 0.06 * k * k, tz + Math.sin(a) * 0.32 * k],
+        [0.24, 0.035, 0.11],
+        k === 3 ? '#8fc86a' : '#6fae58',
+        1,
+        [0, -a, -0.25 * k],
+        b.kit.leaf,
+      )
+  }
+  for (let i = 0; i < 3; i++) b.ball([px + Math.cos(i * 2.1) * 0.12, py - 0.12, tz + Math.sin(i * 2.1) * 0.12], [0.09, 0.09, 0.09], '#7a5638', 1)
+}
+/** Sand, a sandcastle, shells, starfish and a beach ball. */
+function beachDressing(b: Batch) {
+  const [x, z] = beach.center
+  const sand: XZ[] = []
+  for (let i = 0; i < 30; i++) {
+    const a = (i / 30) * Math.PI * 2
+    const wobble = 1 + 0.08 * Math.sin(a * 3) + 0.05 * Math.cos(a * 5)
+    sand.push([x + Math.cos(a) * beach.radiusX * wobble, z + Math.sin(a) * beach.radiusZ * wobble])
+  }
+  b.horizontal(sand, 0.104, 0.02, '#f5e2b6', b.kit.soil, 0.012, 2, true)
+  const cx = x - 1.2,
+    cz = z + 0.3
+  b.cylinder([cx, 0.2, cz], 0.3, 0.34, 0.2, '#e8c98f', 10)
+  for (const [dx, dz] of [
+    [-0.28, -0.2],
+    [0.28, -0.2],
+    [0, 0.28],
+  ]) {
+    b.cylinder([cx + dx, 0.33, cz + dz], 0.1, 0.11, 0.3, '#ecd09a', 8)
+    b.cylinder([cx + dx, 0.54, cz + dz], 0.01, 0.12, 0.14, '#e2bd80', 8)
+  }
+  b.cylinder([cx, 0.45, cz], 0.14, 0.16, 0.3, '#ecd09a', 8)
+  b.stick([cx, 0.6, cz], [cx, 0.85, cz], 0.01, '#8a6a4a', 3)
+  b.prism([[0, 0], [0.16, 0.05], [0, 0.1]], 0.01, '#ef6c5c', [cx, 0.74, cz])
+  for (const [dx, dz, colour] of [
+    [0.9, 0.5, '#f29a6c'],
+    [-0.4, -0.7, '#f6c24d'],
+    [1.7, -0.3, '#ef8a8a'],
+  ] as const) {
+    for (let i = 0; i < 5; i++) {
+      const a = (i / 5) * Math.PI * 2
+      b.ball([x + dx + Math.cos(a) * 0.07, 0.125, z + dz + Math.sin(a) * 0.07], [0.07, 0.02, 0.03], colour, 0, [0, -a, 0])
+    }
+  }
+  for (const [dx, dz] of [
+    [0.2, -0.9],
+    [-1.9, 0.6],
+    [2.2, 0.4],
+  ])
+    b.ball([x + dx, 0.125, z + dz], [0.06, 0.03, 0.05], '#fdf1e6', 1, [0, dx, 0])
+  // A striped beach ball.
+  const bx = x + 0.6,
+    bz = z - 0.2
+  b.ball([bx, 0.3, bz], [0.2, 0.2, 0.2], '#fffaf0', 2)
+  b.ball([bx, 0.3, bz], [0.204, 0.08, 0.204], '#ef6c5c', 2, [0.4, 0, 0])
+  b.ball([bx, 0.3, bz], [0.08, 0.204, 0.204], '#5fb3c9', 2, [0, 0, 0.4])
+}
+/** A brass telescope on a tripod, pointed at the horizon. */
+function telescope(b: Batch, x: number, z: number) {
+  for (let i = 0; i < 3; i++) {
+    const a = (i / 3) * Math.PI * 2
+    b.stick([x + Math.cos(a) * 0.3, 0.1, z + Math.sin(a) * 0.3], [x, 0.95, z], 0.03, timber, 5)
+  }
+  b.stick([x + 0.35, 1.18, z + 0.1], [x - 0.4, 0.95, z - 0.12], 0.07, '#d7a94d', 10, 0.7)
+  b.cylinder([x + 0.37, 1.19, z + 0.1], 0.075, 0.075, 0.03, '#b8862e', 10, [0, 0, Math.PI / 2 - 0.3])
+}
+
 /** Plant little clumps of flowers along the verges of every path. */
 function verges(b: Batch, rand: () => number, low: boolean) {
   const palette = ['#fcf2c7', '#f09aa4', '#f6c768', '#b9a2d9', '#f6a77d', '#9ccbf0', '#ffffff']
@@ -801,7 +958,9 @@ export function createScenery(low: boolean) {
       [2.79, 4.74],
       [2.83, 6.52],
       [2.62, 8.64],
-      [2.48, 10.03],
+      [2.5, 10.6],
+      [2.5, 12.0],
+      [2.5, 13.2],
     ],
     1.13,
   )
@@ -824,6 +983,11 @@ export function createScenery(low: boolean) {
     1,
     true,
   )
+  // Paths out to the tulip field, the pond, the beach and the lookout.
+  path(staticParts, [[-8.48, 1.05], [-11.0, 0.4], [-11.1, -3.0], [-11.0, -5.9], [-9.6, -8.4]], 1.05)
+  path(staticParts, [[1.8, -2.6], [3.2, -4.6], [3.7, -7.0], [5.0, -8.9]], 1.0)
+  path(staticParts, [[9.7, 5.75], [10.6, 7.0], [11.0, 8.1]], 1.05)
+  path(staticParts, [[-13, 0.7], [-15.2, 0.85]], 1.1)
   decoratePlaza(staticParts)
   bridge(staticParts, 1)
   bridge(staticParts, 6.5)
@@ -838,6 +1002,23 @@ export function createScenery(low: boolean) {
   well(staticParts, ...wellSite)
   parasol(staticParts, ...parasolSite)
   for (const [x, z, k] of rockSites) mossyRocks(staticParts, x, z, k)
+  // The new corners of the island.
+  tulipBed(staticParts)
+  pondDressing(staticParts)
+  beachDressing(staticParts)
+  palmSites.forEach(([x, z], i) => palm(staticParts, x, z, 0.6 + i * 2.1))
+  telescope(staticParts, ...telescopeSite)
+  group.add(createPond(...pond.center, pond.radius, kit.clock))
+  // Wildflowers scattered across the wide outer meadow.
+  for (let i = 0; i < (low ? 26 : 60); i++) {
+    const a = rand() * Math.PI * 2,
+      r = 0.72 + rand() * 0.24
+    const x = Math.cos(a) * shape.walkX * r,
+      z = Math.sin(a) * shape.walkZ * r
+    if (Math.abs(x - river(z)) < 1.4 || !walkable(x, z)) continue
+    const colour = ['#fcf2c7', '#f09aa4', '#f6c768', '#b9a2d9', '#ffffff', '#9ccbf0'][i % 6]
+    for (let k = 0; k < 3; k++) flower(staticParts, x + (rand() - 0.5) * 0.4, z + (rand() - 0.5) * 0.3, colour, rand())
+  }
   for (const [x, z] of benchSites) bench(staticParts, x, z)
   for (const [x, z] of cafeTables) {
     staticParts.cylinder([x, 0.53, z], 0.42, 0.42, 0.1, '#d2a57a', 12)
@@ -901,8 +1082,8 @@ export function createScenery(low: boolean) {
   for (let i = 0; i < (low ? 60 : 125); i++) {
     const a = rand() * Math.PI * 2,
       r = 0.77 + rand() * 0.18,
-      x = Math.cos(a) * 15 * r,
-      z = Math.sin(a) * 10.3 * r
+      x = Math.cos(a) * shape.walkX * r,
+      z = Math.sin(a) * shape.walkZ * r
     if (Math.abs(x - river(z)) < 1.13) continue
     for (let j = 0; j < 2; j++)
       staticParts.ball(
@@ -935,7 +1116,7 @@ export function createScenery(low: boolean) {
   add(pickable(sign(kit), 'map', 0, 2))
   group.add(staticParts.finish())
   const daylightGlow = { value: 1 }
-  group.add(createRiver(river, riverWidth, kit.clock, daylightGlow))
+  group.add(createRiver(river, riverWidth, kit.clock, daylightGlow, shape.lip))
   const ambience = createAmbience({
     kit,
     crowns: crowns.filter((_, i) => !isPine(i)),
@@ -959,7 +1140,7 @@ export function createScenery(low: boolean) {
   })
   group.add(ambience.group)
   const seabirds = [
-    [2.95, 12.52],
+    [3.3, shape.pierFrom + 1.7],
     [-10.9, 6.15],
   ].map(([x, z], i) => {
     const g = bird(kit)
@@ -998,6 +1179,8 @@ export function createScenery(low: boolean) {
     group,
     interactives: objects,
     crowns,
+    balloon: ambience.balloon,
+    popBalloon: ambience.popBalloon,
     /** Shake the tree nearest to (x, z) if one is within reach. */
     shake(x: number, z: number, reachLimit = 1.6) {
       let best = -1,

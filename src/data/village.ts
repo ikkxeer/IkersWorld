@@ -20,7 +20,7 @@ export const anchors: Record<Place, [number, number]> = {
   projects: [-5, 4],
   contact: [2, 5.5],
   map: [0, 2],
-  npc: [3.75, 8.95],
+  npc: [3.95, 11.95],
 }
 export const destinations: Record<Zone, [number, number]> = {
   about: [-7, -0.5],
@@ -112,6 +112,18 @@ const es = {
   loading3D: 'Cargando la isla 3D…',
   campfire: 'Fogata · sentarse',
   run: 'Correr',
+  fishing: 'Pescar en el muelle',
+  fishWait: 'Espera a que pique…',
+  fishReel: 'recoger',
+  fishBite: '¡Ha picado! ¡Tira!',
+  fishEarly: '¡Demasiado pronto! El pez se ha asustado.',
+  fishLate: '¡Oh, no! Se ha escapado…',
+  fishCaught: '¡Has pescado',
+  fishNew: '¡Nuevo!',
+  fishCollection: 'Colección',
+  pull: 'Tirar',
+  giftTitle: '¡Un regalo caído del cielo!',
+  giftBody: 'Dentro había un proyecto:',
 }
 type Dictionary = typeof es
 const ca: Dictionary = {
@@ -195,6 +207,18 @@ const ca: Dictionary = {
   loading3D: 'Carregant l’illa 3D…',
   campfire: 'Foguera · seure',
   run: 'Córrer',
+  fishing: 'Pescar al moll',
+  fishWait: 'Espera que piqui…',
+  fishReel: 'recollir',
+  fishBite: 'Ha picat! Estira!',
+  fishEarly: "Massa aviat! El peix s'ha espantat.",
+  fishLate: "Oh, no! S'ha escapat…",
+  fishCaught: 'Has pescat',
+  fishNew: 'Nou!',
+  fishCollection: 'Col·lecció',
+  pull: 'Estirar',
+  giftTitle: 'Un regal caigut del cel!',
+  giftBody: 'A dins hi havia un projecte:',
 }
 const en: Dictionary = {
   brand: 'Interactive portfolio',
@@ -278,6 +302,18 @@ const en: Dictionary = {
   loading3D: 'Loading the 3D island…',
   campfire: 'Campfire · sit down',
   run: 'Run',
+  fishing: 'Fish off the pier',
+  fishWait: 'Wait for a bite…',
+  fishReel: 'reel in',
+  fishBite: "It's biting! Pull!",
+  fishEarly: 'Too soon! The fish got spooked.',
+  fishLate: 'Oh no! It got away…',
+  fishCaught: 'You caught',
+  fishNew: 'New!',
+  fishCollection: 'Collection',
+  pull: 'Pull',
+  giftTitle: 'A gift from the sky!',
+  giftBody: 'Inside was a project:',
 }
 export const copy = { es, ca, en }
 export const placeKeys: Record<Zone, keyof Dictionary> = {

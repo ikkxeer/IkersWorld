@@ -15,10 +15,10 @@ export function makeSky(scene: T.Scene, low: boolean) {
   sun.castShadow = true
   sun.shadow.mapSize.set(low ? 512 : 1024, low ? 512 : 1024)
   Object.assign(sun.shadow.camera, {
-    left: -23,
-    right: 23,
-    top: 19,
-    bottom: -19,
+    left: -28,
+    right: 28,
+    top: 23,
+    bottom: -23,
     near: 0.1,
     far: 75,
   })
@@ -103,6 +103,36 @@ export function makeSky(scene: T.Scene, low: boolean) {
   })
   const flies = new T.Points(fliesGeometry, flyMaterial)
   scene.add(flies)
+  // Shooting stars streak across the night sky every so often.
+  const streakCanvas = document.createElement('canvas')
+  streakCanvas.width = 128
+  streakCanvas.height = 8
+  const sc = streakCanvas.getContext('2d')
+  if (sc) {
+    const g = sc.createLinearGradient(0, 0, 128, 0)
+    g.addColorStop(0, 'rgba(255,255,255,0)')
+    g.addColorStop(0.85, 'rgba(255,248,220,0.9)')
+    g.addColorStop(1, 'rgba(255,255,255,1)')
+    sc.fillStyle = g
+    sc.fillRect(0, 2, 128, 4)
+  }
+  const streakMaterial = new T.MeshBasicMaterial({
+    map: new T.CanvasTexture(streakCanvas),
+    transparent: true,
+    depthWrite: false,
+    blending: T.AdditiveBlending,
+    fog: false,
+    opacity: 0,
+  })
+  streakMaterial.userData.noBend = true
+  const streak = new T.Mesh(new T.PlaneGeometry(6, 0.12), streakMaterial)
+  streak.visible = false
+  scene.add(streak)
+  let nightLevel = 0
+  let nextStreak = 8
+  let streakStart = -10
+  const streakFrom = new T.Vector3(),
+    streakDir = new T.Vector3()
   function update(date: Date) {
     const s = daylight(date)
     sky.set(s.a[1]).lerp(tmp.set(s.b[1]), s.mix)
@@ -122,6 +152,7 @@ export function makeSky(scene: T.Scene, low: boolean) {
     flies.visible = s.night > 0.18
     flyMaterial.opacity = s.night
     starMat.opacity = s.night
+    nightLevel = s.night
     orb.material.color.set(s.night > 0.55 ? '#e5e9ff' : '#ffebae')
     orb.position.set(
       Math.cos(angle) * 24,
@@ -133,6 +164,19 @@ export function makeSky(scene: T.Scene, low: boolean) {
   return {
     update,
     animate: (t: number) => {
+      if (nightLevel > 0.6 && t > nextStreak) {
+        streakStart = t
+        nextStreak = t + 7 + random() * 12
+        streakFrom.set(-30 + random() * 50, 16 + random() * 10, -34 - random() * 10)
+        streakDir.set(1, -0.45 - random() * 0.2, 0).normalize()
+        streak.rotation.z = Math.atan2(streakDir.y, streakDir.x)
+      }
+      const age = (t - streakStart) / 0.9
+      streak.visible = age >= 0 && age < 1
+      if (streak.visible) {
+        streak.position.copy(streakFrom).addScaledVector(streakDir, age * 22)
+        streakMaterial.opacity = Math.sin(Math.PI * age) * nightLevel
+      }
       if (flies.visible) {
         for (let i = 0; i < fireflies.length; i += 3) {
           fireflies[i] = resting[i] + Math.sin(t * 0.67 + i) * 0.22

@@ -13,8 +13,9 @@ export function createRiver(
   width: (z: number) => number,
   clock: Uniform,
   light: Uniform,
+  lip: number,
 ) {
-  const reach = 12.8
+  const reach = lip + 2.75
   const smooth = (a: number, b: number, x: number) => {
     const t = Math.min(1, Math.max(0, (x - a) / (b - a)))
     return t * t * (3 - 2 * t)
@@ -25,9 +26,9 @@ export function createRiver(
     const d = Math.abs(z)
     return (
       -0.13 -
-      0.34 * smooth(10.3, 10.95, d) -
-      0.21 * smooth(11.45, 12.0, d) -
-      0.18 * smooth(12.0, 12.6, d)
+      0.34 * smooth(lip, lip + 0.65, d) -
+      0.21 * smooth(lip + 1.3, lip + 1.9, d) -
+      0.18 * smooth(lip + 1.9, lip + 2.5, d)
     )
   }
   const rows = 180,
@@ -39,7 +40,7 @@ export function createRiver(
   for (let i = 0; i <= rows; i++) {
     const z = -reach + (2 * reach * i) / rows
     const d = Math.abs(z)
-    const spread = 1 + 1.3 * smooth(10.8, 12.7, d)
+    const spread = 1 + 1.3 * smooth(lip + 0.5, lip + 2.5, d)
     const y = level(z)
     const rapids = Math.min(1, Math.abs(level(z + 0.05) - level(z - 0.05)) * 9)
     for (let j = 0; j <= cols; j++) {
@@ -47,7 +48,7 @@ export function createRiver(
       positions.push(center(z) + (u * 2 - 1) * (width(z) + 0.17) * spread, y, z)
       // Water runs outwards from beneath the first bridge to both estuaries.
       flow.push(u, Math.abs(z - 1))
-      shape.push(rapids, smooth(12.25, reach, d))
+      shape.push(rapids, smooth(lip + 2.1, reach, d))
     }
   }
   for (let i = 0; i < rows; i++)
@@ -148,8 +149,8 @@ export function paintSea(material: T.MeshStandardMaterial, clock: Uniform) {
         '#include <color_fragment>',
         `#include <color_fragment>
         vec2 p = vSeaWorld.xz;
-        float r = length(p / vec2(17.1, 12.3));
-        float dist = (r - 1.) * mix(12.3, 17.1, abs(p.x) / (abs(p.x) + abs(p.y) * 1.39 + .001));
+        float r = length(p / vec2(21.15, 15.45));
+        float dist = (r - 1.) * mix(15.45, 21.15, abs(p.x) / (abs(p.x) + abs(p.y) * 1.37 + .001));
         float wobble = islandNoise(p * .35 + seaTime * .08);
         float shore = 1. - smoothstep(0., 10., dist);
         vec3 base = diffuseColor.rgb;
@@ -168,4 +169,44 @@ export function paintSea(material: T.MeshStandardMaterial, clock: Uniform) {
       )
   }
   material.customProgramCacheKey = () => 'island-sea'
+}
+
+/** A little round pond with lazy ripples and glints, soft at the rim. */
+export function createPond(cx: number, cz: number, radius: number, clock: Uniform) {
+  const geometry = new T.CircleGeometry(radius, 40, 0, Math.PI * 2)
+  geometry.rotateX(-Math.PI / 2)
+  const material = new T.MeshStandardMaterial({ color: '#ffffff', roughness: 0.25, transparent: true })
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.pondTime = clock
+    shader.vertexShader =
+      'varying vec2 vPond;\n' +
+      shader.vertexShader.replace(
+        '#include <begin_vertex>',
+        `#include <begin_vertex>
+        vPond = position.xz / ${radius.toFixed(3)};`,
+      )
+    shader.fragmentShader =
+      'uniform float pondTime;\nvarying vec2 vPond;\n' +
+      noiseGLSL +
+      shader.fragmentShader.replace(
+        '#include <color_fragment>',
+        `#include <color_fragment>
+        float r = length(vPond);
+        vec3 water = mix(vec3(.2, .55, .6), vec3(.48, .82, .76), smoothstep(.45, 1., r));
+        float rings = sin(r * 18. - pondTime * 1.6 + islandNoise(vPond * 3. + pondTime * .2) * 2.);
+        water = mix(water, vec3(.82, .97, .93), smoothstep(.9, .98, rings) * .45 * (1. - r));
+        vec2 cell = floor(vPond * 9.);
+        float glint = step(.95, islandHash(cell)) * pow(max(0., sin(pondTime * 2.6 + islandHash(cell + 4.) * 6.28)), 8.);
+        water += glint * .5;
+        float rim = smoothstep(.86, 1., r);
+        water = mix(water, vec3(.94, 1., .96), rim * .75);
+        diffuseColor.rgb = water;`,
+      )
+  }
+  material.customProgramCacheKey = () => 'island-pond'
+  const mesh = new T.Mesh(geometry, material)
+  mesh.position.set(cx, 0.118, cz)
+  mesh.receiveShadow = true
+  mesh.name = 'pond'
+  return mesh
 }
