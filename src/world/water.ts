@@ -11,22 +11,43 @@ type Uniform = { value: number }
 export function createRiver(
   center: (z: number) => number,
   width: (z: number) => number,
-  from: number,
-  to: number,
   clock: Uniform,
   light: Uniform,
 ) {
-  const rows = 120,
+  const reach = 12.8
+  const smooth = (a: number, b: number, x: number) => {
+    const t = Math.min(1, Math.max(0, (x - a) / (b - a)))
+    return t * t * (3 - 2 * t)
+  }
+  // Water level along the stream: level through the island, then a short
+  // cascade over the cliff lip, across the beach shelf and down into the sea.
+  const level = (z: number) => {
+    const d = Math.abs(z)
+    return (
+      -0.13 -
+      0.34 * smooth(10.3, 10.95, d) -
+      0.21 * smooth(11.45, 12.0, d) -
+      0.18 * smooth(12.0, 12.6, d)
+    )
+  }
+  const rows = 180,
     cols = 10
   const positions: number[] = [],
     flow: number[] = [],
+    shape: number[] = [],
     index: number[] = []
   for (let i = 0; i <= rows; i++) {
-    const z = from + ((to - from) * i) / rows
+    const z = -reach + (2 * reach * i) / rows
+    const d = Math.abs(z)
+    const spread = 1 + 1.3 * smooth(10.8, 12.7, d)
+    const y = level(z)
+    const rapids = Math.min(1, Math.abs(level(z + 0.05) - level(z - 0.05)) * 9)
     for (let j = 0; j <= cols; j++) {
       const u = j / cols
-      positions.push(center(z) + (u * 2 - 1) * (width(z) + 0.17), -0.13, z)
-      flow.push(u, z - from)
+      positions.push(center(z) + (u * 2 - 1) * (width(z) + 0.17) * spread, y, z)
+      // Water runs outwards from beneath the first bridge to both estuaries.
+      flow.push(u, Math.abs(z - 1))
+      shape.push(rapids, smooth(12.25, reach, d))
     }
   }
   for (let i = 0; i < rows; i++)
@@ -38,6 +59,7 @@ export function createRiver(
   const geometry = new T.BufferGeometry()
   geometry.setAttribute('position', new T.Float32BufferAttribute(positions, 3))
   geometry.setAttribute('flow', new T.Float32BufferAttribute(flow, 2))
+  geometry.setAttribute('shape', new T.Float32BufferAttribute(shape, 2))
   geometry.setIndex(index)
   geometry.computeVertexNormals()
 
@@ -45,20 +67,22 @@ export function createRiver(
     color: '#ffffff',
     roughness: 0.3,
     metalness: 0.04,
+    transparent: true,
   })
   material.onBeforeCompile = (shader) => {
     shader.uniforms.riverTime = clock
     shader.uniforms.riverLight = light
     shader.vertexShader =
-      'uniform float riverTime;\nattribute vec2 flow;\nvarying vec2 vFlow;\n' +
+      'uniform float riverTime;\nattribute vec2 flow;\nattribute vec2 shape;\nvarying vec2 vFlow;\nvarying vec2 vShape;\n' +
       shader.vertexShader.replace(
         '#include <begin_vertex>',
         `#include <begin_vertex>
         vFlow = flow;
+        vShape = shape;
         transformed.y += sin(flow.y * 2.3 - riverTime * 2. + flow.x * 3.) * .006;`,
       )
     shader.fragmentShader =
-      'uniform float riverTime;\nuniform float riverLight;\nvarying vec2 vFlow;\n' +
+      'uniform float riverTime;\nuniform float riverLight;\nvarying vec2 vFlow;\nvarying vec2 vShape;\n' +
       noiseGLSL +
       shader.fragmentShader
         .replace(
@@ -84,7 +108,13 @@ export function createRiver(
           vec2 cell = floor(vec2(across * 14., along * 4. - t * 1.15));
           float glint = step(.962, islandHash(cell)) *
             pow(max(0., sin(t * 3. + islandHash(cell + 3.) * 6.28)), 6.) * step(.12, side);
+          // White water where it tumbles down to the beach, then it melts
+          // into the sea shallows.
+          float churn = vShape.x * smoothstep(.35, .7, islandNoise(vec2(across * 7., along * 3. - t * 3.2)));
+          water = mix(water, vec3(.96, 1., .98), clamp(churn * 1.2 + vShape.x * .25, 0., .9));
+          water = mix(water, vec3(.56, .88, .82), vShape.y * .6);
           diffuseColor.rgb = water;
+          diffuseColor.a *= 1. - vShape.y;
           float riverGlow = (streak * .16 + foam * .14 + glint * .9) * riverLight;`,
         )
         .replace(
@@ -119,14 +149,15 @@ export function paintSea(material: T.MeshStandardMaterial, clock: Uniform) {
         `#include <color_fragment>
         vec2 p = vSeaWorld.xz;
         float r = length(p / vec2(17.1, 12.3));
-        float dist = (r - 1.) * 13.;
+        float dist = (r - 1.) * mix(12.3, 17.1, abs(p.x) / (abs(p.x) + abs(p.y) * 1.39 + .001));
         float wobble = islandNoise(p * .35 + seaTime * .08);
         float shore = 1. - smoothstep(0., 10., dist);
         vec3 base = diffuseColor.rgb;
         vec3 col = mix(base, base * vec3(1.16, 1.2, 1.06) + vec3(.07, .09, .06), shore * shore);
         // Foam bands roll in towards the sand.
         float band = sin(dist * 3.4 + wobble * 2.6 + seaTime * 1.3);
-        float foamBand = smoothstep(.86, .96, band) * (1. - smoothstep(.4, 2.6, dist)) * step(0., dist);
+        float foamBand = smoothstep(.84, .96, band) * (1. - smoothstep(.3, 1.6, dist)) * step(0., dist)
+          * smoothstep(.3, .6, islandNoise(p * .9 + seaTime * .15));
         float edge = 1. - smoothstep(.05, .7, dist + (wobble - .5) * .6 + .15 * sin(seaTime * 1.1));
         // Painterly wavelets further out.
         vec2 w = p * vec2(1.1, 2.3) + vec2(seaTime * .3, seaTime * .08);
@@ -137,28 +168,4 @@ export function paintSea(material: T.MeshStandardMaterial, clock: Uniform) {
       )
   }
   material.customProgramCacheKey = () => 'island-sea'
-}
-
-/** Waterfalls: bright streaks tumbling downwards. */
-export function paintFalls(material: T.MeshStandardMaterial, clock: Uniform) {
-  material.onBeforeCompile = (shader) => {
-    shader.uniforms.fallTime = clock
-    shader.vertexShader =
-      'varying vec3 vFallWorld;\n' +
-      shader.vertexShader.replace(
-        '#include <worldpos_vertex>',
-        `#include <worldpos_vertex>
-        vFallWorld = (modelMatrix * vec4(transformed, 1.)).xyz;`,
-      )
-    shader.fragmentShader =
-      'uniform float fallTime;\nvarying vec3 vFallWorld;\n' +
-      noiseGLSL +
-      shader.fragmentShader.replace(
-        '#include <color_fragment>',
-        `#include <color_fragment>
-        float fall = fract(vFallWorld.y * 2.6 + fallTime * 1.8 + islandNoise(vFallWorld.xz * 5.) * .9);
-        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(.96, 1., .98), smoothstep(.72, .92, fall) * .75);`,
-      )
-  }
-  material.customProgramCacheKey = () => 'island-falls'
 }

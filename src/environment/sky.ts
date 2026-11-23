@@ -28,14 +28,14 @@ export function makeSky(scene: T.Scene, low: boolean) {
   sun.shadow.radius = 3
   scene.add(hemi, sun)
   const sea = new T.Mesh(
-    new T.PlaneGeometry(350, 350),
+    new T.PlaneGeometry(240, 240, 96, 96),
     new T.MeshStandardMaterial({ color: 0x66bfc6, roughness: 0.55 }),
   )
   const seaClock = { value: 0 }
   paintSea(sea.material, seaClock)
   sea.rotation.x = -Math.PI / 2
   sea.position.y = -0.88
-  sea.receiveShadow = true
+  sea.receiveShadow = false
   scene.add(sea)
   let seed = 735
   function random() {
@@ -43,6 +43,7 @@ export function makeSky(scene: T.Scene, low: boolean) {
     return seed / 4294967296
   }
   const cloudMat = new T.MeshLambertMaterial({ color: 0xfffaf0 })
+  cloudMat.userData.noBend = true
   const cloudGeo = new T.IcosahedronGeometry(1, 2)
   const clouds = new T.Group()
   for (let i = 0; i < 12; i++) {
@@ -72,12 +73,14 @@ export function makeSky(scene: T.Scene, low: boolean) {
     transparent: true,
     fog: false,
   })
+  starMat.userData.noBend = true
   const stars = new T.Points(sg, starMat)
   scene.add(stars)
   const orb = new T.Mesh(
     new T.SphereGeometry(2.2, 20, 12),
     new T.MeshBasicMaterial({ color: '#fff6c4', fog: false }),
   )
+  orb.material.userData.noBend = true
   scene.add(orb)
   // Small luminous points hover just above the meadow when the local sun sets.
   const fliesGeometry = new T.BufferGeometry()

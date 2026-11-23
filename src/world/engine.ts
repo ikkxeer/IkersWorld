@@ -1,8 +1,10 @@
 import * as T from 'three'
 import { makeSky } from '../environment/sky'
 import { makeIris } from './iris'
+import { bendScene, projectCurved, unbendRay, worldCurve, worldCurveFocus } from './curve'
 import { anchors, destinations } from '../data/village'
-import { createVisitor, createGuide, angleDelta } from './character'
+import { campfire } from '../data/island'
+import { createVisitor, createGuide, createCat, angleDelta } from './character'
 import { makeGallery, makeInterior } from './interior'
 import { createScenery, islandFloorHeight } from './scenery'
 import { walkable, route, type Point } from './navigation'
@@ -27,7 +29,11 @@ export function startVillage(
     antialias: !low,
     powerPreference: 'default',
   })
-  renderer.setPixelRatio(Math.min(devicePixelRatio, low ? 1.25 : 1.65))
+  // Resolution adapts to how smoothly frames arrive (see `adapt` in tick).
+  const maxRatio = Math.min(devicePixelRatio, low ? 1.25 : 1.65)
+  const minRatio = Math.min(maxRatio, low ? 0.75 : 1)
+  let pixelRatio = maxRatio
+  renderer.setPixelRatio(pixelRatio)
   renderer.shadowMap.enabled = true
   renderer.shadowMap.type = T.PCFShadowMap
   renderer.outputColorSpace = T.SRGBColorSpace
@@ -40,7 +46,12 @@ export function startVillage(
   const atmosphere = makeSky(scene, low)
   const scenery = createScenery(low),
     visitor = createVisitor(),
-    guide = createGuide()
+    guide = createGuide(),
+    cat = createCat()
+  // Mochi naps on the bench by Iker's house.
+  cat.group.position.set(-6.2, 0.47, -0.22)
+  cat.group.scale.setScalar(1.25)
+  scene.add(cat.group)
   const [guideX, guideZ] = anchors.npc
   guide.group.position.set(guideX, islandFloorHeight(guideX, guideZ), guideZ)
   // Pip waits beside the path at the foot of the pier, watching new arrivals.
@@ -51,7 +62,89 @@ export function startVillage(
   scene.add(scenery.group, visitor.group, guide.group, dust)
   visitor.group.position.set(2.5, -0.06, 11.6)
   visitor.group.scale.setScalar(1.36)
-  const outdoorPickables = [...scenery.interactives, guide.group]
+  // An invisible hit area makes the campfire circle clickable and reachable.
+  const [fireX, fireZ] = campfire.fire
+  const fireSpot = new T.Group()
+  fireSpot.position.set(fireX, 0, fireZ)
+  fireSpot.userData.zone = 'campfire'
+  const fireHit = new T.Mesh(
+    new T.CylinderGeometry(1.35, 1.35, 1, 12),
+    new T.MeshBasicMaterial({ visible: false }),
+  )
+  fireHit.position.y = 0.5
+  fireSpot.add(fireHit)
+  scene.add(fireSpot)
+  const outdoorPickables = [...scenery.interactives, guide.group, fireSpot]
+  /** Log seats: where to sit (fire side of the log) and where to step off. */
+  const seats = campfire.logs.map(([dx, dz]) => {
+    const lx = fireX + dx,
+      lz = fireZ + dz
+    const yaw = Math.atan2(fireX - lx, fireZ - lz)
+    const ux = Math.sin(yaw),
+      uz = Math.cos(yaw)
+    return {
+      x: lx + ux * 0.27,
+      z: lz + uz * 0.27,
+      yaw,
+      out: [lx - ux * 0.66, lz - uz * 0.66] as [number, number],
+    }
+  })
+  type Seat = (typeof seats)[number]
+  /** Sitting by the fire: walk to the log, hop on, sit, and hop back off. */
+  let rest: {
+    seat: Seat
+    stage: 'approach' | 'hop' | 'seated' | 'rise' | 'leave'
+    timer: number
+    from: [number, number]
+  } | null = null
+  let cozy = 0
+  let running = false
+  /** A tree the visitor is walking over to shake, and where to face. */
+  let pendingShake: [number, number] | null = null
+  let faceYaw: number | null = null
+  function shakeTree(x: number, z: number) {
+    const tree = scenery.shake(x, z)
+    if (!tree) return false
+    const p = visitor.group.position
+    faceYaw = Math.atan2(tree[0] - p.x, tree[1] - p.z)
+    return true
+  }
+  /** Did a click land on a tree crown? Returns that tree. */
+  function crownAt(clientX: number, clientY: number) {
+    const box = canvas.getBoundingClientRect()
+    const x = clientX - box.left,
+      y = clientY - box.top
+    let hit: [number, number, number] | null = null
+    for (const crown of scenery.crowns) {
+      const [cx, cz, top] = crown
+      projectCurved(projected.set(cx, top, cz), camera)
+      const sx = ((projected.x + 1) * box.width) / 2,
+        sy = ((1 - projected.y) * box.height) / 2
+      projectCurved(projected.set(cx + 1, top, cz), camera)
+      const radius = Math.abs(((projected.x + 1) * box.width) / 2 - sx) * 0.9
+      if (Math.hypot(x - sx, y - sy) < radius) hit = crown
+    }
+    return hit
+  }
+  function beginRest() {
+    if (rest || inside) return
+    const p = visitor.group.position
+    const usable = seats.filter((s) => canWalk(...s.out))
+    if (!usable.length) return
+    const seat = usable.reduce((best, s) =>
+      Math.hypot(s.out[0] - p.x, s.out[1] - p.z) < Math.hypot(best.out[0] - p.x, best.out[1] - p.z) ? s : best,
+    )
+    rest = { seat, stage: 'approach', timer: 0, from: [p.x, p.z] }
+    goal = route([p.x, p.z], seat.out)
+    if (!goal.length) goal = [seat.out]
+    ring.visible = false
+  }
+  function standUp() {
+    if (!rest || (rest.stage !== 'seated' && rest.stage !== 'hop')) return
+    visitor.sit?.(false)
+    rest.stage = 'rise'
+    rest.timer = 0
+  }
   const rooms = { about: makeInterior(), tech: makeGallery() }
   let inside: Interior = false
   let snapCamera = false
@@ -63,7 +156,8 @@ export function startVillage(
     if (inside === 'tech') return z > -1.1
     return !(x < -2.38 && z > -1.7 && z < 0.83) &&
       !(x > 1.72 && z < -1.65) &&
-      Math.hypot(x - 0.12, z + 1.62) > 0.58
+      Math.hypot(x - 0.12, z + 1.62) > 0.58 &&
+      Math.hypot(x - 3.35, z - 0.4) > 0.38
   }
   function setInside(value: Interior) {
     if (inside === value) return
@@ -73,6 +167,7 @@ export function startVillage(
     const destination = value ? rooms[value].scene : scene
     destination.add(visitor.group, dust)
     velocity.set(0, 0)
+    rest = null
     visitor.settle()
     if (value) visitor.group.position.set(0, 0, 1.16)
     else visitor.group.position.copy(doorstep)
@@ -160,6 +255,7 @@ export function startVillage(
       (-(e.clientY - box.top) / box.height) * 2 + 1,
     )
     ray.setFromCamera(pointer, camera)
+    unbendRay(ray.ray, camera)
     let o: T.Object3D | null =
       ray.intersectObjects(getPickables(), true)[0]?.object ?? null
     while (o && !o.userData.zone) o = o.parent
@@ -202,10 +298,29 @@ export function startVillage(
       )
         return
       const o = resolve(e)
+      if (rest && rest.stage !== 'approach') {
+        standUp()
+        return
+      }
       if (o) {
         activate(o.userData.zone, o.userData.project)
         return
       }
+      const crown = inside ? null : crownAt(e.clientX, e.clientY)
+      if (crown) {
+        const p = visitor.group.position
+        const [cx, cz] = crown
+        const d = Math.hypot(cx - p.x, cz - p.z)
+        if (d < 1.6) shakeTree(p.x, p.z)
+        else {
+          // Walk up to the trunk first, then give it a shake.
+          const k = 1.05 / d
+          goal = route([p.x, p.z], [cx + (p.x - cx) * k, cz + (p.z - cz) * k])
+          pendingShake = goal.length ? [cx, cz] : null
+        }
+        return
+      }
+      pendingShake = null
       if (ray.ray.intersectPlane(plane, point))
         goal = inside
           ? canWalk(point.x, point.z)
@@ -267,12 +382,18 @@ export function startVillage(
   }
   function activate(target: Target, exhibit?: number) {
     arrivalTime = 3.5
-    if (target === 'exit') crossDoor(false)
+    if (target === 'campfire') {
+      if (rest) standUp()
+      else beginRest()
+    } else if (target === 'exit') crossDoor(false)
     else if ((target === 'about' || target === 'tech') && !inside) crossDoor(target)
     else events.open(target, exhibit)
   }
   function interact() {
-    if (!paused && !iris.active() && reach) activate(reach, project)
+    if (paused || iris.active()) return
+    if (rest && rest.stage !== 'approach') standUp()
+    else if (reach) activate(reach, project)
+    else if (!inside) shakeTree(visitor.group.position.x, visitor.group.position.z)
   }
   window.addEventListener(
     'keydown',
@@ -286,9 +407,11 @@ export function startVillage(
         e.target instanceof HTMLSelectElement
       )
         return
+      if (e.key === 'Shift') running = true
       if (movement.includes(e.code)) {
         e.preventDefault()
         keys.add(e.code)
+        if (rest?.stage === 'seated') standUp()
       }
       if (e.code === 'KeyE' && !e.repeat) interact()
       if (e.code === 'Equal') changeZoom(0.1)
@@ -296,7 +419,10 @@ export function startVillage(
     },
     { signal: signal.signal },
   )
-  window.addEventListener('keyup', (e) => keys.delete(e.code), {
+  window.addEventListener('keyup', (e) => {
+    keys.delete(e.code)
+    if (e.key === 'Shift') running = false
+  }, {
     signal: signal.signal,
   })
   window.addEventListener(
@@ -315,6 +441,32 @@ export function startVillage(
     },
     { signal: signal.signal },
   )
+  // Frame pacing: drop the pixel ratio a notch when frames run long, and win
+  // it back once things are smooth again.
+  let sampleStart = 0,
+    samples = 0,
+    lastAdapt = 0
+  function adapt(stamp: number) {
+    if (paused || document.hidden) return
+    if (!sampleStart) sampleStart = stamp
+    samples++
+    const elapsedMs = stamp - sampleStart
+    if (elapsedMs < 2000) return
+    const average = elapsedMs / samples
+    sampleStart = stamp
+    samples = 0
+    const target = low ? 33 : 17
+    if (stamp - lastAdapt < 3000) return
+    let next = pixelRatio
+    if (average > target * 1.45) next = Math.max(minRatio, pixelRatio - 0.2)
+    else if (average < target * 1.1) next = Math.min(maxRatio, pixelRatio + 0.1)
+    if (Math.abs(next - pixelRatio) > 0.01) {
+      pixelRatio = next
+      lastAdapt = stamp
+      renderer.setPixelRatio(pixelRatio)
+      resize()
+    }
+  }
   function updateReach(force = true) {
     const previous = nearObject
     const p = visitor.group.position
@@ -336,11 +488,16 @@ export function startVillage(
             zone === 'map' ||
             zone === 'contact'
           ? 1.8
-          : 3.5
-      if (dist <= limit && dist < best) {
+          : zone === 'campfire'
+            ? 2.3
+            : 3.5
+      if (rest) break
+      // The campfire circle is wide: measure from its rim, not its centre.
+      const effective = zone === 'campfire' ? dist - 0.75 : dist
+      if (dist <= limit && effective < best) {
         nearObject = o
         reach = zone
-        best = dist
+        best = effective
         project = o.userData.project
       }
     }
@@ -358,6 +515,7 @@ export function startVillage(
     if (last && stamp - last < (paused && !iris.active() ? 100 : low ? 31 : 15))
       return
     iris.advance(stamp)
+    adapt(stamp)
     const dt = Math.min(0.14, Math.max(0, (stamp - (last || stamp)) / 1000))
     last = stamp
     elapsed += dt
@@ -369,9 +527,10 @@ export function startVillage(
     const p = visitor.group.position
     let distance = 0,
       turn = 0
-    const pace = inside ? 2.6 : 3.1
+    const pace = (inside ? 2.6 : 3.1) * (running && !inside ? 1.75 : 1)
+    const free = !rest || rest.stage === 'approach'
     wish.set(0, 0)
-    if (!paused && !iris.active()) {
+    if (!paused && !iris.active() && free) {
       const dx =
         Number(keys.has('KeyD') || keys.has('ArrowRight')) -
         Number(keys.has('KeyA') || keys.has('ArrowLeft')) +
@@ -384,6 +543,9 @@ export function startVillage(
       if (step.lengthSq() > 0.001) {
         goal = []
         ring.visible = false
+        rest = null
+        pendingShake = null
+        faceYaw = null
         wish.copy(step)
         if (wish.lengthSq() > 1) wish.normalize()
         wish.multiplyScalar(pace)
@@ -416,7 +578,7 @@ export function startVillage(
     velocity.x += (wish.x - velocity.x) * response
     velocity.y += (wish.y - velocity.y) * response
     if (wish.lengthSq() === 0 && velocity.lengthSq() < 0.01) velocity.set(0, 0)
-    if (velocity.lengthSq() > 0) {
+    if (velocity.lengthSq() > 0 && free) {
       step.copy(velocity).multiplyScalar(dt)
       if (goal.length === 1) {
         const remaining = Math.hypot(goal[0][0] - p.x, goal[0][1] - p.z)
@@ -432,7 +594,7 @@ export function startVillage(
       distance = step.length()
       if (goal.length && wish.lengthSq() > 0 && distance < 0.0002) goal = []
     }
-    const speed = distance > 0.0002 ? Math.min(velocity.length(), distance / Math.max(dt, 1e-3)) : 0
+    let speed = distance > 0.0002 ? Math.min(velocity.length(), distance / Math.max(dt, 1e-3)) : 0
     if (velocity.length() > 0.2) {
       // Turn progressively towards the direction of travel.
       const rot = visitor.group.rotation.y
@@ -441,8 +603,60 @@ export function startVillage(
       visitor.group.rotation.y = rot + turned
       turn -= turned
     }
+    // Campfire: arrive at the log, hop on, sit; on any input, hop back off.
+    let hopLift = 0
+    if (rest) {
+      const seat = rest.seat
+      rest.timer += dt
+      if (rest.stage === 'approach' && !goal.length) {
+        if (Math.hypot(seat.out[0] - p.x, seat.out[1] - p.z) < 0.35) {
+          rest.stage = 'hop'
+          rest.timer = 0
+          rest.from = [p.x, p.z]
+        } else rest = null
+      }
+      if (rest && rest.stage !== 'approach') {
+        velocity.set(0, 0)
+        const leaving = rest.stage === 'leave'
+        const hopping = rest.stage === 'hop' || leaving
+        const t = Math.min(1, rest.timer / 0.5)
+        if (hopping) {
+          const k = t * t * (3 - 2 * t)
+          const [ax, az] = leaving ? [seat.x, seat.z] : rest.from
+          const [bx, bz] = leaving ? seat.out : [seat.x, seat.z]
+          const ox = p.x,
+            oz = p.z
+          p.x = ax + (bx - ax) * k
+          p.z = az + (bz - az) * k
+          hopLift = Math.sin(Math.PI * t) * 0.26
+          distance = Math.hypot(p.x - ox, p.z - oz)
+        }
+        const facing = leaving ? Math.atan2(seat.out[0] - seat.x, seat.out[1] - seat.z) : seat.yaw
+        visitor.group.rotation.y += angleDelta(visitor.group.rotation.y, facing) * (1 - Math.exp(-dt * 12))
+        if (rest.stage === 'hop' && t >= 1) {
+          rest.stage = 'seated'
+          visitor.sit?.(true)
+        } else if (rest.stage === 'rise' && rest.timer > 0.4) {
+          rest.stage = 'leave'
+          rest.timer = 0
+        } else if (leaving && t >= 1) rest = null
+      }
+    }
+    cozy = T.MathUtils.damp(cozy, rest?.stage === 'seated' ? 1 : 0, 1.6, dt)
     const onRug = Math.abs(p.x) < 1.73 && Math.abs(p.z - 0.1) < 1.27
-    p.y = inside ? (inside === 'about' && onRug ? 0.09 : 0.01) : islandFloorHeight(p.x, p.z)
+    p.y = (inside ? (inside === 'about' && onRug ? 0.09 : 0.01) : islandFloorHeight(p.x, p.z)) + hopLift
+    if (pendingShake && !goal.length) {
+      const [sx, sz] = pendingShake
+      pendingShake = null
+      if (Math.hypot(sx - p.x, sz - p.z) < 1.7) shakeTree(p.x, p.z)
+    }
+    if (faceYaw !== null && speed < 0.05) {
+      const delta = angleDelta(visitor.group.rotation.y, faceYaw)
+      visitor.group.rotation.y += delta * (1 - Math.exp(-dt * 10))
+      turn = delta
+      if (Math.abs(delta) < 0.02) faceYaw = null
+    }
+    if (rest && rest.stage !== 'approach') speed = distance / Math.max(dt, 1e-3)
     visitor.animate(elapsed, motion.matches, {
       distance,
       speed,
@@ -450,6 +664,7 @@ export function startVillage(
       dust: !inside,
     })
     guide.animate(elapsed, motion.matches, undefined, inside ? null : p)
+    if (!inside) cat.animate(elapsed, motion.matches, undefined, p)
     if (!motion.matches) {
       guideMarker.position.y = 1.34 + Math.sin(elapsed * 2.4) * 0.045
       guideMarker.rotation.y = elapsed * 1.3
@@ -483,6 +698,13 @@ export function startVillage(
       inside ? 0.55 : 0,
       inside ? 0 : p.z * 0.65 * intro,
     )
+    if (!inside) {
+      // Look a little ahead of the visitor, and settle in close by the fire.
+      desired.x += velocity.x * 0.16 * intro
+      desired.z += velocity.y * 0.12 * intro
+      desired.x += (fireX * follow - desired.x) * 0.45 * cozy
+      desired.z += (fireZ * 0.65 - desired.z) * 0.45 * cozy
+    }
     // Around the iris, glide the camera so the visitor sits in the middle of
     // the screen, right where the circle shrinks to and reopens from.
     // With reduced motion the camera stays put and the circle closes on the
@@ -507,13 +729,16 @@ export function startVillage(
       aspect < 0.9 ? 10.15 - closeToPlaza * 1.3 : 8.25 - closeToPlaza * 1.15
     const span = inside
       ? Math.max(4.2, 4.8 / aspect) / zoom
-      : streetSpan / zoom + (1 - intro) * (aspect < 0.9 ? 14 : 8)
+      : (streetSpan / zoom) * (1 - 0.2 * cozy) + (1 - intro) * (aspect < 0.9 ? 14 : 8)
     const orbit = (1 - intro) * 1.05
     cameraOffset.set(
       8 * Math.cos(orbit) - 27 * Math.sin(orbit),
       19 + 16 * (1 - intro),
       27 * Math.cos(orbit) + 8 * Math.sin(orbit),
     )
+    // A gentle diorama curve outdoors; rooms stay flat.
+    worldCurve.value = inside ? 0 : 0.0072
+    worldCurveFocus.value = cameraOffset.length()
     camera.left = -span * aspect
     camera.right = span * aspect
     camera.top = span
@@ -525,7 +750,7 @@ export function startVillage(
     view.signs.forEach((sign, index) => {
       if (!sign) return
       const [x, z] = index === 0 ? anchors.tech : anchors.npc
-      projected.set(x, index === 0 ? 3.46 : 2.1, z).project(camera)
+      projectCurved(projected.set(x, index === 0 ? 3.46 : 2.1, z), camera)
       const visible =
         !inside &&
         !paused &&
@@ -554,7 +779,7 @@ export function startVillage(
       exhibitHalo.material.opacity = motion.matches
         ? 0.98
         : 0.89 + 0.09 * Math.cos(elapsed * 4)
-      projected.set(x, 1.89, z).project(camera)
+      projectCurved(projected.set(x, 1.89, z), camera)
       if (view.exhibit) {
         const width = canvas.clientWidth
         const height = canvas.clientHeight
@@ -577,7 +802,7 @@ export function startVillage(
       const width = canvas.clientWidth,
         height = canvas.clientHeight
       if (motion.matches) {
-        projected.set(p.x, p.y + 0.9, p.z).project(camera)
+        projectCurved(projected.set(p.x, p.y + 0.9, p.z), camera)
         iris.draw(
           width,
           height,
@@ -602,10 +827,27 @@ export function startVillage(
     },
     { signal: signal.signal },
   )
+  bendScene(scene)
+  if (import.meta.env.DEV)
+    // Development-only hook for automated visual checks.
+    Object.assign(window, {
+      __island: {
+        teleport(x: number, z: number, yaw = 0) {
+          visitor.group.position.set(x, islandFloorHeight(x, z), z)
+          visitor.group.rotation.y = yaw
+          velocity.set(0, 0)
+          goal = []
+          visitor.settle()
+          snapCamera = true
+        },
+        state: () => ({ rest: rest?.stage ?? null, reach, x: visitor.group.position.x, z: visitor.group.position.z }),
+      },
+    })
   frame = requestAnimationFrame(tick)
   return {
     pause(value) {
       paused = value
+      running = false
       keys.clear()
       stick.set(0, 0)
       goal = []
@@ -633,6 +875,7 @@ export function startVillage(
         keys.clear()
         stick.set(0, 0)
         velocity.set(0, 0)
+        rest = null
         visitor.settle()
         snapCamera = true
         setHover(null)

@@ -27,6 +27,101 @@ export interface IslandCharacter {
   ) => void
   /** Drop any in-flight gait state, e.g. after a teleport or a scene swap. */
   settle: () => void
+  /** Sit down on (or get up from) a seat right behind the character. */
+  sit?: (seated: boolean) => void
+  /** Float a little emote bubble above the head. */
+  emote?: (kind: Emote) => void
+}
+
+export type Emote = 'note' | 'heart' | 'alert' | 'sparkle' | 'sleep'
+
+/** Emote bubbles drawn once on a canvas and reused as sprites. */
+const emoteTextures = new Map<Emote, THREE.Texture>()
+function emoteTexture(kind: Emote) {
+  let texture = emoteTextures.get(kind)
+  if (texture) return texture
+  const canvas = document.createElement('canvas')
+  canvas.width = canvas.height = 96
+  const c = canvas.getContext('2d')
+  const color = { note: '#5b8fd6', heart: '#ec6577', alert: '#f08a3c', sparkle: '#e9a92a', sleep: '#7f8fc9' }[kind]
+  if (c) {
+    c.fillStyle = '#fffaf0'
+    c.strokeStyle = 'rgba(80,60,40,0.25)'
+    c.lineWidth = 4
+    c.beginPath()
+    c.arc(48, 44, 34, 0, TAU)
+    c.fill()
+    c.stroke()
+    c.beginPath()
+    c.moveTo(40, 74)
+    c.lineTo(48, 90)
+    c.lineTo(58, 72)
+    c.fill()
+    c.fillStyle = color
+    if (kind === 'heart') {
+      c.beginPath()
+      c.moveTo(48, 62)
+      c.bezierCurveTo(20, 42, 30, 18, 48, 32)
+      c.bezierCurveTo(66, 18, 76, 42, 48, 62)
+      c.fill()
+    } else if (kind === 'sparkle') {
+      c.beginPath()
+      for (let i = 0; i < 8; i++) {
+        const r = i % 2 ? 9 : 24,
+          a = (i / 8) * TAU - Math.PI / 2
+        c.lineTo(48 + Math.cos(a) * r, 44 + Math.sin(a) * r)
+      }
+      c.fill()
+    } else {
+      c.font = '900 50px "Nunito Variable", Nunito, system-ui, sans-serif'
+      c.textAlign = 'center'
+      c.textBaseline = 'middle'
+      c.fillText(kind === 'note' ? '♪' : kind === 'sleep' ? 'z' : '!', 48, 46)
+    }
+  }
+  texture = new THREE.CanvasTexture(canvas)
+  texture.colorSpace = THREE.SRGBColorSpace
+  emoteTextures.set(kind, texture)
+  return texture
+}
+
+/** A small pool of bubbles that pop up, drift and fade above a character. */
+function emotes(parent: THREE.Object3D, height: number) {
+  const pool = Array.from({ length: 3 }, () => {
+    const sprite = new THREE.Sprite(
+      new THREE.SpriteMaterial({ transparent: true, depthWrite: false, depthTest: false }),
+    )
+    sprite.visible = false
+    sprite.renderOrder = 10
+    parent.add(sprite)
+    return { sprite, age: 1, drift: 0 }
+  })
+  let next = 0
+  return {
+    show(kind: Emote) {
+      const bubble = pool[next]
+      next = (next + 1) % pool.length
+      bubble.sprite.material.map = emoteTexture(kind)
+      bubble.sprite.material.needsUpdate = true
+      bubble.age = 0
+      bubble.drift = (next - 1) * 0.08
+      bubble.sprite.visible = true
+    },
+    update(dt: number) {
+      for (const bubble of pool) {
+        if (!bubble.sprite.visible) continue
+        bubble.age += dt / 1.8
+        if (bubble.age >= 1) {
+          bubble.sprite.visible = false
+          continue
+        }
+        const pop = bubble.age < 0.12 ? ease(bubble.age / 0.12) * 1.15 : 1 + 0.15 * (1 - Math.min(1, (bubble.age - 0.12) / 0.15))
+        bubble.sprite.scale.setScalar(0.3 * Math.min(pop, 1.15))
+        bubble.sprite.position.set(0.18 + bubble.drift + Math.sin(bubble.age * 6) * 0.02, height + bubble.age * 0.35, 0)
+        bubble.sprite.material.opacity = 1 - Math.max(0, (bubble.age - 0.75) / 0.25)
+      }
+    },
+  }
 }
 
 type Vec3 = [number, number, number]
@@ -181,6 +276,7 @@ const { clamp, damp, lerp } = THREE.MathUtils
 export const angleDelta = (from: number, to: number) =>
   Math.atan2(Math.sin(to - from), Math.cos(to - from))
 const ease = (t: number) => t * t * (3 - 2 * t)
+const smoothstep01 = (t: number) => ease(clamp(t, 0, 1))
 
 /** A small pseudo-random stream so idle behaviour differs between characters. */
 function chance(seed: number) {
@@ -251,6 +347,11 @@ interface FootPose {
 }
 
 type IdleAction = 'sway' | 'stretch' | 'tap'
+
+/** Seated pose: the seat is ~0.2 behind the feet, at log height. */
+const SIT_PELVIS = 0.285
+const SIT_BACK = 0.2
+const SIT_FOOT = 0.07
 
 export function createVisitor(): IslandCharacter {
   const group = new THREE.Group()
@@ -585,6 +686,10 @@ export function createVisitor(): IslandCharacter {
   let nextAction = 4.5
   let lastAction: IdleAction | null = null
   const blink = blinker(random)
+  const bubbles = emotes(group, 1.32)
+  let seated = false
+  let sitW = 0
+  let nextNote = 0
   const nod = spring(120, 10)
   const curlPitch = spring(90, 5)
   const curlRoll = spring(90, 5)
@@ -596,6 +701,9 @@ export function createVisitor(): IslandCharacter {
   const gait: FootPose = { z: 0, y: 0, pitch: 0 }
 
   function settle() {
+    seated = false
+    sitW = 0
+    pelvis.position.z = 0
     moving = false
     walk = 0
     pace = 0
@@ -644,17 +752,21 @@ export function createVisitor(): IslandCharacter {
     moving = nowMoving
 
     walk = damp(walk, moving ? 1 : 0, moving ? 9 : 6, dt)
-    pace = damp(pace, clamp(speed / TOP_SPEED, 0, 1.2), 10, dt)
+    pace = damp(pace, clamp(speed / TOP_SPEED, 0, 1.9), 10, dt)
+    sitW = damp(sitW, seated ? 1 : 0, reduced ? 14 : 4.5, dt)
+    const sitting = ease(clamp(sitW, 0, 1))
+    // Running: longer strides, pumping arms and a keener lean.
+    const run = clamp((pace - 1.05) / 0.6, 0, 1)
     accel = damp(accel, dt > 0 ? (speed - lastSpeed) / dt : 0, 8, dt)
     lastSpeed = speed
     const s = reduced ? Math.min(pace, 1) * 0.8 : pace
-    const length = CYCLE * (0.7 + 0.3 * Math.min(1, pace))
-    const lift = (0.065 + 0.05 * Math.min(1, pace)) * (reduced ? 0.7 : 1)
+    const length = CYCLE * (0.7 + 0.3 * Math.min(1, pace) + 0.45 * Math.max(0, pace - 1))
+    const lift = (0.065 + 0.05 * Math.min(1, pace) + 0.04 * run) * (reduced ? 0.7 : 1)
     const yawRate = dt > 0 ? angleDelta(lastYaw, group.rotation.y) / dt : 0
     lastYaw = group.rotation.y
 
     /* ---- Idle actions: little bits of personality when standing still ---- */
-    if (moving || reduced) {
+    if (moving || reduced || seated || sitW > 0.02) {
       idleSince = time
       nextAction = time + 6 + random() * 4
       action = null
@@ -725,6 +837,17 @@ export function createVisitor(): IslandCharacter {
       }
     }
 
+    /* ---- Seated: feet planted in front, swinging happily now and then ---- */
+    if (sitting > 0) {
+      const kick = reduced ? 0 : smoothstep01(Math.sin(time * 0.37) * 2 - 0.6)
+      legs.forEach((leg, index) => {
+        const swing = kick * Math.max(0, Math.sin(time * 4.2 + index * Math.PI))
+        leg.pose.z = lerp(leg.pose.z, SIT_FOOT + 0.05 * swing, sitting)
+        leg.pose.y = lerp(leg.pose.y, 0.035 * swing, sitting)
+        leg.pose.pitch = lerp(leg.pose.pitch, -0.25 * swing, sitting)
+      })
+    }
+
     /* ---- Body rhythm: a springy, bouncy trot ---- */
     const w = walk
     const cycle = phase * TAU
@@ -741,17 +864,18 @@ export function createVisitor(): IslandCharacter {
 
     pelvis.position.x = reduced ? 0 : -0.02 * s * w * weightSide + 0.012 * shift + 0.03 * dance
     pelvis.rotation.set(
-      0.03 * s * w,
+      0.03 * s * w + 0.06 * run - 0.08 * sitting,
       reduced ? 0 : 0.14 * s * w * Math.cos(cycle),
       reduced ? 0 : 0.06 * s * w * weightSide - 0.08 * turnLook * s + 0.018 * shift + 0.09 * dance,
     )
     const lean = reduced
       ? 0.03 * w
-      : 0.08 * s * w + clamp(accel * 0.018, -0.1, 0.12) - 0.16 * stretching
+      : 0.08 * s * w + 0.1 * run + clamp(accel * 0.018, -0.1, 0.12) - 0.16 * stretching
+    const fireSway = reduced ? 0 : Math.sin(time * 1.2) * 0.05 * sitting
     chest.rotation.set(
-      lean + 0.012 * breathe * idle,
+      lean + 0.012 * breathe * idle + 0.16 * sitting,
       -pelvis.rotation.y * 1.35,
-      -pelvis.rotation.z * 0.45,
+      -pelvis.rotation.z * 0.45 + fireSway,
     )
     const squash = landing.step(0, dt)
     chest.scale.set(
@@ -769,7 +893,8 @@ export function createVisitor(): IslandCharacter {
       const allowed = Math.sqrt(Math.max(0, (LEG * 0.985) ** 2 - dx * dx - dz * dz))
       height = Math.min(height, ANKLE_Y + leg.pose.y + allowed + 0.02)
     })
-    pelvis.position.y = height
+    pelvis.position.y = lerp(height, SIT_PELVIS + 0.006 * breathe, sitting)
+    pelvis.position.z = -SIT_BACK * sitting
     pelvis.updateMatrix()
 
     legs.forEach((leg) => {
@@ -783,7 +908,7 @@ export function createVisitor(): IslandCharacter {
     /* ---- Arms: counter-swing with follow-through ---- */
     arms.forEach(({ side, shoulder, elbow }, index) => {
       const swing = Math.cos(cycle - 0.07 * TAU + (index ? Math.PI : 0))
-      const amount = (reduced ? 0.35 : 0.72) * Math.min(1, s) * w
+      const amount = ((reduced ? 0.35 : 0.72) * Math.min(1, s) + 0.25 * run) * w
       const forwardness = Math.max(0, -swing)
       const rest = side * (0.28 + 0.06 * s * w + 0.025 * idle * (breathe + 1))
       const wave = swaying * (0.35 + 0.25 * Math.sin(actT * TAU * 1.15 + index * Math.PI))
@@ -792,7 +917,15 @@ export function createVisitor(): IslandCharacter {
         0,
         rest + side * (wave + 0.12 * stretching) + (reduced ? 0 : 0.03 * shift * side),
       )
-      elbow.rotation.x = lerp(-0.22 - 0.6 * forwardness * amount - 0.12 * w, -0.15, stretching)
+      elbow.rotation.x = lerp(-0.22 - 0.6 * forwardness * amount - 0.12 * w - 0.85 * run * w, -0.15, stretching)
+      if (sitting > 0) {
+        // Warm both hands at the fire, then rest them on the knees for a while.
+        const warm = reduced ? 1 : smoothstep01(Math.sin(time * 0.21) * 3 + 0.5)
+        const rub = reduced ? 0 : 0.07 * Math.sin(time * 6.5 + index * Math.PI) * warm
+        shoulder.rotation.x = lerp(shoulder.rotation.x, lerp(-0.62, -1.12 + rub, warm), sitting)
+        shoulder.rotation.z = lerp(shoulder.rotation.z, side * lerp(0.2, 0.12, warm), sitting)
+        elbow.rotation.x = lerp(elbow.rotation.x, lerp(-0.3, -0.85, warm), sitting)
+      }
     })
 
     /* ---- Head: stabilises, anticipates turns, looks around when idle ---- */
@@ -813,8 +946,9 @@ export function createVisitor(): IslandCharacter {
       nextLook = time + 2.2 + random() * 3.2
     }
     const busy = Math.max(swaying, stretching)
-    lookYaw = damp(lookYaw, reduced ? 0 : lookTarget[0] * idle * (1 - busy) + turnLook * 0.45, 5, dt)
-    lookPitch = damp(lookPitch, lookTarget[1] * idle * (1 - busy) - 0.32 * stretching, 5, dt)
+    const gazeAway = 1 - sitting
+    lookYaw = damp(lookYaw, reduced ? 0 : (lookTarget[0] * idle * (1 - busy) + turnLook * 0.45) * gazeAway, 5, dt)
+    lookPitch = damp(lookPitch, lookTarget[1] * idle * (1 - busy) * gazeAway - 0.32 * stretching + 0.14 * sitting, 5, dt)
     lookTilt = damp(lookTilt, lookTarget[2] * idle * (1 - busy) - 0.2 * dance, 6, dt)
     const nodding = reduced ? 0 : nod.step(clamp(-bobVelocity * 0.35, -0.3, 0.3), dt)
     const tapNod = tapping * 0.07 * Math.sin(actT * TAU * 2.4)
@@ -825,7 +959,12 @@ export function createVisitor(): IslandCharacter {
     )
 
     /* ---- Face ---- */
-    const happy = busy > 0.45
+    const cosy = sitting > 0.9 && !reduced && Math.sin(time * 0.45) > 0.82
+    const happy = busy > 0.45 || cosy
+    if (sitting > 0.95 && !reduced && time > nextNote) {
+      bubbles.show(random() < 0.2 ? 'heart' : 'note')
+      nextNote = time + 2.6 + random() * 2.4
+    }
     eyes.visible = !happy
     happyEyes.visible = happy
     eyes.scale.y = reduced ? 1 : blink(time)
@@ -841,7 +980,7 @@ export function createVisitor(): IslandCharacter {
       cowlick.rotation.x = curlPitch.step(clamp(-bobVelocity * 0.9 + lean * 0.6 - accel * 0.02, -0.5, 0.5), dt)
       cowlick.rotation.z = curlRoll.step(clamp(-yawRate * 0.05 - 0.3 * dance, -0.5, 0.5), dt)
       const flutter = Math.sin(time * 13) * 0.12 * s * w
-      scarfTail.rotation.x = 0.08 + tailSwing.step(clamp(0.9 * s * w + accel * 0.03 - bobVelocity * 0.4, -0.3, 1.2), dt) + flutter
+      scarfTail.rotation.x = 0.08 + tailSwing.step(clamp(0.75 * Math.min(s, 1.2) * w + accel * 0.03 - bobVelocity * 0.4, -0.3, 0.95), dt) + flutter
       scarfTail.rotation.z = tailRoll.step(clamp(yawRate * 0.08 - pelvis.rotation.z * 2, -0.6, 0.6), dt)
     }
 
@@ -851,9 +990,20 @@ export function createVisitor(): IslandCharacter {
     shadow.position.x = pelvis.position.x * 0.5
 
     updateDust(dt)
+    bubbles.update(dt)
   }
   animate(0, false)
-  return { group, effects, animate, settle }
+  return {
+    group,
+    effects,
+    animate,
+    settle,
+    sit(value: boolean) {
+      seated = value
+      if (value) nextNote = previous + 1.5
+    },
+    emote: (kind: Emote) => bubbles.show(kind),
+  }
 }
 
 /* -------------------------------------------------------------------------- */
@@ -971,10 +1121,12 @@ export function createGuide(): IslandCharacter {
   const blink = blinker(random)
   const capBounce = spring(160, 8)
   const toPlayer = new THREE.Vector3()
+  const bubbles = emotes(group, 1.0)
 
   return {
     group,
     settle() {},
+    emote: (kind: Emote) => bubbles.show(kind),
     animate(time, reduced, _move, attention) {
       const dt = Math.min(0.1, Math.max(0, time - previous))
       previous = time
@@ -995,7 +1147,10 @@ export function createGuide(): IslandCharacter {
         }
       }
       const close = distance < 2.6
-      if (close && !near && !reduced) greet = 0
+      if (close && !near && !reduced) {
+        greet = 0
+        bubbles.show('alert')
+      }
       near = close
 
       if (!reduced && time > nextTilt) {
@@ -1012,7 +1167,10 @@ export function createGuide(): IslandCharacter {
         spin = 0
         nextSpin = time + 14 + random() * 10
       }
+      const before = greet
       greet = Math.min(1, greet + dt / 1.8)
+      if (before < 0.55 && greet >= 0.55) bubbles.show('heart')
+      bubbles.update(dt)
       flutter = Math.min(1, flutter + dt / 0.7)
       spin = Math.min(1, spin + dt / 1.1)
 
@@ -1051,6 +1209,107 @@ export function createGuide(): IslandCharacter {
       happyEyes.visible = happy
       eyes.scale.y = reduced ? 1 : blink(time)
       shadow.scale.setScalar(1 - hop * 0.5)
+    },
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Mochi, the island cat, napping on a bench.                                 */
+
+export function createCat(): IslandCharacter {
+  const group = new THREE.Group()
+  const material = clay()
+  const random = chance(41)
+  const fur = '#f2b673'
+  const cream = '#fff1dc'
+  const body = joint(group)
+  const loaf = sculpt(material)
+  loaf.oval(fur, [0, 0.12, 0], [0.24, 0.13, 0.17])
+  loaf.oval(cream, [0.02, 0.09, 0.1], [0.17, 0.08, 0.08])
+  for (const [x, z] of [
+    [-0.13, -0.05],
+    [0.05, -0.08],
+  ])
+    loaf.oval('#e39a55', [x, 0.2, z], [0.05, 0.03, 0.07], [0, 0, 0.2])
+  for (const side of [-1, 1]) loaf.oval(cream, [0.17, 0.035, side * 0.07], [0.06, 0.03, 0.045])
+  loaf.mesh(body)
+
+  const head = joint(body, 0.2, 0.17, 0.02)
+  const face = sculpt(material)
+  face.oval(fur, [0.05, 0.03, 0], [0.13, 0.11, 0.12])
+  face.oval(cream, [0.12, 0.0, 0], [0.06, 0.05, 0.08])
+  face.oval('#f08a8a', [0.175, 0.025, 0], [0.012, 0.01, 0.014])
+  for (const side of [-1, 1]) {
+    face.oval(fur, [0.04, 0.13, side * 0.065], [0.035, 0.055, 0.03], [side * 0.25, 0, -0.15])
+    face.oval('#f6b0a0', [0.05, 0.125, side * 0.065], [0.018, 0.035, 0.015], [side * 0.25, 0, -0.15])
+    face.oval('#f6a196', [0.14, -0.005, side * 0.07], [0.012, 0.02, 0.025])
+  }
+  face.mesh(head)
+  const closed = sculpt(material)
+  const open = sculpt(material)
+  for (const side of [-1, 1]) {
+    closed.oval(ink, [0.155, 0.045, side * 0.045], [0.006, 0.006, 0.026], [0, 0, 0.3])
+    open.oval(ink, [0.155, 0.05, side * 0.045], [0.012, 0.024, 0.016])
+    open.oval('#ffffff', [0.165, 0.058, side * 0.045 - 0.004], [0.004, 0.006, 0.005])
+  }
+  const sleepyEyes = closed.mesh(head)
+  const eyes = open.mesh(head)
+  eyes.visible = false
+
+  const tail = joint(body, -0.22, 0.08, 0.05)
+  const tailShape = sculpt(material)
+  tailShape.oval(fur, [0.0, 0, 0.09], [0.04, 0.035, 0.11], [0, 0.4, 0])
+  tailShape.oval('#e39a55', [0.07, 0, 0.18], [0.035, 0.03, 0.06], [0, 1.2, 0])
+  tailShape.mesh(tail)
+  group.name = 'cat'
+
+  const bubbles = emotes(group, 0.55)
+  const toPlayer = new THREE.Vector3()
+  let previous = 0
+  let awake = 0
+  let nextSnore = 2
+  let nextTwitch = 3
+  let twitch = 1
+  return {
+    group,
+    settle() {},
+    animate(time, reduced, _move, attention) {
+      const dt = Math.min(0.1, Math.max(0, time - previous))
+      previous = time
+      let near = false
+      let bearing = 0
+      if (attention) {
+        toPlayer.subVectors(attention, group.position)
+        near = Math.hypot(toPlayer.x, toPlayer.z) < 2.2
+        // The cat's nose points along its local +X: turn the head towards the
+        // visitor in that frame.
+        group.worldToLocal(toPlayer.copy(attention))
+        bearing = Math.atan2(-toPlayer.z, toPlayer.x)
+      }
+      awake = damp(awake, near ? 1 : 0, near ? 3 : 0.8, dt)
+      const breathe = reduced ? 0 : Math.sin(time * (1.6 + awake))
+      body.scale.set(1, 1 + 0.035 * breathe, 1 + 0.02 * breathe)
+      head.rotation.set(
+        0,
+        clamp(bearing, -0.9, 0.9) * awake,
+        lerp(-0.35, 0.12, awake) + (reduced ? 0 : 0.03 * breathe),
+      )
+      head.position.y = 0.17 + 0.05 * awake
+      eyes.visible = awake > 0.5
+      sleepyEyes.visible = !eyes.visible
+      if (eyes.visible && !reduced) eyes.scale.y = Math.sin(time * 0.9) > 0.97 ? 0.15 : 1
+      if (!reduced && time > nextTwitch) {
+        twitch = 0
+        nextTwitch = time + 2 + random() * 4
+      }
+      twitch = Math.min(1, twitch + dt / 0.6)
+      const flick = twitch < 1 ? Math.sin(twitch * Math.PI * 3) * (1 - twitch) : 0
+      tail.rotation.y = reduced ? 0 : 0.25 * Math.sin(time * (0.8 + awake * 2.5)) + 0.5 * flick
+      if (!reduced && awake < 0.2 && time > nextSnore) {
+        bubbles.show('sleep')
+        nextSnore = time + 3.5 + random() * 2
+      }
+      bubbles.update(dt)
     },
   }
 }

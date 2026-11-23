@@ -1,5 +1,6 @@
 import { anchors, type Zone } from '../data/village'
 import { exhibitSpots } from '../data/exhibits'
+import { propColliders } from '../data/island'
 export type Point = [number, number]
 // Narrow colliders leave the spaces between the six pedestals walkable.
 const ornaments: ([number, number] | [number, number, number])[] = [
@@ -8,25 +9,23 @@ const ornaments: ([number, number] | [number, number, number])[] = [
   [0, 2],
   anchors.npc,
   [2.05, 8.72],
-  [0.43, 8.3],
   [0.04, -3.17],
   [4.24, -4.02],
   [4.93, 1.98],
-  // Campfire, its log seats, the well and the beach parasol (x, z, radius).
-  [-0.45, 4.2, 0.55],
-  [-1.28, 3.78, 0.24],
-  [-1.23, 4.08, 0.24],
-  [-1.18, 4.38, 0.24],
-  [-0.05, 4.88, 0.24],
-  [0.17, 4.68, 0.24],
-  [0.39, 4.48, 0.24],
-  [-0.87, 5.02, 0.24],
-  [-0.57, 5.06, 0.24],
-  [-0.27, 5.10, 0.24],
-  [5.7, -4.9, 0.62],
-  [12.15, 4.1, 0.25],
-  [12.83, 4.3, 0.42],
+  ...propColliders(),
 ]
+// Bucket colliders on a 1-unit grid so each walkability test only checks
+// the handful of props nearby (route searches call it thousands of times).
+const cells = new Map<number, [number, number, number][]>()
+const cellKey = (cx: number, cz: number) => (cx + 64) * 256 + (cz + 64)
+for (const [ox, oz, r = 0.32] of ornaments)
+  for (let cx = Math.floor(ox - r); cx <= Math.floor(ox + r); cx++)
+    for (let cz = Math.floor(oz - r); cz <= Math.floor(oz + r); cz++) {
+      const key = cellKey(cx, cz)
+      const list = cells.get(key) ?? []
+      list.push([ox, oz, r])
+      cells.set(key, list)
+    }
 const blocks: [Zone, number, number][] = [
   ['about', 2.05, 1.62],
   ['tech', 2.25, 1.7],
@@ -35,7 +34,8 @@ const blocks: [Zone, number, number][] = [
 ]
 export function walkable(x: number, z: number) {
   if (Math.abs(x - 2.5) < 0.63 && z > 9.25 && z < 12.95) return true
-  if (ornaments.some(([ox, oz, r = 0.32]) => (x - ox) ** 2 + (z - oz) ** 2 < r ** 2))
+  const nearby = cells.get(cellKey(Math.floor(x), Math.floor(z)))
+  if (nearby?.some(([ox, oz, r]) => (x - ox) ** 2 + (z - oz) ** 2 < r ** 2))
     return false
   if ((x / 14.8) ** 2 + (z / 9.8) ** 2 > 1) return false
   if (

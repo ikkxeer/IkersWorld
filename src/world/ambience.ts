@@ -1,5 +1,5 @@
 import * as T from 'three'
-import type { XZ } from './modelKit'
+import { Batch, ModelKit, type XZ } from './modelKit'
 
 /** A soft round sprite texture, drawn once and shared by every glow. */
 export function softDot(inner: string, outer: string) {
@@ -20,9 +20,15 @@ export function softDot(inner: string, outer: string) {
 }
 
 interface AmbienceOptions {
+  kit: ModelKit
+  /** Broadleaf crowns leaves can fall from: x, z, crown height. */
+  crowns: [number, number, number][]
+  /** Grassy spots sparrows like to land on. */
+  perches: XZ[]
   low: boolean
   lamps: XZ[]
   campfire: XZ
+  lanterns: [number, number, number][]
   chimneys: [number, number, number][]
   river: (z: number) => number
   riverWidth: (z: number) => number
@@ -33,7 +39,7 @@ interface AmbienceOptions {
  * dusk, a crackling campfire, chimney smoke, drifting pollen by day, fish
  * shadows in the stream and gulls wheeling over the sea.
  */
-export function createAmbience({ low, lamps, campfire, chimneys, river, riverWidth }: AmbienceOptions) {
+export function createAmbience({ kit, crowns, perches, low, lamps, campfire, lanterns, chimneys, river, riverWidth }: AmbienceOptions) {
   const group = new T.Group()
   group.name = 'ambience'
   const glowTexture = softDot('rgba(255,244,214,1)', 'rgba(255,205,120,0.45)')
@@ -61,6 +67,24 @@ export function createAmbience({ low, lamps, campfire, chimneys, river, riverWid
     const light = new T.PointLight('#ffc879', 0, 6.5, 1.6)
     group.add(light)
     return light
+  })
+
+  // Paper lantern glows over the campfire circle.
+  const lanternGlows = lanterns.map(([x, y, z], i) => {
+    const glow = new T.Sprite(
+      new T.SpriteMaterial({
+        map: glowTexture,
+        color: i % 2 ? '#ffb38a' : '#ffd890',
+        transparent: true,
+        depthWrite: false,
+        blending: T.AdditiveBlending,
+        opacity: 0,
+      }),
+    )
+    glow.position.set(x, y - 0.2, z)
+    glow.scale.setScalar(0.75)
+    group.add(glow)
+    return glow
   })
 
   /* ------------------------------ Campfire ----------------------------- */
@@ -190,11 +214,93 @@ export function createAmbience({ low, lamps, campfire, chimneys, river, riverWid
     return { gull, wings, radius: 19 + i * 3.5, height: 4.2 + i * 1.1, speed: 0.12 - i * 0.02, offset: i * 2.1 }
   })
 
+  /* --------------------------- Falling leaves -------------------------- */
+  const leafGeometry = new T.IcosahedronGeometry(1, 0)
+  leafGeometry.scale(0.07, 0.012, 0.045)
+  const leaves = new T.InstancedMesh(
+    leafGeometry,
+    new T.MeshLambertMaterial({ color: '#ffffff' }),
+    low ? 10 : 22,
+  )
+  leaves.frustumCulled = false
+  const leafColors = ['#8cbf62', '#a6cf6c', '#f2b35e', '#e98b5a', '#f3c2cc']
+  const leafState = Array.from({ length: leaves.count }, (_, i) => ({
+    x: 0,
+    y: -5,
+    z: 0,
+    age: 0,
+    life: 0,
+    delay: (i * 1.7) % 9,
+    spin: 0,
+    seed: i * 1.37,
+  }))
+  const tint = new T.Color()
+  leafState.forEach((_, i) => leaves.setColorAt(i, tint.set(leafColors[i % leafColors.length])))
+  function dropLeaf(leaf: (typeof leafState)[number], x: number, y: number, z: number) {
+    leaf.x = x
+    leaf.y = y
+    leaf.z = z
+    leaf.age = 0
+    leaf.life = 4.5 + ((leaf.seed * 7) % 2)
+    leaf.delay = 0
+  }
+  group.add(leaves)
+
+  /* ------------------------------ Sparrows ----------------------------- */
+  const birdBody = new Batch(kit)
+  birdBody.ball([0, 0.07, 0], [0.065, 0.058, 0.085], '#b98257', 1)
+  birdBody.ball([0, 0.055, 0.02], [0.05, 0.045, 0.06], '#f3dfbf', 1)
+  birdBody.ball([0, 0.12, 0.06], [0.045, 0.044, 0.045], '#a8724a', 1)
+  birdBody.ball([0, 0.125, 0.1], [0.012, 0.01, 0.022], '#e6a640', 0)
+  for (const s of [-1, 1]) birdBody.ball([s * 0.03, 0.135, 0.09], [0.009, 0.011, 0.006], '#2f2624', 0)
+  birdBody.ball([0, 0.085, -0.1], [0.028, 0.012, 0.05], '#8a5a3a', 0, [0.35, 0, 0])
+  const bodyMesh = birdBody.finish().children[0] as T.Mesh
+  const wingGeometry = new T.SphereGeometry(1, 8, 6)
+  wingGeometry.translate(1, 0, 0)
+  wingGeometry.scale(0.045, 0.012, 0.035)
+  const sparrowCount = low ? 3 : 6
+  const sparrowBodies = new T.InstancedMesh(bodyMesh.geometry, kit.matte, sparrowCount)
+  const sparrowWings = new T.InstancedMesh(wingGeometry, new T.MeshLambertMaterial({ color: '#9a6744' }), sparrowCount * 2)
+  sparrowBodies.frustumCulled = sparrowWings.frustumCulled = false
+  sparrowBodies.castShadow = true
+  group.add(sparrowBodies, sparrowWings)
+  const sparrows = Array.from({ length: sparrowCount }, (_, i) => {
+    const home = perches[i % perches.length]
+    return {
+      x: home[0] + ((i * 0.37) % 0.6) - 0.3,
+      z: home[1] + ((i * 0.61) % 0.6) - 0.3,
+      y: 0.1,
+      yaw: i,
+      perch: i % perches.length,
+      flight: null as null | { from: [number, number]; to: [number, number]; t: number },
+      nextHop: i * 0.4,
+      hop: 1,
+      hopFrom: [0, 0] as [number, number],
+      hopTo: [0, 0] as [number, number],
+      peck: 0,
+    }
+  })
+  const proxy = new T.Object3D()
+  const wingProxy = new T.Object3D()
+
   const nearest: { x: number; z: number; d: number }[] = lamps.map(([x, z]) => ({ x, z, d: 0 }))
 
+  let lastTime = 0
   return {
     group,
+    /** A shaken tree lets go of a handful of leaves. */
+    burst(x: number, z: number, height: number) {
+      let dropped = 0
+      for (const leaf of leafState) {
+        if (dropped >= 7) break
+        if (leaf.age < leaf.life * 0.6 && leaf.life > 0) continue
+        dropLeaf(leaf, x + (Math.random() - 0.5) * 1.6, height - 0.2 + Math.random() * 0.6, z + (Math.random() - 0.5) * 1.4)
+        dropped++
+      }
+    },
     update(time: number, night: number, px: number, pz: number, reduced: boolean) {
+      const dt = Math.min(0.1, Math.max(0, time - lastTime))
+      lastTime = time
       const dusk = T.MathUtils.smoothstep(night, 0.12, 0.6)
 
       // Lamps: halos everywhere, real light near the visitor.
@@ -204,15 +310,25 @@ export function createAmbience({ low, lamps, campfire, chimneys, river, riverWid
       })
       for (const lamp of nearest) lamp.d = (lamp.x - px) ** 2 + (lamp.z - pz) ** 2
       nearest.sort((a, b) => a.d - b.d)
+      // Real lights only exist after dusk: by day they would cost every pixel
+      // a lighting pass for nothing.
+      const lit = dusk > 0.01
       pool.forEach((light, i) => {
+        light.visible = lit
         const lamp = nearest[i]
         light.position.set(lamp.x, 1.75, lamp.z)
         light.intensity = dusk * 7
       })
 
+      lanternGlows.forEach((glow, i) => {
+        glow.visible = dusk > 0.01
+        glow.material.opacity = dusk * (0.75 + (reduced ? 0 : 0.15 * Math.sin(time * 1.7 + i * 1.3)))
+      })
+
       // Campfire: always lit, it matters most once the sun goes down.
       const flicker = reduced ? 0.5 : 0.5 + 0.25 * Math.sin(time * 17) + 0.25 * Math.sin(time * 7.3 + 1)
-      fireLight.intensity = (0.8 + dusk * 9) * (0.85 + flicker * 0.3)
+      fireLight.visible = lit
+      fireLight.intensity = dusk * 9 * (0.85 + flicker * 0.3)
       fireHalo.scale.setScalar(1.3 + flicker * 0.35 + dusk * 0.6)
       fireHalo.material.opacity = 0.35 + dusk * 0.55
       flames.forEach((flame, i) => {
@@ -261,6 +377,103 @@ export function createAmbience({ low, lamps, campfire, chimneys, river, riverWid
         body.rotation.y = Math.PI + (reduced ? 0 : Math.sin(time * 5 + start) * 0.2)
         body.visible = Math.abs(z) < 9.2
       })
+
+      // Leaves drift down from the crowns, rock side to side and settle.
+      leaves.visible = !reduced
+      if (!reduced) {
+        leafState.forEach((leaf, i) => {
+          if (leaf.age >= leaf.life) {
+            leaf.delay -= dt
+            if (leaf.delay <= 0 && crowns.length) {
+              const [cx, cz, ch] = crowns[Math.floor(((time * 13.7 + i * 5.3) % 1) * crowns.length)]
+              dropLeaf(leaf, cx + Math.sin(time + i) * 0.8, ch, cz + Math.cos(time * 1.3 + i) * 0.7)
+            } else {
+              proxy.position.set(0, -50, 0)
+              proxy.scale.setScalar(0)
+              proxy.updateMatrix()
+              leaves.setMatrixAt(i, proxy.matrix)
+              return
+            }
+          }
+          leaf.age += dt
+          const falling = leaf.y > 0.13
+          if (falling) {
+            leaf.y -= dt * 0.42
+            leaf.x += Math.sin(leaf.age * 2.3 + leaf.seed) * dt * 0.45
+            leaf.z += Math.cos(leaf.age * 1.7 + leaf.seed) * dt * 0.25 + dt * 0.1
+            leaf.spin += dt * 2.2
+          } else if (leaf.age < leaf.life - 1) leaf.age = Math.max(leaf.age, leaf.life - 1.6)
+          const fade = Math.min(1, (leaf.life - leaf.age) / 0.6)
+          proxy.position.set(leaf.x, Math.max(0.12, leaf.y), leaf.z)
+          proxy.rotation.set(falling ? Math.sin(leaf.age * 2.3 + leaf.seed) * 0.8 : 0, leaf.spin, falling ? Math.cos(leaf.age * 1.9) * 0.5 : 0)
+          proxy.scale.setScalar(Math.max(0, fade))
+          proxy.updateMatrix()
+          leaves.setMatrixAt(i, proxy.matrix)
+          if (leaf.age >= leaf.life) leaf.delay = 2 + ((leaf.seed * 3.1) % 6)
+        })
+        leaves.instanceMatrix.needsUpdate = true
+      }
+
+      // Sparrows hop and peck, and scatter to another perch if you come close.
+      sparrows.forEach((bird, i) => {
+        if (!bird.flight && Math.hypot(bird.x - px, bird.z - pz) < 1.9 && !reduced) {
+          const next = (bird.perch + 1 + (i % (perches.length - 1))) % perches.length
+          bird.perch = next
+          const [tx, tz] = perches[next]
+          bird.flight = { from: [bird.x, bird.z], to: [tx + ((i * 0.53) % 0.8) - 0.4, tz + ((i * 0.29) % 0.8) - 0.4], t: 0 }
+        }
+        let flap = 0
+        if (bird.flight) {
+          const f = bird.flight
+          f.t = Math.min(1, f.t + dt / 2.4)
+          const k = f.t * f.t * (3 - 2 * f.t)
+          bird.x = f.from[0] + (f.to[0] - f.from[0]) * k
+          bird.z = f.from[1] + (f.to[1] - f.from[1]) * k
+          bird.y = 0.1 + Math.sin(Math.PI * f.t) * 2.2
+          bird.yaw = Math.atan2(f.to[0] - f.from[0], f.to[1] - f.from[1])
+          flap = Math.sin(time * 38 + i)
+          if (f.t >= 1) {
+            bird.flight = null
+            bird.y = 0.1
+            bird.nextHop = time + 0.6
+          }
+        } else if (!reduced) {
+          if (time > bird.nextHop) {
+            const a = Math.sin(i * 3.1 + time) * Math.PI
+            const [hx, hz] = perches[bird.perch]
+            bird.hopFrom = [bird.x, bird.z]
+            const r = 0.12
+            bird.hopTo = [
+              Math.min(hx + 0.6, Math.max(hx - 0.6, bird.x + Math.cos(a) * r)),
+              Math.min(hz + 0.6, Math.max(hz - 0.6, bird.z + Math.sin(a) * r)),
+            ]
+            bird.hop = 0
+            bird.yaw = Math.atan2(bird.hopTo[0] - bird.x, bird.hopTo[1] - bird.z)
+            bird.nextHop = time + 0.5 + ((i * 0.77 + time) % 1.4)
+            bird.peck = (i + Math.floor(time)) % 3 === 0 ? 0 : 1
+          }
+          bird.hop = Math.min(1, bird.hop + dt / 0.18)
+          bird.x = bird.hopFrom[0] + (bird.hopTo[0] - bird.hopFrom[0]) * bird.hop
+          bird.z = bird.hopFrom[1] + (bird.hopTo[1] - bird.hopFrom[1]) * bird.hop
+          bird.y = 0.1 + Math.sin(Math.PI * bird.hop) * 0.06
+          bird.peck = Math.min(1, bird.peck + dt / 0.5)
+        }
+        const pecking = bird.flight ? 0 : Math.sin(Math.min(1, bird.peck) * Math.PI) * 0.6
+        proxy.position.set(bird.x, bird.y, bird.z)
+        proxy.rotation.set(pecking, bird.yaw, 0)
+        proxy.scale.setScalar(1.25)
+        proxy.updateMatrix()
+        sparrowBodies.setMatrixAt(i, proxy.matrix)
+        for (const side of [-1, 1]) {
+          wingProxy.position.set(side * 0.05, 0.09, 0)
+          wingProxy.rotation.set(0, side < 0 ? Math.PI : 0, (bird.flight ? 0.2 + flap * 0.9 : -0.5) * (side < 0 ? 1 : 1))
+          wingProxy.updateMatrix()
+          wingProxy.matrix.premultiply(proxy.matrix)
+          sparrowWings.setMatrixAt(i * 2 + (side > 0 ? 1 : 0), wingProxy.matrix)
+        }
+      })
+      sparrowBodies.instanceMatrix.needsUpdate = true
+      sparrowWings.instanceMatrix.needsUpdate = true
 
       // Gulls wheel lazily out over the water.
       gulls.forEach(({ gull, wings, radius, height, speed, offset }) => {

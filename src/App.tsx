@@ -60,6 +60,7 @@ function placeName(
   if (place === 'projects' && exhibit !== undefined)
     return portfolio(lang).projects[exhibit].name
   if (place === 'exit') return inside === 'tech' ? t.leaveLab : t.leaveHouse
+  if (place === 'campfire') return t.campfire
   if (place === 'about' && inside) return t.album
   if (place === 'tech') return exhibit === undefined ? t.workshopSign : stations[exhibit][lang]
   return place === 'map'

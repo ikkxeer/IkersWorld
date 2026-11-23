@@ -1,6 +1,7 @@
 import type { Place, Zone } from '../data/village'
 export type Interior = 'about' | 'tech' | false
-export type Target = Place | 'exit'
+/** 'campfire' is handled in-world (the visitor sits down), never as a panel. */
+export type Target = Place | 'exit' | 'campfire'
 export interface VillageEvents {
   open: (place: Place, project?: number) => void
   position: (

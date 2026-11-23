@@ -12,16 +12,29 @@ import {
 import { building, lighthouse, pickable } from './village'
 import { decoratePlaza, exhibit } from './exhibits'
 import { exhibitSpots } from '../data/exhibits'
+import {
+  lanternPoints,
+  benchSites,
+  bushSites,
+  cafeTables,
+  campfire,
+  fenceRuns,
+  isPine,
+  lampSites,
+  parasolSite,
+  picnicSite,
+  rockSites,
+  treeSites,
+  wellSite,
+} from '../data/island'
 import { walkable } from './navigation'
-import { createRiver, paintFalls } from './water'
+import { createRiver } from './water'
 import { createAmbience } from './ambience'
 
 const river = (z: number) =>
   -2.5 + Math.sin(z * 0.64) * 0.14 + Math.sin(z * 0.28) * 0.12
 const riverWidth = (z: number) =>
   0.66 + 0.09 * Math.cos(z * 0.72) + 0.035 * Math.cos(z * 1.8)
-const endZ = -10.5,
-  frontZ = 10.5
 
 function terrain(b: Batch) {
   const rand = seeded(71)
@@ -44,6 +57,8 @@ function terrain(b: Batch) {
     '#f3d7a2',
     undefined,
     0.1,
+    4,
+    true,
   )
   b.horizontal(
     coast.map(([x, z]) => [x * 1.087, z * 1.088]),
@@ -52,6 +67,7 @@ function terrain(b: Batch) {
     '#efcc92',
     undefined,
     0.08,
+    4,
   )
   const nearRiver = (p: XZ, s: number) =>
     s * (p[0] - river(p[1])) - riverWidth(p[1])
@@ -81,28 +97,23 @@ function terrain(b: Batch) {
       const z = last + ((first - last) * j) / 34
       outline.push([river(z) + side * riverWidth(z), z])
     }
-    b.horizontal(outline, -0.28, 0.39, '#d4a36a', undefined, 0.155)
-    b.horizontal(outline, -0.12, 0.19, '#dbb87d', undefined, 0.105)
-    b.horizontal(outline, 0.005, 0.14, '#9fca72', b.kit.grass, 0.095)
+    b.horizontal(outline, -0.28, 0.39, '#d4a36a', undefined, 0.155, 4)
+    b.horizontal(outline, -0.12, 0.19, '#dbb87d', undefined, 0.105, 4)
+    b.horizontal(outline, 0.005, 0.14, '#9fca72', b.kit.grass, 0.095, 5, true)
   }
-  // Short stepped waterfalls drop into the inlet at either end of the island.
-  for (const s of [-1, 1]) {
-    b.block(
-      [river(s * 10.54), -0.43, s * 10.56],
-      [1.28, 0.6, 0.24],
-      '#8bd1c4',
-      [0, 0.07 * s, 0],
-      true,
-      b.kit.water,
-    )
-    for (let i = 0; i < 5; i++)
-      b.ball(
-        [river(s * 10.57) + (i - 2) * 0.24, -0.74, s * 10.72],
-        [0.25, 0.08, 0.26],
-        '#c2ead3',
-        1,
-      )
-  }
+  // Boulders frame both river mouths where the stream spills to the beach.
+  for (const s of [-1, 1])
+    for (const side of [-1, 1])
+      for (let i = 0; i < 3; i++) {
+        const z = s * (10.75 + i * 0.42)
+        b.ball(
+          [river(z) + side * (riverWidth(z) * (1.15 + i * 0.35) + 0.25), -0.38 - i * 0.12, z],
+          [0.32 - i * 0.05, 0.26 - i * 0.04, 0.3 - i * 0.04],
+          ['#b6ab99', '#c9bfae', '#a9a08f'][i],
+          1,
+          [0, i + side, 0.1],
+        )
+      }
   // Pebbled cliff faces keep the silhouette varied even at the waterline.
   for (let i = 0; i < 100; i++) {
     const a = rand() * Math.PI * 2,
@@ -180,7 +191,7 @@ function path(b: Batch, pts: XZ[], width: number, c = '#ecd3a0') {
     left.push([x - ((dz / l) * width) / 2, z + ((dx / l) * width) / 2])
     right.push([x + ((dz / l) * width) / 2, z - ((dx / l) * width) / 2])
   })
-  b.horizontal([...left, ...right.reverse()], 0.104, 0.02, c, b.kit.soil, 0.008)
+  b.horizontal([...left, ...right.reverse()], 0.104, 0.02, c, b.kit.soil, 0.008, 2, true)
   routes.push({ pts, width })
 }
 const bridgeWidth = 2.9
@@ -527,7 +538,46 @@ function bird(kit: ModelKit) {
 /* Cosy outdoor props.                                                       */
 
 /** Stone-ringed fire pit with log seats around it. */
-function campfire(b: Batch, x: number, z: number) {
+function campfireCircle(b: Batch, x: number, z: number) {
+  // A soft earthen clearing so the circle feels worn in by many evenings.
+  const clearing: XZ[] = []
+  for (let i = 0; i < 28; i++) {
+    const a = (i / 28) * Math.PI * 2,
+      r = 1.55 + 0.12 * Math.sin(a * 3) + 0.06 * Math.cos(a * 5)
+    clearing.push([x + Math.cos(a) * r, z + Math.sin(a) * r])
+  }
+  b.horizontal(clearing, 0.104, 0.02, '#e4c99a', b.kit.soil, 0.01, 2, true)
+  // Lantern posts and a sagging string of paper lanterns.
+  const lanterns = lanternPoints()
+  for (const [dx, dz] of campfire.posts) {
+    b.stick([x + dx, 0.1, z + dz], [x + dx, 1.75, z + dz], 0.05, timber, 7)
+    b.ball([x + dx, 1.78, z + dz], [0.07, 0.06, 0.07], trim, 1)
+  }
+  const [[ax, az], [bx, bz]] = campfire.posts
+  let prev: [number, number, number] = [x + ax, 1.66, z + az]
+  for (const point of [...lanterns, [x + bx, 1.66, z + bz] as [number, number, number]]) {
+    b.stick(prev, point, 0.008, '#6b5444', 4)
+    prev = point
+  }
+  lanterns.forEach(([lx, ly, lz], i) => {
+    b.stick([lx, ly, lz], [lx, ly - 0.08, lz], 0.006, '#6b5444', 4)
+    b.ball([lx, ly - 0.2, lz], [0.1, 0.13, 0.1], ['#ffd27a', '#ff9e8a', '#fff1c4', '#ffc46b', '#ffb3a1'][i % 5], 1, [0, 0, 0], b.kit.glass)
+    b.cylinder([lx, ly - 0.07, lz], 0.05, 0.05, 0.03, '#7a5a40', 8)
+  })
+  // Firewood, stacked and ready.
+  const [wx, wz] = campfire.woodpile
+  for (let row = 0; row < 3; row++)
+    for (let i = 0; i < 3 - row; i++) {
+      const dz = (i - (2 - row) / 2) * 0.17
+      b.stick([x + wx - 0.32, 0.18 + row * 0.15, z + wz + dz], [x + wx + 0.32, 0.18 + row * 0.15, z + wz + dz], 0.075, i % 2 ? '#a06c45' : '#8f5f3d', 8)
+      b.cylinder([x + wx + 0.325, 0.18 + row * 0.15, z + wz + dz], 0.07, 0.07, 0.01, '#e7c391', 8, [0, 0, Math.PI / 2])
+    }
+  // A ring of wildflowers around the clearing.
+  for (let i = 0; i < 9; i++) {
+    const a = (i / 9) * Math.PI * 2 + 0.4,
+      r = 1.72
+    flower(b, x + Math.cos(a) * r, z + Math.sin(a) * r, ['#fcf2c7', '#f09aa4', '#f6c768'][i % 3], (i * 0.37) % 1)
+  }
   for (let i = 0; i < 9; i++) {
     const a = (i / 9) * Math.PI * 2
     b.ball([x + Math.cos(a) * 0.36, 0.15, z + Math.sin(a) * 0.36], [0.12, 0.09, 0.11], i % 2 ? '#b8ad9c' : '#cfc4b0', 1, [0, a, 0])
@@ -537,11 +587,7 @@ function campfire(b: Batch, x: number, z: number) {
     const a = (i / 3) * Math.PI * 2 + 0.3
     b.stick([x + Math.cos(a) * 0.24, 0.14, z + Math.sin(a) * 0.24], [x - Math.cos(a) * 0.05, 0.3, z - Math.sin(a) * 0.05], 0.05, '#8a5a3a', 6)
   }
-  for (const [dx, dz, turn] of [
-    [-0.78, -0.12, 1.4],
-    [0.62, 0.48, -0.75],
-    [-0.12, 0.86, 0.15],
-  ]) {
+  for (const [dx, dz, turn] of campfire.logs) {
     const cx = x + dx,
       cz = z + dz
     const ex = Math.cos(turn) * 0.36,
@@ -774,135 +820,43 @@ export function createScenery(low: boolean) {
     0.02,
     '#e3cfa2',
     staticParts.kit.soil,
+    0,
+    1,
+    true,
   )
   decoratePlaza(staticParts)
   bridge(staticParts, 1)
   bridge(staticParts, 6.5)
   pier(staticParts)
   lighthouse(staticParts, 11.5, -5.75)
-  fence(staticParts, [
-    [-10.4, -4.7],
-    [-10.5, -3.45],
-    [-10.6, -2.12],
-    [-10.4, -1],
-    [-9.24, -0.9],
-  ])
-  fence(staticParts, [
-    [-5, -5.17],
-    [-4.37, -4.25],
-    [-4.36, -2.94],
-    [-4.28, -1.74],
-  ])
-  fence(staticParts, [
-    [4.15, -6.61],
-    [5.4, -6.31],
-    [6.4, -5.83],
-  ])
-  fence(staticParts, [
-    [7.23, 7.04],
-    [8.48, 7.01],
-    [9.65, 6.81],
-  ])
-  const lampSites: XZ[] = [
-    [-8.25, 0.03],
-    [0.82, -2.9],
-    [9.99, -0.27],
-    [6.85, 5.42],
-    [-8.55, 6.35],
-    [2.05, 8.72],
-  ]
+  for (const run of fenceRuns) fence(staticParts, run)
   for (const [x, z] of lampSites) lamp(staticParts, x, z)
   // Cosy corners: a campfire circle, a picnic, the old well and a beach nook.
-  const fireSite: XZ = [-0.45, 4.2]
-  campfire(staticParts, ...fireSite)
-  picnic(staticParts, 4.4, 3.5)
-  well(staticParts, 5.7, -4.9)
-  parasol(staticParts, 12.1, 4.1)
-  for (const [x, z, k] of [
-    [-12.7, -1.4, 1],
-    [11.9, -1.7, 0.8],
-    [-3.6, -8.2, 0.9],
-    [7.2, 8.25, 0.85],
-    [-9.9, -6.2, 0.7],
-    [13.1, 1.2, 0.75],
-  ])
-    mossyRocks(staticParts, x, z, k)
-  bench(staticParts, -5.92, -0.24)
-  bench(staticParts, 5.88, -0.14)
-  bench(staticParts, -9.96, 4.01)
-  for (const [x, z] of [
-    [5.8, 4.75],
-    [6.22, 3.08],
-  ]) {
+  const fireSite = campfire.fire
+  campfireCircle(staticParts, ...fireSite)
+  picnic(staticParts, ...picnicSite)
+  well(staticParts, ...wellSite)
+  parasol(staticParts, ...parasolSite)
+  for (const [x, z, k] of rockSites) mossyRocks(staticParts, x, z, k)
+  for (const [x, z] of benchSites) bench(staticParts, x, z)
+  for (const [x, z] of cafeTables) {
     staticParts.cylinder([x, 0.53, z], 0.42, 0.42, 0.1, '#d2a57a', 12)
     staticParts.stick([x, 0.05, z], [x, 0.49, z], 0.071, timber)
     for (const s of [-1, 1]) {
-      staticParts.cylinder(
-        [x + s * 0.48, 0.27, z],
-        0.19,
-        0.19,
-        0.09,
-        '#bc895b',
-        8,
-      )
-      staticParts.stick(
-        [x + s * 0.48, 0.04, z],
-        [x + s * 0.48, 0.24, z],
-        0.046,
-        timber,
-      )
+      staticParts.cylinder([x + s * 0.48, 0.27, z], 0.19, 0.19, 0.09, '#bc895b', 8)
+      staticParts.stick([x + s * 0.48, 0.04, z], [x + s * 0.48, 0.24, z], 0.046, timber)
     }
   }
-  const treeSites: XZ[] = [
-    [-12, -3],
-    [-13.8, 0.1],
-    [-11.7, -5.42],
-    [-10.2, -6.25],
-    [-8.5, -6.68],
-    [-6.3, -7.15],
-    [-4.56, -8.85],
-    [-0.8, -8.68],
-    [2.78, -8.88],
-    [5.3, -7.69],
-    [7.4, -6.71],
-    [13.36, -2.26],
-    [13.8, -0.3],
-    [12.4, 2.29],
-    [10.5, 6.49],
-    [-11.42, 2.7],
-    [-11.13, 5.42],
-    [-9.27, 7.25],
-    [-6.91, 8.01],
-    [0.04, -3.17],
-    [4.24, -4.02],
-    [4.93, 1.98],
-    [0.43, 8.3],
-    [5.66, 8.11],
-  ]
+  /** Every tree's trunk and crown, for shaking and falling leaves. */
+  const crowns: [number, number, number][] = []
   treeSites.forEach(([x, z], i) => {
-    const pine = i % 5 === 1 || i % 7 === 3
-    tree(staticParts, x, z, 0.77 + rand() * 0.59, i, pine)
+    const pine = isPine(i)
+    const size = 0.77 + rand() * 0.59
+    tree(staticParts, x, z, size, i, pine)
+    crowns.push([x, z, (pine ? 1.9 : 2.1) * size])
     if (!pine && i % 4 === 1) mushrooms(staticParts, x + 0.72, z + 0.42, i)
   })
   verges(staticParts, rand, low)
-  const bushSites: XZ[] = [
-    [-8.78, -2],
-    [-5.48, -2],
-    [-10.24, 1.79],
-    [-5, -6.04],
-    [0.18, -4.25],
-    [2.9, -4.33],
-    [7.17, -1.83],
-    [10.47, -1.98],
-    [7.33, 2.17],
-    [8.78, 2.24],
-    [-5.31, 7.3],
-    [-11, 3.55],
-    [-0.42, 7.77],
-    [4.47, 7.84],
-    [10.67, 5.24],
-    [3.98, -2.01],
-  ]
   bushSites.forEach(([x, z], i) =>
     bush(
       staticParts,
@@ -981,12 +935,21 @@ export function createScenery(low: boolean) {
   add(pickable(sign(kit), 'map', 0, 2))
   group.add(staticParts.finish())
   const daylightGlow = { value: 1 }
-  group.add(createRiver(river, riverWidth, endZ - 0.35, frontZ + 0.35, kit.clock, daylightGlow))
-  paintFalls(kit.water, kit.clock)
+  group.add(createRiver(river, riverWidth, kit.clock, daylightGlow))
   const ambience = createAmbience({
+    kit,
+    crowns: crowns.filter((_, i) => !isPine(i)),
+    perches: [
+      [-9.6, -1.4],
+      [3.3, -1.3],
+      [-6.4, 1.85],
+      [6.3, 6.7],
+      [-3.7, 7.7],
+    ],
     low,
     lamps: lampSites,
     campfire: fireSite,
+    lanterns: lanternPoints(),
     chimneys: [
       [-7.85, 3.4, -3.43],
       [7.15, 3.4, 3.57],
@@ -1029,9 +992,30 @@ export function createScenery(low: boolean) {
       return { butterfly, x, z }
     })
   kit.clearTemplates()
+  let shakeStart = -10
+  let clock = 0
   return {
     group,
     interactives: objects,
+    crowns,
+    /** Shake the tree nearest to (x, z) if one is within reach. */
+    shake(x: number, z: number, reachLimit = 1.6) {
+      let best = -1,
+        bestDistance = reachLimit
+      crowns.forEach(([tx, tz], i) => {
+        const d = Math.hypot(tx - x, tz - z)
+        if (d < bestDistance) {
+          bestDistance = d
+          best = i
+        }
+      })
+      if (best < 0 || clock - shakeStart < 0.6) return null
+      const [tx, tz, top] = crowns[best]
+      kit.shake.value.set(tx, tz, 1)
+      shakeStart = clock
+      ambience.burst(tx, tz, top)
+      return crowns[best]
+    },
     animate: (
       time: number,
       night: number,
@@ -1041,6 +1025,8 @@ export function createScenery(low: boolean) {
       floor = 0,
     ) => {
       kit.clock.value = time
+      clock = time
+      kit.shake.value.z = Math.max(0, 1 - (time - shakeStart) / 0.9)
       kit.walker.value.set(px, pz)
       kit.walkerFloor.value = floor
       kit.motion.value = reduced ? 0 : 1

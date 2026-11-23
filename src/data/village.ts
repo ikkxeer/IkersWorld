@@ -110,6 +110,8 @@ const es = {
   focus: 'Recorrer los controles',
   home: 'Inicio',
   loading3D: 'Cargando la isla 3D…',
+  campfire: 'Fogata · sentarse',
+  run: 'Correr',
 }
 type Dictionary = typeof es
 const ca: Dictionary = {
@@ -191,6 +193,8 @@ const ca: Dictionary = {
   focus: 'Recórrer els controls',
   home: 'Inici',
   loading3D: 'Carregant l’illa 3D…',
+  campfire: 'Foguera · seure',
+  run: 'Córrer',
 }
 const en: Dictionary = {
   brand: 'Interactive portfolio',
@@ -272,6 +276,8 @@ const en: Dictionary = {
   focus: 'Navigate the controls',
   home: 'Home',
   loading3D: 'Loading the 3D island…',
+  campfire: 'Campfire · sit down',
+  run: 'Run',
 }
 export const copy = { es, ca, en }
 export const placeKeys: Record<Zone, keyof Dictionary> = {

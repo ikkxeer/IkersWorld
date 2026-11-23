@@ -81,6 +81,36 @@ export function makeInterior() {
       )
     }
   }
+  // Cosy touches: wainscoting, a wall clock, framed pictures and a reading lamp.
+  room.block([0, 0.32, -2.885], [8.4, 0.58, 0.03], '#c3d29f')
+  room.block([0, 0.62, -2.86], [8.4, 0.07, 0.07], trim, [0, 0, 0], true)
+  room.block([-4.035, 0.32, 0], [0.03, 0.58, 5.9], '#b8c893')
+  room.block([-4.01, 0.62, 0], [0.07, 0.07, 5.9], trim, [0, 0, 0], true)
+  room.cylinder([1.35, 2.28, -2.86], 0.24, 0.24, 0.07, timber, 18, [Math.PI / 2, 0, 0])
+  room.cylinder([1.35, 2.28, -2.82], 0.2, 0.2, 0.03, '#fbf1da', 18, [Math.PI / 2, 0, 0])
+  room.block([1.35, 2.34, -2.8], [0.025, 0.13, 0.012], '#5b4436')
+  room.block([1.4, 2.28, -2.8], [0.1, 0.022, 0.012], '#5b4436')
+  for (const [z, w, colour] of [
+    [-1.05, 0.56, '#f3b57c'],
+    [0.05, 0.42, '#8fc7c1'],
+    [-0.5, 0.3, '#e7a1a6'],
+  ] as const) {
+    const y = z === -0.5 ? 2.55 : 2.05
+    room.block([-4.02, y, z], [0.05, w + 0.12, w], timber, [0, 0, 0], true)
+    room.block([-3.99, y, z], [0.02, w, w - 0.12], colour)
+    room.ball([-3.975, y - w * 0.12, z], [0.01, w * 0.2, w * 0.28], '#fff6df', 0)
+  }
+  const shade = new T.MeshStandardMaterial({
+    vertexColors: true,
+    emissive: '#ffcf80',
+    emissiveIntensity: 0.85,
+  })
+  room.cylinder([3.35, 0.04, 0.4], 0.2, 0.22, 0.06, timber, 12)
+  room.stick([3.35, 0.05, 0.4], [3.35, 1.5, 0.4], 0.025, '#6b4f3c', 6)
+  room.cylinder([3.35, 1.62, 0.4], 0.17, 0.28, 0.32, '#fde8b6', 14, [0, 0, 0], shade)
+  const lampLight = new T.PointLight('#ffc77d', 3, 4.5, 1.6)
+  lampLight.position.set(3.35, 1.45, 0.4)
+  scene.add(lampLight)
   const album = new Batch(kit)
   album.cylinder([0, 0.42, 0], 0.53, 0.53, 0.14, wood, 20)
   album.cylinder([0, 0.2, 0], 0.14, 0.21, 0.4, timber, 12)

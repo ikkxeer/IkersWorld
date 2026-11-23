@@ -1,6 +1,7 @@
 import * as T from 'three'
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
+import { TessellateModifier } from 'three/addons/modifiers/TessellateModifier.js'
 import { noiseGLSL } from './shaderBits'
 
 export type XYZ = [number, number, number]
@@ -61,6 +62,8 @@ export class ModelKit {
   readonly walker = { value: new T.Vector2(100, 100) }
   readonly motion = { value: 1 }
   readonly walkerFloor = { value: 0 }
+  /** (x, z, strength) of the tree currently being shaken. */
+  readonly shake = { value: new T.Vector3(0, 0, 0) }
   constructor() {
     for (const [material, flower] of [
       [this.leaf, false],
@@ -72,9 +75,10 @@ export class ModelKit {
           walker: this.walker,
           motion: this.motion,
           walkerFloor: this.walkerFloor,
+          shake: this.shake,
         })
         shader.vertexShader =
-          'uniform float islandTime; uniform float motion; uniform vec2 walker;\nvarying float leafUp;\n' +
+          'uniform float islandTime; uniform float motion; uniform vec2 walker; uniform vec3 shake;\nvarying float leafUp;\n' +
           (flower ? '' : 'varying vec3 leafViewPosition;\n') +
           shader.vertexShader
         shader.vertexShader = shader.vertexShader.replace(
@@ -82,8 +86,15 @@ export class ModelKit {
           `#include <begin_vertex>
           leafUp = normalize(mat3(modelMatrix) * objectNormal).y;
           vec2 here = (modelMatrix * vec4(position, 1.)).xz;
-          float sway = sin(islandTime * 1.45 + here.x * .9 + here.y * .68);
+          // Gusts roll across the island: the breeze swells and settles.
+          float gust = .7 + .5 * sin(islandTime * .27 + here.x * .08 - here.y * .05);
+          float sway = sin(islandTime * 1.45 + here.x * .9 + here.y * .68) * gust;
           transformed.x += motion * sway * ${flower ? '.023' : '.035'} * clamp(position.y, 0., 3.);
+          transformed.z += motion * sin(islandTime * 1.1 + here.y * .7) * gust * ${flower ? '.01' : '.018'} * clamp(position.y, 0., 3.);
+          // A shaken tree rattles its crown.
+          float shaken = shake.z * (1. - smoothstep(.7, 1.7, length(here - shake.xy))) * clamp(position.y - .9, 0., 2.);
+          transformed.x += shaken * sin(islandTime * 41.) * .085;
+          transformed.z += shaken * cos(islandTime * 33.) * .06;
           ${flower ? 'vec2 away = here - walker; transformed.xz += motion * away / max(length(away), .1) * (1. - smoothstep(.2, 1.8, length(away))) * .18;' : 'leafViewPosition = (modelViewMatrix * vec4(transformed, 1.)).xyz;'}`,
         )
         // Sunlit crowns, cool undersides: soft painted volume on foliage.
@@ -290,6 +301,8 @@ export class Batch {
     r: XYZ = zero,
     bevel = 0,
     mat?: T.Material,
+    bevelSegments = 1,
+    tessellate = false,
   ) {
     const sh = new T.Shape()
     outline.forEach(([x, y], i) => {
@@ -302,11 +315,15 @@ export class Batch {
       bevelEnabled: bevel > 0,
       bevelSize: bevel,
       bevelThickness: bevel,
-      bevelSegments: 1,
+      bevelSegments,
       curveSegments: 4,
     })
-    this.put(g, c, p, unit, r, mat)
+    // Large flat shapes are split into small triangles so the curved-world
+    // bend (applied per vertex) follows the surface instead of cutting chords.
+    const fine = tessellate ? new TessellateModifier(1.4, 10).modify(g) : g
+    this.put(fine, c, p, unit, r, mat)
     g.dispose()
+    if (fine !== g) fine.dispose()
   }
   horizontal(
     points: XZ[],
@@ -315,6 +332,8 @@ export class Batch {
     c: string,
     mat?: T.Material,
     bevel = 0,
+    bevelSegments = 1,
+    tessellate = false,
   ) {
     this.prism(
       points.map(([x, z]) => [x, -z]),
@@ -324,6 +343,8 @@ export class Batch {
       [-Math.PI / 2, 0, 0],
       bevel,
       mat,
+      bevelSegments,
+      tessellate,
     )
   }
   finish() {
@@ -332,7 +353,10 @@ export class Batch {
       parts.forEach((g) => g.dispose())
       if (geometry) {
         const mesh = new T.Mesh(geometry, material)
-        mesh.castShadow = true
+        // Ground and tiny flowers only receive shadows: casting them would
+        // re-render the whole lawn and hundreds of petals in the shadow pass.
+        const k = this.kit
+        mesh.castShadow = material !== k.grass && material !== k.soil && material !== k.petals
         mesh.receiveShadow = true
         this.group.add(mesh)
       }
