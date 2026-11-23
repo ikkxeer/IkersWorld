@@ -29,6 +29,7 @@ export class ModelKit {
   readonly clock = { value: 0 }
   readonly walker = { value: new T.Vector2(100, 100) }
   readonly motion = { value: 1 }
+  readonly walkerFloor = { value: 0 }
   constructor() {
     for (const [material, flower] of [
       [this.leaf, false],
@@ -39,9 +40,11 @@ export class ModelKit {
           islandTime: this.clock,
           walker: this.walker,
           motion: this.motion,
+          walkerFloor: this.walkerFloor,
         })
         shader.vertexShader =
           'uniform float islandTime; uniform float motion; uniform vec2 walker;\n' +
+          (flower ? '' : 'varying vec3 leafViewPosition;\n') +
           shader.vertexShader
         shader.vertexShader = shader.vertexShader.replace(
           '#include <begin_vertex>',
@@ -49,8 +52,26 @@ export class ModelKit {
           vec2 here = (modelMatrix * vec4(position, 1.)).xz;
           float sway = sin(islandTime * 1.45 + here.x * .9 + here.y * .68);
           transformed.x += motion * sway * ${flower ? '.023' : '.035'} * clamp(position.y, 0., 3.);
-          ${flower ? 'vec2 away = here - walker; transformed.xz += motion * away / max(length(away), .1) * (1. - smoothstep(.2, 1.8, length(away))) * .18;' : ''}`,
+          ${flower ? 'vec2 away = here - walker; transformed.xz += motion * away / max(length(away), .1) * (1. - smoothstep(.2, 1.8, length(away))) * .18;' : 'leafViewPosition = (modelViewMatrix * vec4(transformed, 1.)).xyz;'}`,
         )
+        if (!flower) {
+          // Reveal the player's silhouette through greenery between them and the camera.
+          shader.fragmentShader =
+            'uniform vec2 walker; uniform float walkerFloor; varying vec3 leafViewPosition;\n' +
+            shader.fragmentShader
+          shader.fragmentShader = shader.fragmentShader.replace(
+            '#include <alphatest_fragment>',
+            `#include <alphatest_fragment>
+            vec3 walkerView = (viewMatrix * vec4(walker.x, walkerFloor + .94, walker.y, 1.)).xyz;
+            vec3 fromWalker = leafViewPosition - walkerView;
+            float curtain = length(fromWalker.xy / vec2(.74, 1.16));
+            if (fromWalker.z > -.48 && curtain < 1.32) {
+              float coverage = smoothstep(.83, 1.32, curtain);
+              float stipple = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(.06711056, .00583715))));
+              if (coverage <= stipple) discard;
+            }`,
+          )
+        }
       }
       material.customProgramCacheKey = () => (flower ? 'flowers' : 'leaves')
     }

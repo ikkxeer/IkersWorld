@@ -240,13 +240,13 @@ export function createVisitor(): IslandCharacter {
     ankle = new THREE.Vector3()
   for (const side of [-1, 1]) {
     const thigh = sculpt(material)
-    thigh.oval('#3e556d', [0, -0.091, 0], [0.087, 0.125, 0.083])
+    thigh.oval('#3e556d', [0, -0.11, 0], [0.092, 0.151, 0.089])
     const calf = sculpt(material)
-    calf.oval('#fff0cb', [0, -0.095, 0], [0.071, 0.112, 0.065])
-    calf.oval('#d39a5c', [0, -0.107, 0], [0.074, 0.026, 0.07])
+    calf.oval('#fff0cb', [0, -0.105, 0], [0.074, 0.127, 0.071])
+    calf.oval('#d39a5c', [0, -0.129, 0], [0.077, 0.025, 0.074])
     const shoe = sculpt(material)
-    shoe.oval(boots, [0, -0.016, 0.059], [0.098, 0.077, 0.148])
-    shoe.oval('#573c34', [0, -0.067, 0.055], [0.101, 0.028, 0.147])
+    shoe.oval(boots, [0, -0.016, 0.052], [0.107, 0.077, 0.165])
+    shoe.oval('#4d382f', [0, -0.063, 0.05], [0.112, 0.03, 0.164])
     shoe.oval('#d79158', [0, 0.026, 0.093], [0.084, 0.055, 0.104])
     legs.push({
       side,
@@ -319,15 +319,17 @@ export function createVisitor(): IslandCharacter {
   ) => {
     const dt = Math.min(0.1, Math.max(0, time - previous))
     previous = time
-    const target = moving && !reduced ? 1 : 0
-    effort = reduced
+    // Reduce secondary motion while keeping the footsteps tied to locomotion.
+    const target = moving ? (reduced ? 0.78 : 1) : 0
+    effort = THREE.MathUtils.damp(effort, target, moving ? 26 : 16, dt)
+    if (moving)
+      gait = (gait + (distance ?? dt * 3.1) / (reduced ? 1.42 : 1.78)) % 1
+    const sway = reduced ? 0 : Math.sin(gait * Math.PI * 2) * effort
+    const bounce = reduced
       ? 0
-      : THREE.MathUtils.damp(effort, target, moving ? 22 : 13, dt)
-    if (target) gait = (gait + (distance ?? dt * 3.1) / 1.44) % 1
-    const sway = Math.sin(gait * Math.PI * 2) * effort
-    const bounce = (0.5 - 0.5 * Math.cos(gait * Math.PI * 4)) * 0.074 * effort
-    body.position.set(sway * 0.038, bounce, 0)
-    body.rotation.set(0.12 * effort, -0.095 * sway, -0.08 * sway)
+      : (0.5 - 0.5 * Math.cos(gait * Math.PI * 4)) * 0.058 * effort
+    body.position.set(sway * 0.032, 0.172 + bounce, 0)
+    body.rotation.set(reduced ? 0 : 0.075 * effort, -0.095 * sway, -0.08 * sway)
     head.rotation.z = reduced
       ? 0
       : 0.065 * sway + Math.sin(time * 1.7) * 0.015 * (1 - effort)
@@ -340,18 +342,18 @@ export function createVisitor(): IslandCharacter {
       const onGround = phase < 0.56
       const swing = THREE.MathUtils.clamp((phase - 0.56) / 0.44, 0, 1)
       const reach = onGround
-        ? 0.31 - (0.62 * phase) / 0.56
-        : -0.31 + 0.62 * THREE.MathUtils.smoothstep(swing, 0, 1)
+        ? 0.39 - (0.78 * phase) / 0.56
+        : -0.39 + 0.78 * THREE.MathUtils.smoothstep(swing, 0, 1)
       const lift = Math.sin(Math.PI * swing) * effort
-      hip.set(side * 0.111 + body.position.x, 0.348 + bounce, 0)
-      ankle.set(side * 0.117, 0.091 + 0.205 * lift, reach * effort)
+      hip.set(side * 0.136 + body.position.x, 0.517 + bounce, 0)
+      ankle.set(side * 0.164, 0.096 + 0.252 * lift, reach * effort)
       knee.lerpVectors(hip, ankle, 0.53)
-      knee.z += 0.04 + 0.158 * lift
-      poseSegment(thigh, hip, knee, 0.183)
-      poseSegment(calf, knee, ankle, 0.178)
+      knee.z += 0.052 + 0.174 * lift
+      poseSegment(thigh, hip, knee, 0.22)
+      poseSegment(calf, knee, ankle, 0.21)
       shoe.position.copy(ankle)
       shoe.rotation.set(0.42 * lift * Math.cos(swing * Math.PI), side * 0.12, 0)
-      arms[index].rotation.x = reach * effort * 2.35
+      arms[index].rotation.x = reach * effort * (reduced ? 0.85 : 1.85)
     })
   }
   animate(0, false, false)

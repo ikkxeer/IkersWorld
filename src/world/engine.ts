@@ -4,7 +4,7 @@ import { makeIris } from './iris'
 import { anchors, destinations } from '../data/village'
 import { createVisitor, createGuide } from './character'
 import { makeInterior } from './interior'
-import { createScenery } from './scenery'
+import { createScenery, islandFloorHeight } from './scenery'
 import { walkable, route, type Point } from './navigation'
 import type {
   Target,
@@ -405,21 +405,11 @@ export function startVillage(
         }
       }
     }
-    const bridge =
-      Math.abs(p.x + 2.5) < 1.4 &&
-      (Math.abs(p.z - 1) < 0.85 || Math.abs(p.z - 6.5) < 0.85)
-    p.y = inside
-      ? 0.09
-      : bridge
-        ? 0.22
-        : p.z > 9.95
-          ? -0.06
-          : p.x < -3.55 && p.x > -8.55 && p.z > 2.6 && p.z < 6.15
-            ? 0.08
-            : 0
+    const onRug = Math.abs(p.x) < 1.73 && Math.abs(p.z - 0.1) < 1.27
+    p.y = inside ? (onRug ? 0.09 : 0.01) : islandFloorHeight(p.x, p.z)
     visitor.animate(elapsed, distance > 0.0002, motion.matches, distance)
     guide.animate(elapsed, false, motion.matches)
-    scenery.animate(elapsed, night, p.x, p.z, motion.matches)
+    scenery.animate(elapsed, night, p.x, p.z, motion.matches, p.y)
     if (!motion.matches) atmosphere.animate(elapsed)
     if (
       hovered &&

@@ -204,12 +204,28 @@ function path(b: Batch, pts: XZ[], width: number, c = '#e8cf9d') {
   })
   b.horizontal([...left, ...right.reverse()], 0.067, 0.027, c)
 }
+const bridgeWidth = 2.9
+const bridgeTop = (progress: number) =>
+  0.19 + 0.18 * Math.sin(progress * Math.PI)
+
+export function islandFloorHeight(x: number, z: number) {
+  const bridgeZ =
+    Math.abs(z - 1) < 0.76 ? 1 : Math.abs(z - 6.5) < 0.76 ? 6.5 : null
+  if (bridgeZ !== null) {
+    const across = (x - river(bridgeZ)) / bridgeWidth + 0.5
+    if (across >= 0 && across <= 1) return bridgeTop(across)
+  }
+  if (z > 10 && Math.abs(x - 2.5) < 0.9) return -0.06
+  // The bevel rises above the nominal top of the grass extrusion.
+  return 0.1
+}
+
 function bridge(b: Batch, z: number) {
   const x = river(z)
   for (let i = 0; i < 13; i++) {
     const t = i / 12,
-      xx = x + (t - 0.5) * 2.9,
-      y = 0.12 + 0.18 * Math.sin(t * Math.PI)
+      xx = x + (t - 0.5) * bridgeWidth,
+      y = bridgeTop(t) - 0.07
     b.block(
       [xx, y, z],
       [0.219, 0.14, 1.49],
@@ -885,9 +901,11 @@ export function createScenery(low: boolean) {
       px: number,
       pz: number,
       reduced: boolean,
+      floor = 0,
     ) => {
       kit.clock.value = time
       kit.walker.value.set(px, pz)
+      kit.walkerFloor.value = floor
       kit.motion.value = reduced ? 0 : 1
       kit.glass.emissiveIntensity = 0.04 + night * 1.35
       if (reduced) return
