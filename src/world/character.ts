@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
+import { cartoon } from './modelKit'
 
 /** What the engine measured this frame, in world units. */
 export interface Locomotion {
@@ -72,6 +73,24 @@ function sculpt(material: THREE.Material) {
         [0, 0, 0],
       )
     },
+    /** A doughnut (scarf, rims) of the given ring and tube radius. */
+    ring(color: string, at: Vec3, radius: number, tube: number, depth = 1, tilt: Vec3 = [0, 0, 0]) {
+      const profile: [number, number][] = []
+      for (let i = 0; i <= 10; i++) {
+        const a = (i / 10) * TAU - Math.PI / 2
+        profile.push([radius + tube * Math.cos(a), tube * Math.sin(a)])
+      }
+      add(
+        new THREE.LatheGeometry(
+          profile.map(([r, y]) => new THREE.Vector2(r, y)),
+          28,
+        ),
+        color,
+        at,
+        [1, 1, depth],
+        tilt,
+      )
+    },
     turned(
       color: string,
       at: Vec3,
@@ -112,7 +131,11 @@ function joint(parent: THREE.Object3D, x = 0, y = 0, z = 0) {
 }
 
 function clay() {
-  return new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.86 })
+  return cartoon(
+    new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.82 }),
+    0.26,
+    0.08,
+  )
 }
 
 function blobShadow(radius: number) {
@@ -186,30 +209,40 @@ function blinker(random: () => number) {
   }
 }
 
-const skin = '#edb287'
-const hair = '#62412f'
-const jacket = '#399489'
-const cuff = '#72b7a3'
-const pants = '#3e556d'
-const boots = '#9b6442'
-const ink = '#42332e'
+/* ------------------------------------------------------------------------ */
+/* Palette: a mint striped jumper, denim dungarees, a coral scarf and yellow */
+/* rain boots make the visitor readable at a glance, even from far away.    */
+const skin = '#f7cba4'
+const skinShade = '#f0b28c'
+const blush = '#f59a88'
+const hair = '#7a4630'
+const hairLight = '#99603f'
+const jumper = '#83cdb0'
+const stripe = '#fdf3dc'
+const denim = '#5479b0'
+const denimLight = '#6e93c6'
+const scarf = '#ef6c5c'
+const boot = '#f3b840'
+const sole = '#8a5440'
+const ink = '#2f2624'
 
 /* ------------------------------------------------------------------------ */
-/* Rig dimensions, in the character's local units (the engine scales ×1.33). */
-const THIGH = 0.21
-const SHIN = 0.21
+/* Rig dimensions, in the character's local units (the engine scales ×1.36). */
+const THIGH = 0.165
+const SHIN = 0.165
 const LEG = THIGH + SHIN
-const HIP_X = 0.088
-const FOOT_X = 0.105
-const ANKLE_Y = 0.09
-const PELVIS_Y = 0.48
-const UPPER_ARM = 0.125
-const FOREARM = 0.11
+const HIP_X = 0.075
+const FOOT_X = 0.094
+const ANKLE_Y = 0.085
+const PELVIS_Y = 0.395
+const UPPER_ARM = 0.105
+const FOREARM = 0.095
+const HEAD = 0.3
 /** Distance (local) covered by one full gait cycle, i.e. two steps, at top speed. */
-const CYCLE = 0.84
+const CYCLE = 0.72
 /** Fraction of the cycle each foot spends on the ground; the rest is the swing. */
-const STANCE = 0.58
-const TOP_SPEED = 3
+const STANCE = 0.56
+const TOP_SPEED = 3.1
 
 interface FootPose {
   z: number
@@ -217,163 +250,161 @@ interface FootPose {
   pitch: number
 }
 
+type IdleAction = 'sway' | 'stretch' | 'tap'
+
 export function createVisitor(): IslandCharacter {
   const group = new THREE.Group()
   const material = clay()
-  const random = chance(7)
+  const random = chance(11)
 
   /* ----------------------------- Skeleton ------------------------------ */
   const pelvis = joint(group, 0, PELVIS_Y, 0)
-  const chest = joint(pelvis, 0, 0.06, 0)
-  const neck = joint(chest, 0, 0.29, 0.005)
+  const chest = joint(pelvis, 0, 0.05, 0)
+  const neck = joint(chest, 0, 0.245, 0.005)
   const head = joint(neck)
-  const hatPivot = joint(head, 0, 0.27 + 0.19, -0.01)
+  const cowlick = joint(head, 0.03, HEAD + 0.27, -0.02)
+  const scarfTail = joint(chest, -0.085, 0.235, -0.1)
 
-  /* ----------------------------- Hips ---------------------------------- */
+  /* ------------------------- Dungaree shorts --------------------------- */
   const hips = sculpt(material)
-  hips.oval(pants, [0, 0.015, 0], [0.165, 0.115, 0.14])
-  hips.oval('#c48a52', [0, 0.085, 0], [0.172, 0.026, 0.146])
-  hips.oval('#f2cf86', [0, 0.085, 0.142], [0.024, 0.022, 0.01])
+  hips.oval(denim, [0, 0.03, 0], [0.158, 0.11, 0.135])
+  hips.oval(denimLight, [0, -0.01, -0.118], [0.06, 0.045, 0.02])
   hips.mesh(pelvis)
 
   /* ----------------------------- Torso --------------------------------- */
   const torso = sculpt(material)
   torso.turned(
-    jacket,
+    jumper,
     [0, 0, 0],
     [
       [0, 0],
-      [0.186, 0.012],
-      [0.194, 0.07],
-      [0.198, 0.2],
-      [0.176, 0.262],
-      [0.09, 0.288],
-      [0, 0.288],
+      [0.168, 0.01],
+      [0.176, 0.06],
+      [0.172, 0.16],
+      [0.148, 0.222],
+      [0.08, 0.248],
+      [0, 0.248],
     ],
-    0.82,
+    0.86,
   )
-  // Collar, lapels and buttons.
-  torso.oval('#f6d9a3', [0, 0.25, 0.122], [0.085, 0.06, 0.037])
-  torso.oval('#438779', [-0.063, 0.25, 0.146], [0.08, 0.036, 0.023], [0, 0, -0.45])
-  torso.oval('#438779', [0.063, 0.25, 0.146], [0.08, 0.036, 0.023], [0, 0, 0.45])
-  for (const y of [0.08, 0.15, 0.205])
-    torso.oval('#f5d597', [0, y, 0.162], [0.012, 0.012, 0.009])
-  // A little explorer's satchel on the back with its straps.
-  torso.oval('#d9805b', [0, 0.16, -0.156], [0.165, 0.18, 0.096])
-  torso.oval('#eea078', [0, 0.235, -0.2], [0.154, 0.08, 0.066])
-  torso.oval('#ffe1aa', [0, 0.19, -0.262], [0.028, 0.029, 0.012])
-  for (const side of [-1, 1])
-    torso.oval(
-      '#e5a177',
-      [side * 0.133, 0.19, 0.1],
-      [0.024, 0.108, 0.036],
-      [0.08, 0, side * 0.13],
+  // Cream stripes wrap the jumper.
+  for (const [y, r] of [
+    [0.115, 0.177],
+    [0.175, 0.166],
+  ])
+    torso.turned(
+      stripe,
+      [0, 0, 0],
+      [
+        [r, y - 0.018],
+        [r + 0.004, y],
+        [r, y + 0.018],
+      ],
+      0.86,
     )
-  // Neck stub so the head never seems to float when it nods.
-  torso.oval(skin, [0, 0.29, 0.005], [0.07, 0.045, 0.065])
+  // Dungaree bib, straps, brass buttons and a sunny star patch.
+  torso.oval(denim, [0, 0.07, 0.112], [0.115, 0.1, 0.048])
+  torso.oval(denim, [0, 0.03, 0], [0.172, 0.07, 0.15])
+  for (const side of [-1, 1]) {
+    torso.oval(denim, [side * 0.078, 0.165, 0.12], [0.022, 0.07, 0.014], [0.2, 0, side * 0.12])
+    torso.oval(denim, [side * 0.078, 0.15, -0.122], [0.022, 0.085, 0.014], [-0.2, 0, side * 0.12])
+    torso.oval('#f6cf63', [side * 0.07, 0.122, 0.152], [0.017, 0.017, 0.01])
+  }
+  torso.oval(denimLight, [0, 0.06, 0.155], [0.05, 0.04, 0.008])
+  torso.oval('#ffd56a', [0, 0.065, 0.161], [0.026, 0.026, 0.008])
+  torso.oval('#ff9f7a', [0, 0.065, 0.166], [0.011, 0.011, 0.005])
+  // A chunky knitted scarf.
+  torso.ring(scarf, [0, 0.243, 0.004], 0.105, 0.045, 0.92)
+  torso.oval('#f58676', [0.07, 0.225, 0.1], [0.05, 0.045, 0.04], [0, 0.4, 0])
   torso.mesh(chest)
 
+  const tail = sculpt(material)
+  tail.oval(scarf, [0, -0.065, 0], [0.048, 0.08, 0.022])
+  tail.oval(stripe, [0, -0.125, 0], [0.047, 0.018, 0.024])
+  tail.oval(scarf, [0, -0.16, 0], [0.045, 0.03, 0.021])
+  for (const dx of [-0.028, 0, 0.028])
+    tail.oval(scarf, [dx, -0.195, 0], [0.011, 0.016, 0.011])
+  tail.mesh(scarfTail)
+
   /* ------------------------------ Head --------------------------------- */
+  const H = HEAD
   const face = sculpt(material)
-  face.oval(skin, [0, 0, 0], [0.283, 0.278, 0.248])
-  face.oval(hair, [0, 0.078, -0.058], [0.287, 0.244, 0.229])
-  face.oval(skin, [0, -0.027, 0.054], [0.264, 0.225, 0.211])
-  face.oval(skin, [0, -0.041, 0.262], [0.042, 0.035, 0.037])
+  face.oval(skin, [0, 0, 0], [0.31, 0.29, 0.28])
+  face.oval(skin, [0, -0.06, 0.07], [0.27, 0.21, 0.22])
+  face.oval(skinShade, [0, -0.045, 0.285], [0.03, 0.022, 0.02])
   for (const side of [-1, 1]) {
-    face.oval(skin, [side * 0.265, -0.015, -0.002], [0.052, 0.073, 0.044])
-    face.oval('#df947c', [side * 0.274, -0.018, 0.026], [0.026, 0.039, 0.012])
-    face.oval(hair, [side * 0.246, 0.071, 0.035], [0.04, 0.1, 0.074])
-    face.oval(
-      '#e79b82',
-      [side * 0.171, -0.073, 0.206],
-      [0.046, 0.021, 0.013],
-      [0, side * 0.49, side * 0.08],
-    )
+    face.oval(skin, [side * 0.298, -0.02, 0.01], [0.05, 0.068, 0.045])
+    face.oval('#f2a18c', [side * 0.31, -0.022, 0.03], [0.022, 0.035, 0.012])
+    face.oval(blush, [side * 0.172, -0.085, 0.232], [0.058, 0.032, 0.012], [0, side * 0.58, 0])
+    face.oval(hair, [side * 0.272, 0.005, 0.06], [0.05, 0.11, 0.075])
   }
-  for (const [x, y, angle] of [
-    [-0.15, 0.144, -0.4],
-    [-0.049, 0.158, -0.72],
-    [0.073, 0.168, -0.65],
-  ]) {
-    face.oval(hair, [x, y, 0.185], [0.079, 0.099, 0.04], [0, 0, angle])
-  }
-  face.mesh(head, [0, 0.27, 0])
+  // Hair: a rounded cap, a swoopy four-lock fringe and a nape tuft.
+  face.oval(hair, [0, 0.075, -0.045], [0.326, 0.272, 0.3])
+  face.oval(hair, [0, -0.09, -0.2], [0.24, 0.16, 0.12])
+  for (const [x, y, z, angle, w] of [
+    [-0.19, 0.11, 0.19, 0.7, 0.085],
+    [-0.085, 0.155, 0.22, 0.35, 0.1],
+    [0.04, 0.16, 0.225, -0.15, 0.1],
+    [0.165, 0.125, 0.2, -0.55, 0.09],
+  ])
+    face.oval(hair, [x, y, z], [w, 0.115, 0.055], [0.25, 0, angle])
+  face.oval(hairLight, [-0.08, 0.235, 0.12], [0.11, 0.035, 0.05], [0.5, 0.2, 0.25])
+  face.mesh(head, [0, H, 0])
 
-  // Brows and mouth live on their own mesh so the expression can change.
-  const expression = sculpt(material)
-  for (const side of [-1, 1])
-    expression.oval(
-      hair,
-      [side * 0.108, 0.077, 0.228],
-      [0.05, 0.013, 0.01],
-      [0, side * 0.32, -side * 0.12],
-    )
-  // A soft little smile: two short strokes meeting in a shallow "u".
-  for (const side of [-1, 1])
-    expression.oval(
-      '#ae7159',
-      [side * 0.018, -0.094, 0.251],
-      [0.024, 0.008, 0.008],
-      [0, side * 0.1, side * 0.32],
-    )
-  const brows = expression.mesh(head, [0, 0.27, 0])
+  const cowlickMesh = sculpt(material)
+  cowlickMesh.oval(hair, [0, 0.045, 0], [0.032, 0.07, 0.026], [0, 0, -0.35])
+  cowlickMesh.oval(hair, [0.035, 0.105, 0.004], [0.026, 0.045, 0.022], [0, 0, 0.9])
+  cowlickMesh.mesh(cowlick)
 
-  const eyes = sculpt(material)
+  // Expressions are separate meshes so the face can switch moods.
+  const eyeShapes = sculpt(material)
   for (const side of [-1, 1]) {
-    eyes.oval(ink, [side * 0.105, 0, 0.245], [0.025, 0.035, 0.014], [0, side * 0.28, 0])
-    eyes.oval('#fff4de', [side * 0.105 - 0.006, 0.011, 0.259], [0.006, 0.008, 0.003])
+    eyeShapes.oval(ink, [side * 0.11, 0, 0.255], [0.042, 0.058, 0.02], [0, side * 0.38, 0])
+    eyeShapes.oval('#ffffff', [side * 0.11 - 0.015, 0.022, 0.274], [0.014, 0.017, 0.005])
+    eyeShapes.oval('#ffffff', [side * 0.11 + 0.012, -0.022, 0.276], [0.006, 0.007, 0.004])
   }
-  const gaze = eyes.mesh(head, [0, 0.27 + 0.021, 0])
+  const eyes = eyeShapes.mesh(head, [0, H, 0])
+  const happyShapes = sculpt(material)
+  for (const side of [-1, 1])
+    for (const half of [-1, 1])
+      happyShapes.oval(
+        ink,
+        [side * 0.11 + half * 0.02, 0.004, 0.27],
+        [0.028, 0.009, 0.009],
+        [0, side * 0.38, -half * 0.6],
+      )
+  const happyEyes = happyShapes.mesh(head, [0, H, 0])
+  happyEyes.visible = false
 
-  // A broad brim and a tapered crown make the explorer readable from above.
-  const hat = sculpt(material)
-  hat.turned(
-    '#e2b96c',
-    [0, 0.002, 0],
-    [
-      [0, -0.016],
-      [0.287, -0.016],
-      [0.382, -0.031],
-      [0.4, -0.023],
-      [0.393, -0.004],
-      [0.29, 0.03],
-      [0.275, 0.092],
-      [0.229, 0.199],
-      [0.169, 0.23],
-      [0.04, 0.232],
-      [0, 0.226],
-    ],
-    0.9,
-    [-0.065, 0, -0.055],
-  )
-  hat.turned(
-    '#c57b4c',
-    [0, 0.002, 0],
-    [
-      [0.286, 0.032],
-      [0.279, 0.076],
-      [0.273, 0.093],
-    ],
-    0.907,
-    [-0.065, 0, -0.055],
-  )
-  hat.oval('#6a9765', [0.259, 0.096, 0.052], [0.028, 0.09, 0.018], [0.24, 0, -0.54])
-  hat.mesh(hatPivot)
+  const browShapes = sculpt(material)
+  for (const side of [-1, 1])
+    browShapes.oval(hair, [side * 0.115, 0.098, 0.258], [0.038, 0.011, 0.01], [0, side * 0.35, -side * 0.16])
+  const brows = browShapes.mesh(head, [0, H, 0])
+
+  const smileShapes = sculpt(material)
+  for (const side of [-1, 1])
+    smileShapes.oval('#a3574b', [side * 0.017, -0.112, 0.268], [0.022, 0.008, 0.008], [0, side * 0.1, side * 0.36])
+  const smile = smileShapes.mesh(head, [0, H, 0])
+  const openShapes = sculpt(material)
+  openShapes.oval('#8c3b3a', [0, -0.115, 0.262], [0.042, 0.034, 0.016])
+  openShapes.oval('#ec7b77', [0, -0.13, 0.27], [0.026, 0.014, 0.01])
+  const mouthOpen = openShapes.mesh(head, [0, H, 0])
+  mouthOpen.visible = false
 
   /* ------------------------------ Arms --------------------------------- */
   const arms = [-1, 1].map((side) => {
-    const shoulder = joint(chest, side * 0.168, 0.232, 0.004)
+    const shoulder = joint(chest, side * 0.148, 0.2, 0.004)
     const upper = sculpt(material)
-    upper.oval(jacket, [0, -0.005, 0], [0.068, 0.07, 0.07])
-    upper.limb(jacket, 0.054, UPPER_ARM - 0.02)
-    upper.oval(cuff, [0, -UPPER_ARM + 0.012, 0], [0.058, 0.03, 0.058])
+    upper.oval(jumper, [0, -0.004, 0], [0.06, 0.062, 0.062])
+    upper.limb(jumper, 0.05, UPPER_ARM - 0.02)
+    upper.oval(stripe, [0, -0.05, 0], [0.053, 0.016, 0.053])
+    upper.oval(stripe, [0, -UPPER_ARM + 0.01, 0], [0.052, 0.024, 0.052])
     upper.mesh(shoulder)
     const elbow = joint(shoulder, 0, -UPPER_ARM, 0)
     const lower = sculpt(material)
-    lower.limb(skin, 0.042, FOREARM - 0.03)
-    // A soft mitten hand with a little thumb, chibi style.
-    lower.oval(skin, [0, -FOREARM, 0.006], [0.057, 0.062, 0.052])
-    lower.oval(skin, [-side * 0.02, -FOREARM + 0.012, 0.042], [0.022, 0.03, 0.022], [0.4, 0, 0])
+    lower.limb(skin, 0.04, FOREARM - 0.035)
+    lower.oval(skin, [0, -FOREARM, 0.006], [0.055, 0.058, 0.05])
+    lower.oval(skin, [-side * 0.02, -FOREARM + 0.014, 0.04], [0.02, 0.028, 0.02], [0.4, 0, 0])
     lower.mesh(elbow)
     return { side, shoulder, elbow }
   })
@@ -381,14 +412,16 @@ export function createVisitor(): IslandCharacter {
   /* ------------------------------ Legs --------------------------------- */
   const legs = [-1, 1].map((side) => {
     const thigh = sculpt(material)
-    thigh.limb(pants, 0.074, THIGH)
+    thigh.limb(denim, 0.066, THIGH - 0.02)
+    thigh.oval(denimLight, [0, -THIGH + 0.035, 0], [0.07, 0.02, 0.07])
     const calf = sculpt(material)
-    calf.limb('#fff0cb', 0.06, SHIN - 0.02, [0, 0.01, 0])
-    calf.oval('#d39a5c', [0, -0.07, 0], [0.064, 0.022, 0.064])
+    calf.limb(stripe, 0.05, SHIN - 0.035, [0, 0.005, 0])
     const shoe = sculpt(material)
-    shoe.oval(boots, [0, -0.016, 0.052], [0.107, 0.077, 0.165])
-    shoe.oval('#4d382f', [0, -0.063, 0.05], [0.112, 0.03, 0.164])
-    shoe.oval('#d79158', [0, 0.026, 0.093], [0.084, 0.055, 0.104])
+    shoe.oval(boot, [0, 0.045, -0.005], [0.072, 0.06, 0.072])
+    shoe.oval('#f8cf6d', [0, 0.092, -0.005], [0.074, 0.016, 0.074])
+    shoe.oval(boot, [0, -0.01, 0.035], [0.094, 0.07, 0.138])
+    shoe.oval('#f7c95e', [0, 0.012, 0.11], [0.06, 0.04, 0.05])
+    shoe.oval(sole, [0, -0.058, 0.033], [0.099, 0.026, 0.143])
     const leg = {
       side,
       thigh: thigh.mesh(group),
@@ -403,7 +436,7 @@ export function createVisitor(): IslandCharacter {
     return leg
   })
 
-  const shadow = blobShadow(0.33)
+  const shadow = blobShadow(0.3)
   shadow.scale.y = 0.85
   group.add(shadow)
   group.name = 'visitor'
@@ -416,7 +449,7 @@ export function createVisitor(): IslandCharacter {
     const mesh = new THREE.Mesh(
       puffGeometry,
       new THREE.MeshLambertMaterial({
-        color: '#f3e6c9',
+        color: '#f6ead0',
         transparent: true,
         opacity: 0,
         depthWrite: false,
@@ -512,7 +545,7 @@ export function createVisitor(): IslandCharacter {
       const strike = Math.max(0, 1 - phase / 0.1)
       const peel = Math.max(0, (phase - (STANCE - 0.13)) / 0.13)
       out.pitch = -0.26 * strike * strike + 0.5 * peel * peel
-      out.y = 0.05 * Math.sin(Math.max(0, -out.pitch)) + 0.1 * Math.sin(Math.max(0, out.pitch))
+      out.y = 0.045 * Math.sin(Math.max(0, -out.pitch)) + 0.09 * Math.sin(Math.max(0, out.pitch))
       return out
     }
     // Swing: a Hermite curve whose end speeds match the ground, so the foot
@@ -548,11 +581,18 @@ export function createVisitor(): IslandCharacter {
   let nextLook = 3
   let idleSince = 0
   let turnLook = 0
+  let action: { kind: IdleAction; start: number; length: number } | null = null
+  let nextAction = 4.5
+  let lastAction: IdleAction | null = null
   const blink = blinker(random)
-  const hatPitch = spring(140, 9)
-  const hatRoll = spring(140, 9)
-  const landing = spring(170, 13)
+  const nod = spring(120, 10)
+  const curlPitch = spring(90, 5)
+  const curlRoll = spring(90, 5)
+  const tailSwing = spring(45, 4.5)
+  const tailRoll = spring(45, 4.5)
+  const landing = spring(170, 12)
   let lastBob = 0
+  let lastYaw = 0
   const gait: FootPose = { z: 0, y: 0, pitch: 0 }
 
   function settle() {
@@ -564,13 +604,13 @@ export function createVisitor(): IslandCharacter {
     accel = 0
     lastSpeed = 0
     phase = STANCE
+    action = null
     for (const leg of legs) {
       leg.pose.z = leg.pose.y = leg.pose.pitch = 0
       leg.planted = true
     }
-    landing.reset()
-    hatPitch.reset()
-    hatRoll.reset()
+    for (const s of [landing, nod, curlPitch, curlRoll, tailSwing, tailRoll]) s.reset()
+    lastYaw = group.rotation.y
   }
 
   const animate: IslandCharacter['animate'] = (time, reduced, move) => {
@@ -582,11 +622,12 @@ export function createVisitor(): IslandCharacter {
     const nowMoving = travelled > 1e-5 && speed > 0.08
 
     if (nowMoving && !moving) {
-      // Begin with the left foot already peeling off, and blend from wherever
-      // the feet stand so starting never pops.
+      // Begin with a foot already peeling off, and blend from wherever the
+      // feet stand so starting never pops.
       for (const leg of legs) Object.assign(leg.from, leg.pose)
       phase = STANCE - 0.02
       blendIn = 0
+      action = null
     } else if (!nowMoving && moving) {
       // Stopping: plant the furthest foot last with two small settling steps.
       for (const leg of legs) Object.assign(leg.from, leg.pose)
@@ -595,7 +636,10 @@ export function createVisitor(): IslandCharacter {
         Math.abs(legs[0].pose.z) + legs[0].pose.y > Math.abs(legs[1].pose.z) + legs[1].pose.y
           ? [0, 1]
           : [1, 0]
-      if (!reduced) landing.kick(-0.35 * pace)
+      if (!reduced) {
+        landing.kick(-0.4 * pace)
+        nod.kick(1.6 * pace)
+      }
     }
     moving = nowMoving
 
@@ -605,7 +649,35 @@ export function createVisitor(): IslandCharacter {
     lastSpeed = speed
     const s = reduced ? Math.min(pace, 1) * 0.8 : pace
     const length = CYCLE * (0.7 + 0.3 * Math.min(1, pace))
-    const lift = (0.07 + 0.05 * Math.min(1, pace)) * (reduced ? 0.7 : 1)
+    const lift = (0.065 + 0.05 * Math.min(1, pace)) * (reduced ? 0.7 : 1)
+    const yawRate = dt > 0 ? angleDelta(lastYaw, group.rotation.y) / dt : 0
+    lastYaw = group.rotation.y
+
+    /* ---- Idle actions: little bits of personality when standing still ---- */
+    if (moving || reduced) {
+      idleSince = time
+      nextAction = time + 6 + random() * 4
+      action = null
+    } else if (!action && time > nextAction) {
+      const options: IdleAction[] = (['sway', 'stretch', 'tap'] as IdleAction[]).filter(
+        (kind) => kind !== lastAction,
+      )
+      const kind = options[Math.floor(random() * options.length)]
+      action = { kind, start: time, length: kind === 'stretch' ? 2.6 : kind === 'sway' ? 2.6 : 2.2 }
+      lastAction = kind
+    }
+    let act = 0,
+      actT = 0
+    if (action) {
+      actT = time - action.start
+      if (actT >= action.length) {
+        action = null
+        nextAction = time + 5 + random() * 4
+      } else act = ease(clamp(actT / 0.35, 0, 1)) * ease(clamp((action.length - actT) / 0.45, 0, 1))
+    }
+    const swaying = action?.kind === 'sway' ? act : 0
+    const stretching = action?.kind === 'stretch' ? act : 0
+    const tapping = action?.kind === 'tap' ? act : 0
 
     /* ---- Feet ---- */
     if (moving) {
@@ -624,7 +696,7 @@ export function createVisitor(): IslandCharacter {
         const landed = footPhase < STANCE && prior > footPhase
         if (landed && leg.planted === false) {
           if (move?.dust && !reduced && pace > 0.45) kickDust(leg.shoe, 0.7 + 0.5 * pace)
-          if (!reduced) landing.kick(-0.05 * pace)
+          if (!reduced) landing.kick(-0.09 * pace)
         }
         leg.planted = footPhase < STANCE
       })
@@ -635,18 +707,28 @@ export function createVisitor(): IslandCharacter {
         const t = clamp((settleTime - order * 0.12) / 0.17, 0, 1)
         const k = ease(t)
         const reach = Math.abs(leg.from.z) + leg.from.y
-        const arc = reach > 0.02 ? Math.min(0.06, 0.25 * reach + 0.015) : 0
+        const arc = reach > 0.02 ? Math.min(0.055, 0.25 * reach + 0.015) : 0
         leg.pose.z = lerp(leg.from.z, 0, k)
         leg.pose.y = lerp(leg.from.y, 0, k) + arc * Math.sin(Math.PI * t)
-        leg.pose.pitch = lerp(leg.from.pitch, 0, k) - 0.25 * arc * Math.sin(Math.PI * t) * 4
+        leg.pose.pitch = lerp(leg.from.pitch, 0, k) - arc * Math.sin(Math.PI * t)
         leg.planted = true
       })
+      // Tip-toes while stretching; a cheerful toe-tap otherwise.
+      if (stretching) for (const leg of legs) {
+        leg.pose.pitch += 0.42 * stretching
+        leg.pose.y += 0.09 * Math.sin(0.42 * stretching)
+      }
+      if (tapping) {
+        const beat = Math.max(0, Math.sin(actT * TAU * 2.4))
+        legs[1].pose.pitch -= 0.38 * beat * tapping
+        legs[1].pose.y += 0.04 * Math.sin(0.38 * beat * tapping)
+      }
     }
 
-    /* ---- Body rhythm ---- */
+    /* ---- Body rhythm: a springy, bouncy trot ---- */
     const w = walk
     const cycle = phase * TAU
-    const bob = reduced ? 0 : -Math.cos(2 * (cycle - 0.03 * TAU)) * 0.016 * s * w
+    const bob = reduced ? 0 : -Math.cos(2 * (cycle - 0.03 * TAU)) * 0.022 * s * w
     const bobVelocity = dt > 0 ? (bob - lastBob) / dt : 0
     lastBob = bob
     const weightSide = Math.sin(cycle - 0.04 * TAU)
@@ -655,23 +737,31 @@ export function createVisitor(): IslandCharacter {
     const shift = reduced ? 0 : Math.sin(time * 0.55) * idle
     const turn = clamp(move?.turn ?? 0, -1.4, 1.4)
     turnLook = damp(turnLook, moving ? turn : 0, 8, dt)
+    const dance = Math.sin(actT * TAU * 1.15) * swaying
 
-    pelvis.position.x = reduced ? 0 : -0.018 * s * w * weightSide + 0.012 * shift
+    pelvis.position.x = reduced ? 0 : -0.02 * s * w * weightSide + 0.012 * shift + 0.03 * dance
     pelvis.rotation.set(
       0.03 * s * w,
-      reduced ? 0 : 0.13 * s * w * Math.cos(cycle),
-      reduced ? 0 : 0.05 * s * w * weightSide - 0.07 * turnLook * s + 0.018 * shift,
+      reduced ? 0 : 0.14 * s * w * Math.cos(cycle),
+      reduced ? 0 : 0.06 * s * w * weightSide - 0.08 * turnLook * s + 0.018 * shift + 0.09 * dance,
     )
-    const lean = reduced ? 0.03 * w : 0.07 * s * w + clamp(accel * 0.018, -0.1, 0.12)
+    const lean = reduced
+      ? 0.03 * w
+      : 0.08 * s * w + clamp(accel * 0.018, -0.1, 0.12) - 0.16 * stretching
     chest.rotation.set(
       lean + 0.012 * breathe * idle,
       -pelvis.rotation.y * 1.35,
       -pelvis.rotation.z * 0.45,
     )
-    chest.scale.set(1 + 0.012 * breathe * idle, 1 + 0.018 * breathe * idle, 1 + 0.014 * breathe * idle)
+    const squash = landing.step(0, dt)
+    chest.scale.set(
+      1 + 0.012 * breathe * idle - squash * 0.5,
+      1 + 0.018 * breathe * idle + squash * 1.1 + 0.05 * stretching,
+      1 + 0.014 * breathe * idle - squash * 0.5,
+    )
 
     /* ---- Pelvis height: settle into whichever leg needs it most ---- */
-    let height = PELVIS_Y + bob + landing.step(0, dt)
+    let height = PELVIS_Y + bob + squash * 0.35
     legs.forEach((leg) => {
       const hx = leg.side * HIP_X + pelvis.position.x
       const dx = leg.side * FOOT_X - hx
@@ -693,19 +783,20 @@ export function createVisitor(): IslandCharacter {
     /* ---- Arms: counter-swing with follow-through ---- */
     arms.forEach(({ side, shoulder, elbow }, index) => {
       const swing = Math.cos(cycle - 0.07 * TAU + (index ? Math.PI : 0))
-      const amount = (reduced ? 0.35 : 0.62) * Math.min(1, s) * w
+      const amount = (reduced ? 0.35 : 0.72) * Math.min(1, s) * w
       const forwardness = Math.max(0, -swing)
+      const rest = side * (0.28 + 0.06 * s * w + 0.025 * idle * (breathe + 1))
+      const wave = swaying * (0.35 + 0.25 * Math.sin(actT * TAU * 1.15 + index * Math.PI))
       shoulder.rotation.set(
-        swing * amount + 0.05 * idle * breathe * 0.4,
+        lerp(swing * amount + 0.02 * idle * breathe, -2.75, stretching),
         0,
-        side * (0.3 + 0.05 * s * w + 0.025 * idle * (breathe + 1)) + (reduced ? 0 : 0.03 * shift * side),
+        rest + side * (wave + 0.12 * stretching) + (reduced ? 0 : 0.03 * shift * side),
       )
-      elbow.rotation.x = -0.22 - 0.55 * forwardness * amount - 0.1 * w
+      elbow.rotation.x = lerp(-0.22 - 0.6 * forwardness * amount - 0.12 * w, -0.15, stretching)
     })
 
     /* ---- Head: stabilises, anticipates turns, looks around when idle ---- */
     if (moving) {
-      idleSince = time
       nextLook = time + 1.5 + random() * 1.5
       lookTarget = [0, 0, 0]
     } else if (!reduced && time > nextLook) {
@@ -717,24 +808,42 @@ export function createVisitor(): IslandCharacter {
           : [
               (random() - 0.5) * 1.2,
               (random() - 0.6) * 0.3,
-              quiet > 5 && roll > 0.8 ? (random() - 0.5) * 0.45 : 0,
+              quiet > 5 && roll > 0.75 ? (random() - 0.5) * 0.45 : 0,
             ]
       nextLook = time + 2.2 + random() * 3.2
     }
-    lookYaw = damp(lookYaw, reduced ? 0 : lookTarget[0] * idle + turnLook * 0.45, 5, dt)
-    lookPitch = damp(lookPitch, lookTarget[1] * idle, 5, dt)
-    lookTilt = damp(lookTilt, lookTarget[2] * idle, 4, dt)
+    const busy = Math.max(swaying, stretching)
+    lookYaw = damp(lookYaw, reduced ? 0 : lookTarget[0] * idle * (1 - busy) + turnLook * 0.45, 5, dt)
+    lookPitch = damp(lookPitch, lookTarget[1] * idle * (1 - busy) - 0.32 * stretching, 5, dt)
+    lookTilt = damp(lookTilt, lookTarget[2] * idle * (1 - busy) - 0.2 * dance, 6, dt)
+    const nodding = reduced ? 0 : nod.step(clamp(-bobVelocity * 0.35, -0.3, 0.3), dt)
+    const tapNod = tapping * 0.07 * Math.sin(actT * TAU * 2.4)
     head.rotation.set(
-      lookPitch - lean * 0.6 + (reduced ? 0 : 0.035 * s * w * Math.cos(2 * cycle + 0.6)),
+      lookPitch - lean * 0.55 + nodding + tapNod,
       lookYaw - chest.rotation.y - pelvis.rotation.y,
       lookTilt - pelvis.rotation.z * 0.6 + (reduced ? 0 : Math.sin(time * 1.7) * 0.015 * idle),
     )
-    gaze.scale.y = reduced ? 1 : blink(time)
-    brows.position.y = 0.27 + (lookTilt !== 0 ? Math.abs(lookTilt) * 0.025 : 0)
 
-    /* ---- Secondary motion: hat bounces behind the head ---- */
-    hatPivot.rotation.x = reduced ? 0 : hatPitch.step(clamp(bobVelocity * 0.5 - accel * 0.012, -0.2, 0.2), dt)
-    hatPivot.rotation.z = reduced ? 0 : hatRoll.step(clamp(-turnLook * 0.1 * s, -0.12, 0.12), dt)
+    /* ---- Face ---- */
+    const happy = busy > 0.45
+    eyes.visible = !happy
+    happyEyes.visible = happy
+    eyes.scale.y = reduced ? 1 : blink(time)
+    mouthOpen.visible = happy || (stretching > 0.6 && actT > 0.6)
+    smile.visible = !mouthOpen.visible
+    brows.position.y = H + 0.012 * busy + Math.abs(lookTilt) * 0.02
+
+    /* ---- Secondary motion: cowlick and scarf tail trail behind ---- */
+    if (reduced) {
+      cowlick.rotation.set(0, 0, 0)
+      scarfTail.rotation.set(0.1 * s * w, 0, 0)
+    } else {
+      cowlick.rotation.x = curlPitch.step(clamp(-bobVelocity * 0.9 + lean * 0.6 - accel * 0.02, -0.5, 0.5), dt)
+      cowlick.rotation.z = curlRoll.step(clamp(-yawRate * 0.05 - 0.3 * dance, -0.5, 0.5), dt)
+      const flutter = Math.sin(time * 13) * 0.12 * s * w
+      scarfTail.rotation.x = 0.08 + tailSwing.step(clamp(0.9 * s * w + accel * 0.03 - bobVelocity * 0.4, -0.3, 1.2), dt) + flutter
+      scarfTail.rotation.z = tailRoll.step(clamp(yawRate * 0.08 - pelvis.rotation.z * 2, -0.6, 0.6), dt)
+    }
 
     /* ---- Contact shadow ---- */
     const air = (pelvis.position.y - PELVIS_Y) * 3
@@ -748,74 +857,99 @@ export function createVisitor(): IslandCharacter {
 }
 
 /* -------------------------------------------------------------------------- */
-/* Pip, the welcoming bird.                                                    */
+/* Pip, the welcoming penguin with his little captain's cap.                  */
 
 export function createGuide(): IslandCharacter {
   const group = new THREE.Group()
   const bird = joint(group)
   const material = clay()
   const random = chance(23)
+  const navy = '#3f6690'
+  const cream = '#fff4df'
+  const orange = '#f4a246'
+
   const body = sculpt(material)
-  body.oval('#568897', [0, 0.33, -0.015], [0.241, 0.245, 0.232])
-  body.oval('#fff0ca', [0, 0.32, 0.102], [0.196, 0.196, 0.174])
-  for (const side of [-1, 1]) {
-    body.oval('#bc7b46', [side * 0.101, 0.072, 0], [0.031, 0.06, 0.029])
-    body.oval('#dca456', [side * 0.101, 0.031, 0.035], [0.061, 0.029, 0.09])
-    body.oval('#426c7e', [side * 0.057, 0.302, -0.208], [0.054, 0.039, 0.151], [0.32, side * 0.31, 0])
-  }
-  // Scarf.
-  body.turned(
-    '#e48f62',
-    [0, 0.434, 0.017],
-    [
-      [0.187, -0.018],
-      [0.216, 0.005],
-      [0.21, 0.04],
-      [0.183, 0.052],
-    ],
-    1.04,
-  )
-  body.oval('#e99a6c', [-0.083, 0.406, 0.212], [0.052, 0.098, 0.018], [0.06, 0, -0.47])
+  body.oval(navy, [0, 0.3, -0.01], [0.25, 0.29, 0.235])
+  body.oval(cream, [0, 0.27, 0.075], [0.198, 0.235, 0.18])
+  body.oval('#5a83ad', [0, 0.06, -0.19], [0.09, 0.05, 0.08], [0.6, 0, 0])
+  // Red neckerchief with a knot.
+  body.ring('#e65b4c', [0, 0.47, 0.005], 0.14, 0.038, 0.95)
+  body.oval('#f07263', [0.04, 0.43, 0.165], [0.045, 0.06, 0.02], [0.2, 0, -0.5])
+  body.oval('#f07263', [-0.035, 0.425, 0.163], [0.04, 0.055, 0.02], [0.2, 0, 0.6])
   body.mesh(bird)
 
-  // The head pivots at the scarf so nods and tilts read clearly.
-  const neckY = 0.45
-  const head = joint(bird, 0, neckY, 0.02)
+  const feet = [-1, 1].map((side) => {
+    const foot = sculpt(material)
+    foot.oval(orange, [0, 0.022, 0.05], [0.07, 0.028, 0.1])
+    for (const dx of [-0.035, 0, 0.035]) foot.oval('#f7b766', [dx, 0.024, 0.13], [0.02, 0.02, 0.03])
+    return foot.mesh(group, [side * 0.085, 0, 0])
+  })
+
+  // The head pivots at the neckerchief so nods and tilts read clearly.
+  const head = joint(bird, 0, 0.47, 0.01)
   const face = sculpt(material)
-  const at = (x: number, y: number, z: number): Vec3 => [x, y - neckY, z - 0.02]
-  face.oval('#588b98', at(0, 0.59, 0.043), [0.242, 0.205, 0.226])
-  face.oval('#f3dfac', at(0, 0.54, 0.145), [0.193, 0.126, 0.153])
+  face.oval(navy, [0, 0.13, 0], [0.225, 0.2, 0.205])
+  for (const side of [-1, 1]) {
+    face.oval(cream, [side * 0.065, 0.11, 0.085], [0.11, 0.12, 0.12])
+    face.oval('#f7a3a0', [side * 0.135, 0.06, 0.155], [0.035, 0.02, 0.01], [0, side * 0.6, 0])
+  }
   face.turned(
-    '#dca456',
-    at(0, 0.54, 0.267),
+    orange,
+    [0, 0.075, 0.2],
     [
-      [0.066, 0],
-      [0.056, 0.041],
-      [0.009, 0.109],
-      [0, 0.11],
+      [0.05, 0],
+      [0.042, 0.03],
+      [0.008, 0.075],
+      [0, 0.076],
     ],
-    0.68,
+    0.62,
     [Math.PI * 0.5, 0, 0],
   )
-  for (const side of [-1, 1])
-    face.oval('#cf936b', at(side * 0.168, 0.551, 0.207), [0.035, 0.017, 0.009], [0, side * 0.57, 0])
-  face.oval('#568897', at(-0.019, 0.785, 0.029), [0.039, 0.088, 0.027], [0.29, 0, 0.4])
-  face.oval('#79a6a0', at(0.029, 0.78, 0.043), [0.026, 0.063, 0.023], [0.32, 0, -0.35])
   face.mesh(head)
-  const eyes = sculpt(material)
+  const eyeShapes = sculpt(material)
   for (const side of [-1, 1]) {
-    eyes.oval(ink, [side * 0.096, 0, 0.254], [0.023, 0.029, 0.015], [0, side * 0.31, 0])
-    eyes.oval('#fff6df', [side * 0.096 - 0.003, 0.009, 0.266], [0.006, 0.007, 0.004])
+    eyeShapes.oval(ink, [side * 0.07, 0, 0.19], [0.026, 0.034, 0.014], [0, side * 0.35, 0])
+    eyeShapes.oval('#ffffff', [side * 0.07 - 0.009, 0.012, 0.202], [0.008, 0.01, 0.004])
   }
-  const gaze = eyes.mesh(head, at(0, 0.611, 0))
+  const eyes = eyeShapes.mesh(head, [0, 0.135, 0])
+  const happyShapes = sculpt(material)
+  for (const side of [-1, 1])
+    for (const half of [-1, 1])
+      happyShapes.oval(ink, [side * 0.07 + half * 0.013, 0.003, 0.2], [0.018, 0.006, 0.006], [0, side * 0.35, -half * 0.6])
+  const happyEyes = happyShapes.mesh(head, [0, 0.135, 0])
+  happyEyes.visible = false
+
+  // Captain's cap: white crown, navy band, glossy peak and a golden badge.
+  const cap = joint(head, 0, 0.3, -0.01)
+  const capShapes = sculpt(material)
+  capShapes.turned(
+    '#fffaf0',
+    [0, 0, 0],
+    [
+      [0, 0],
+      [0.15, 0],
+      [0.168, 0.045],
+      [0.165, 0.085],
+      [0.1, 0.105],
+      [0, 0.105],
+    ],
+    1,
+  )
+  capShapes.ring('#2f4a6e', [0, 0.02, 0], 0.152, 0.024)
+  capShapes.oval('#263d5c', [0, 0.008, 0.13], [0.11, 0.016, 0.075], [0.15, 0, 0])
+  capShapes.oval('#f4c95d', [0, 0.045, 0.165], [0.022, 0.022, 0.01])
+  capShapes.mesh(cap)
+  cap.rotation.set(-0.12, 0, 0.12)
 
   const wings = [-1, 1].map((side) => {
+    const pivot = joint(bird, side * 0.225, 0.43, 0)
     const wing = sculpt(material)
-    wing.oval('#467887', [side * 0.013, -0.092, -0.04], [0.076, 0.137, 0.105], [0.39, 0, side * 0.08])
-    wing.oval('#75a1a0', [side * 0.055, -0.086, -0.055], [0.037, 0.076, 0.091], [0.39, 0, side * 0.2])
-    return wing.mesh(bird, [side * 0.19, 0.419, 0])
+    wing.oval(navy, [side * 0.02, -0.11, 0], [0.05, 0.135, 0.1], [0, 0, side * 0.12])
+    wing.oval('#5a83ad', [side * 0.035, -0.17, 0.01], [0.03, 0.06, 0.07], [0, 0, side * 0.12])
+    wing.mesh(pivot)
+    return pivot
   })
-  const shadow = blobShadow(0.27)
+  const shadow = blobShadow(0.29)
   group.add(shadow)
   group.name = 'guide'
 
@@ -825,13 +959,17 @@ export function createGuide(): IslandCharacter {
   let headYaw = 0,
     headTilt = 0,
     headPitch = 0
-  let greet = 1 // seconds since the last greeting (≥1 means idle)
+  let greet = 1 // 0 → 1 over a greeting; ≥1 means idle
   let near = false
   let flutter = 1
   let nextFlutter = 4
+  let spin = 1
+  let nextSpin = 16
   let tilt = 0
+  let gazeOffset = 0
   let nextTilt = 2.5
   const blink = blinker(random)
+  const capBounce = spring(160, 8)
   const toPlayer = new THREE.Vector3()
 
   return {
@@ -844,7 +982,7 @@ export function createGuide(): IslandCharacter {
 
       // Face the visitor when they come close, otherwise watch the pier.
       let bodyTarget = home
-      let lookTarget = 0
+      let lookTarget = gazeOffset
       let distance = Infinity
       if (attention) {
         toPlayer.subVectors(attention, group.position)
@@ -859,39 +997,60 @@ export function createGuide(): IslandCharacter {
       const close = distance < 2.6
       if (close && !near && !reduced) greet = 0
       near = close
-      yaw += angleDelta(yaw, bodyTarget) * (1 - Math.exp(-dt * (reduced ? 20 : 3)))
-      group.rotation.y = yaw
 
       if (!reduced && time > nextTilt) {
         tilt = random() < 0.5 ? 0 : (random() - 0.5) * 0.5
+        gazeOffset = random() < 0.4 ? (random() - 0.5) * 1.4 : 0
         nextTilt = time + 2 + random() * 3
       }
       if (!reduced && time > nextFlutter && greet >= 1) {
         flutter = 0
         nextFlutter = time + 5 + random() * 6
       }
-      greet = Math.min(1, greet + dt / 1.1)
+      // Now and then, when nobody is around, a happy little twirl.
+      if (!reduced && !near && time > nextSpin && greet >= 1 && flutter >= 1) {
+        spin = 0
+        nextSpin = time + 14 + random() * 10
+      }
+      greet = Math.min(1, greet + dt / 1.8)
       flutter = Math.min(1, flutter + dt / 0.7)
+      spin = Math.min(1, spin + dt / 1.1)
 
-      // A greeting is two happy hops with waving wings.
-      const hop = greet < 1 ? Math.abs(Math.sin(greet * Math.PI * 2)) * (1 - greet) : 0
-      const flap =
-        (greet < 1 ? Math.sin(greet * Math.PI * 10) * (1 - greet) : 0) +
-        (flutter < 1 ? Math.sin(flutter * Math.PI * 6) * (1 - flutter) * 0.6 : 0)
+      yaw += angleDelta(yaw, bodyTarget) * (1 - Math.exp(-dt * (reduced ? 20 : 3)))
+      group.rotation.y = yaw + (spin < 1 ? ease(spin) * TAU : 0)
+
+      // Greeting: two happy hops, then a flipper wave.
+      const hopping = greet < 0.55 ? greet / 0.55 : 1
+      const hop =
+        (hopping < 1 ? Math.abs(Math.sin(hopping * Math.PI * 2)) * (1 - hopping * 0.5) : 0) +
+        (spin < 1 ? Math.sin(spin * Math.PI) * 0.8 : 0)
+      const waving = greet < 1 ? Math.sin(clamp((greet - 0.2) / 0.8, 0, 1) * Math.PI) : 0
+      const flap = flutter < 1 ? Math.sin(flutter * Math.PI * 6) * (1 - flutter) : 0
       const breathe = reduced ? 0 : Math.sin(time * 2.1)
-      bird.position.y = reduced ? 0 : hop * 0.16 + breathe * 0.006
-      const squash = reduced ? 1 : 1 + breathe * 0.015 - hop * 0.06
+      // An idle waddle: rock from foot to foot.
+      const rock = reduced ? 0 : Math.sin(time * 2.4) * (near ? 0.035 : 0.055)
+      bird.position.y = reduced ? 0 : hop * 0.17 + breathe * 0.006
+      const squash = reduced ? 1 : 1 + breathe * 0.015 - hop * 0.07
       bird.scale.set(2 - squash, squash, 2 - squash)
-      bird.rotation.z = reduced ? 0 : Math.sin(time * 0.8) * 0.025
-      wings[0].rotation.z = -0.1 - 0.5 * Math.max(0, flap) - 0.03 * breathe
-      wings[1].rotation.z = 0.1 + 0.5 * Math.max(0, flap) + 0.03 * breathe
+      bird.rotation.z = rock
+      feet.forEach((foot, i) => {
+        foot.position.y = Math.max(0, (i ? -1 : 1) * rock) * 0.35 + hop * 0.1
+        foot.rotation.x = -hop * 0.4
+      })
+      wings[0].rotation.z = -0.12 - 0.6 * Math.max(0, flap) - 0.04 * breathe - 0.25 * hop
+      wings[1].rotation.z =
+        0.12 + 0.6 * Math.max(0, flap) + 0.04 * breathe + 0.25 * hop + waving * (2.2 + 0.35 * Math.sin(time * 14))
 
       headYaw = damp(headYaw, reduced ? 0 : lookTarget, 6, dt)
-      headTilt = damp(headTilt, reduced ? 0 : near ? 0.18 : tilt, 4, dt)
-      headPitch = damp(headPitch, reduced ? 0 : near ? -0.08 : 0.03 * Math.sin(time * 0.9), 4, dt)
-      head.rotation.set(headPitch - hop * 0.2, headYaw, headTilt)
-      gaze.scale.y = reduced ? 1 : greet < 0.6 ? 0.35 : blink(time)
-      shadow.scale.setScalar(1 - hop * 0.6)
+      headTilt = damp(headTilt, reduced ? 0 : near ? 0.2 : tilt, 4, dt)
+      headPitch = damp(headPitch, reduced ? 0 : near ? -0.1 : 0.03 * Math.sin(time * 0.9), 4, dt)
+      head.rotation.set(headPitch - hop * 0.15, headYaw, headTilt - rock * 0.6)
+      cap.rotation.x = -0.12 + (reduced ? 0 : capBounce.step(clamp(-hop * 0.5, -0.4, 0), dt))
+      const happy = !reduced && (greet < 1 || spin < 1)
+      eyes.visible = !happy
+      happyEyes.visible = happy
+      eyes.scale.y = reduced ? 1 : blink(time)
+      shadow.scale.setScalar(1 - hop * 0.5)
     },
   }
 }

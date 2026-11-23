@@ -2,7 +2,7 @@ import { anchors, type Zone } from '../data/village'
 import { exhibitSpots } from '../data/exhibits'
 export type Point = [number, number]
 // Narrow colliders leave the spaces between the six pedestals walkable.
-const ornaments: Point[] = [
+const ornaments: ([number, number] | [number, number, number])[] = [
   ...exhibitSpots,
   [2, 5.5],
   [0, 2],
@@ -12,6 +12,20 @@ const ornaments: Point[] = [
   [0.04, -3.17],
   [4.24, -4.02],
   [4.93, 1.98],
+  // Campfire, its log seats, the well and the beach parasol (x, z, radius).
+  [-0.45, 4.2, 0.55],
+  [-1.28, 3.78, 0.24],
+  [-1.23, 4.08, 0.24],
+  [-1.18, 4.38, 0.24],
+  [-0.05, 4.88, 0.24],
+  [0.17, 4.68, 0.24],
+  [0.39, 4.48, 0.24],
+  [-0.87, 5.02, 0.24],
+  [-0.57, 5.06, 0.24],
+  [-0.27, 5.10, 0.24],
+  [5.7, -4.9, 0.62],
+  [12.15, 4.1, 0.25],
+  [12.83, 4.3, 0.42],
 ]
 const blocks: [Zone, number, number][] = [
   ['about', 2.05, 1.62],
@@ -21,7 +35,7 @@ const blocks: [Zone, number, number][] = [
 ]
 export function walkable(x: number, z: number) {
   if (Math.abs(x - 2.5) < 0.63 && z > 9.25 && z < 12.95) return true
-  if (ornaments.some(([ox, oz]) => (x - ox) ** 2 + (z - oz) ** 2 < 0.32 ** 2))
+  if (ornaments.some(([ox, oz, r = 0.32]) => (x - ox) ** 2 + (z - oz) ** 2 < r ** 2))
     return false
   if ((x / 14.8) ** 2 + (z / 9.8) ** 2 > 1) return false
   if (

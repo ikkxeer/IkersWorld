@@ -1,10 +1,37 @@
 import * as T from 'three'
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
+import { noiseGLSL } from './shaderBits'
 
 export type XYZ = [number, number, number]
 export type XZ = [number, number]
 const zero: XYZ = [0, 0, 0]
+
+/**
+ * Soft "storybook" shading on top of the standard PBR model: a gentle warm rim
+ * light and lifted shadows keep colours pastel and silhouettes readable, the
+ * way cosy life-sim games look, without flattening into hard cel bands.
+ */
+export function cartoon(material: T.MeshStandardMaterial, rim = 0.2, lift = 0.07) {
+  const previous = material.onBeforeCompile
+  material.onBeforeCompile = (shader, renderer) => {
+    previous.call(material, shader, renderer)
+    shader.fragmentShader = shader.fragmentShader.replace(
+      '#include <opaque_fragment>',
+      `{
+        float facing = clamp(dot(normal, normalize(vViewPosition)), 0., 1.);
+        float rimLight = pow(1. - facing, 2.6);
+        outgoingLight += rimLight * ${rim.toFixed(3)} * mix(vec3(1., .95, .84), diffuseColor.rgb, .35);
+        outgoingLight += diffuseColor.rgb * vec3(${lift.toFixed(3)}, ${(lift * 0.85).toFixed(3)}, ${(lift * 0.95).toFixed(3)});
+      }
+      #include <opaque_fragment>`,
+    )
+  }
+  const key = material.customProgramCacheKey
+  material.customProgramCacheKey = () =>
+    key.call(material) + `|cartoon${rim}:${lift}`
+  return material
+}
 const unit: XYZ = [1, 1, 1]
 
 /** Small parts are baked with vertex colours into one mesh per animated or pickable object. */
@@ -16,6 +43,10 @@ export class ModelKit {
   })
   readonly leaf = this.matte.clone()
   readonly petals = this.matte.clone()
+  /** Lawn painted with soft sunny patches, flecks and clover dots. */
+  readonly grass = this.matte.clone()
+  /** Earth paths with mottled tones and scattered pebbles. */
+  readonly soil = this.matte.clone()
   readonly glass = new T.MeshStandardMaterial({
     vertexColors: true,
     emissive: '#ffd275',
@@ -43,17 +74,26 @@ export class ModelKit {
           walkerFloor: this.walkerFloor,
         })
         shader.vertexShader =
-          'uniform float islandTime; uniform float motion; uniform vec2 walker;\n' +
+          'uniform float islandTime; uniform float motion; uniform vec2 walker;\nvarying float leafUp;\n' +
           (flower ? '' : 'varying vec3 leafViewPosition;\n') +
           shader.vertexShader
         shader.vertexShader = shader.vertexShader.replace(
           '#include <begin_vertex>',
           `#include <begin_vertex>
+          leafUp = normalize(mat3(modelMatrix) * objectNormal).y;
           vec2 here = (modelMatrix * vec4(position, 1.)).xz;
           float sway = sin(islandTime * 1.45 + here.x * .9 + here.y * .68);
           transformed.x += motion * sway * ${flower ? '.023' : '.035'} * clamp(position.y, 0., 3.);
           ${flower ? 'vec2 away = here - walker; transformed.xz += motion * away / max(length(away), .1) * (1. - smoothstep(.2, 1.8, length(away))) * .18;' : 'leafViewPosition = (modelViewMatrix * vec4(transformed, 1.)).xyz;'}`,
         )
+        // Sunlit crowns, cool undersides: soft painted volume on foliage.
+        shader.fragmentShader =
+          'varying float leafUp;\n' +
+          shader.fragmentShader.replace(
+            '#include <color_fragment>',
+            `#include <color_fragment>
+            diffuseColor.rgb *= mix(vec3(.8, .87, .94), vec3(1.13, 1.11, .9), leafUp * .5 + .5);`,
+          )
         if (!flower) {
           // Reveal the player's silhouette through greenery between them and the camera.
           shader.fragmentShader =
@@ -75,6 +115,11 @@ export class ModelKit {
       }
       material.customProgramCacheKey = () => (flower ? 'flowers' : 'leaves')
     }
+    paintGround(this.grass, 'grass')
+    paintGround(this.soil, 'soil')
+    cartoon(this.matte, 0.14, 0.05)
+    cartoon(this.leaf, 0.2, 0.06)
+    cartoon(this.petals, 0.16, 0.06)
   }
   template(id: string, make: () => T.BufferGeometry) {
     let g = this.templates.get(id)
@@ -88,6 +133,45 @@ export class ModelKit {
     this.templates.forEach((g) => g.dispose())
     this.templates.clear()
   }
+}
+
+function paintGround(material: T.MeshStandardMaterial, kind: 'grass' | 'soil') {
+  material.onBeforeCompile = (shader) => {
+    shader.vertexShader =
+      'varying vec3 vGroundWorld;\n' +
+      shader.vertexShader.replace(
+        '#include <worldpos_vertex>',
+        `#include <worldpos_vertex>
+        vGroundWorld = (modelMatrix * vec4(transformed, 1.)).xyz;`,
+      )
+    const paint =
+      kind === 'grass'
+        ? `vec2 p = vGroundWorld.xz;
+          vec3 g = diffuseColor.rgb * mix(.9, 1.09, islandFbm(p * .42));
+          g = mix(g, g * vec3(1.07, 1.1, .84) + vec3(.02, .02, 0.), smoothstep(.56, .82, islandNoise(p * .17 + 3.)) * .7);
+          vec2 cell = floor(p * 6.5);
+          vec2 local = fract(p * 6.5) - .5;
+          float fleck = step(.86, islandHash(cell)) * smoothstep(.34, .08, length(local * vec2(1.6, .7)));
+          g = mix(g, g * vec3(.78, .9, .68), fleck * .6);
+          float clover = step(.955, islandHash(cell + 7.)) * smoothstep(.3, .1, length(local));
+          g = mix(g, g * 1.18 + .035, clover * .7);
+          diffuseColor.rgb = g;`
+        : `vec2 p = vGroundWorld.xz;
+          vec3 c = diffuseColor.rgb * mix(.93, 1.06, islandFbm(p * 1.4));
+          vec2 cell = floor(p * 4.5);
+          vec2 local = fract(p * 4.5) - .5 + (vec2(islandHash(cell + 2.), islandHash(cell + 5.)) - .5) * .5;
+          float pebble = step(.62, islandHash(cell)) * smoothstep(.13, .08, length(local * vec2(1., 1.4)));
+          c = mix(c, c * (islandHash(cell + 9.) > .5 ? 1.12 : .86), pebble);
+          diffuseColor.rgb = c;`
+    shader.fragmentShader =
+      'varying vec3 vGroundWorld;\n' +
+      noiseGLSL +
+      shader.fragmentShader.replace(
+        '#include <color_fragment>',
+        '#include <color_fragment>\n' + paint,
+      )
+  }
+  material.customProgramCacheKey = () => 'island-' + kind
 }
 
 export class Batch {

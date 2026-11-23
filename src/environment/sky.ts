@@ -1,5 +1,7 @@
 import * as T from 'three'
 import { daylight } from './daylight'
+import { paintSea } from '../world/water'
+import { softDot } from '../world/ambience'
 
 export function makeSky(scene: T.Scene, low: boolean) {
   const sky = new T.Color(),
@@ -8,7 +10,7 @@ export function makeSky(scene: T.Scene, low: boolean) {
   scene.background = sky
   const fog = new T.Fog(0xa6dce5, 43, 118)
   scene.fog = fog
-  const hemi = new T.HemisphereLight(0xfff6d8, 0xc2c794, 1.65)
+  const hemi = new T.HemisphereLight(0xfff6d8, 0xb7d08c, 1.75)
   const sun = new T.DirectionalLight(0xffecc6, 2.6)
   sun.castShadow = true
   sun.shadow.mapSize.set(low ? 512 : 1024, low ? 512 : 1024)
@@ -22,44 +24,26 @@ export function makeSky(scene: T.Scene, low: boolean) {
   })
   sun.shadow.bias = -0.0005
   sun.shadow.normalBias = 0.035
+  // Soft, slightly blurred shadows suit the storybook look.
+  sun.shadow.radius = 3
   scene.add(hemi, sun)
   const sea = new T.Mesh(
     new T.PlaneGeometry(350, 350),
-    new T.MeshStandardMaterial({ color: 0x66bfc6, roughness: 0.68 }),
+    new T.MeshStandardMaterial({ color: 0x66bfc6, roughness: 0.55 }),
   )
+  const seaClock = { value: 0 }
+  paintSea(sea.material, seaClock)
   sea.rotation.x = -Math.PI / 2
   sea.position.y = -0.88
   sea.receiveShadow = true
   scene.add(sea)
-  // Batches of tiny painterly wavelets keep the water readable at every zoom.
-  const waveMat = new T.MeshBasicMaterial({
-    color: 0xe0faf1,
-    transparent: true,
-    opacity: 0.44,
-  })
-  const waves = new T.InstancedMesh(
-    new T.SphereGeometry(1, 6, 3),
-    waveMat,
-    low ? 190 : 420,
-  )
-  const proxy = new T.Object3D()
   let seed = 735
   function random() {
     seed = (seed * 1664525 + 1013904223) >>> 0
     return seed / 4294967296
   }
-  for (let i = 0; i < waves.count; i++) {
-    proxy.position.set((random() - 0.5) * 110, -0.864, (random() - 0.5) * 110)
-    proxy.scale.set(0.08 + random() ** 2 * 0.73, 0.013, 0.025 + random() * 0.07)
-    proxy.updateMatrix()
-    waves.setMatrixAt(i, proxy.matrix)
-  }
-  scene.add(waves)
-  const cloudMat = new T.MeshLambertMaterial({
-    color: 0xfff6df,
-    flatShading: true,
-  })
-  const cloudGeo = new T.IcosahedronGeometry(1, 1)
+  const cloudMat = new T.MeshLambertMaterial({ color: 0xfffaf0 })
+  const cloudGeo = new T.IcosahedronGeometry(1, 2)
   const clouds = new T.Group()
   for (let i = 0; i < 12; i++) {
     const group = new T.Group()
@@ -106,8 +90,9 @@ export function makeSky(scene: T.Scene, low: boolean) {
   const resting = fireflies.slice()
   fliesGeometry.setAttribute('position', new T.BufferAttribute(fireflies, 3))
   const flyMaterial = new T.PointsMaterial({
+    map: softDot('rgba(255,250,200,1)', 'rgba(255,220,110,0.55)'),
     color: '#ffe895',
-    size: 0.095,
+    size: 0.26,
     transparent: true,
     opacity: 0,
     depthWrite: false,
@@ -134,7 +119,6 @@ export function makeSky(scene: T.Scene, low: boolean) {
     flies.visible = s.night > 0.18
     flyMaterial.opacity = s.night
     starMat.opacity = s.night
-    waveMat.opacity = 0.42 - s.night * 0.25
     orb.material.color.set(s.night > 0.55 ? '#e5e9ff' : '#ffebae')
     orb.position.set(
       Math.cos(angle) * 24,
@@ -153,9 +137,9 @@ export function makeSky(scene: T.Scene, low: boolean) {
         }
         fliesGeometry.attributes.position.needsUpdate = true
       }
+      seaClock.value = t
       clouds.position.x = Math.sin(t * 0.019) * 5
-      waves.position.x = Math.sin(t * 0.4) * 0.25
-      waves.position.z = Math.cos(t * 0.32) * 0.08
+
     },
   }
 }
