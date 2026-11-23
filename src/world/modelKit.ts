@@ -1,6 +1,6 @@
 import * as T from 'three'
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js'
-import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
+import { mergeGeometries, mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js'
 import { TessellateModifier } from 'three/addons/modifiers/TessellateModifier.js'
 import { noiseGLSL } from './shaderBits'
 
@@ -155,7 +155,13 @@ export class ModelKit {
   template(id: string, make: () => T.BufferGeometry) {
     let g = this.templates.get(id)
     if (!g) {
-      g = make()
+      // Weld each reusable shape once (UVs dropped so seams don't split it):
+      // every copy is then already indexed and merging stays cheap.
+      const raw = make()
+      for (const attr of Object.keys(raw.attributes))
+        if (attr !== 'position' && attr !== 'normal') raw.deleteAttribute(attr)
+      g = mergeVertices(raw, 1e-4)
+      if (g !== raw) raw.dispose()
       this.templates.set(id, g)
     }
     return g
@@ -252,10 +258,17 @@ export class Batch {
     material: T.Material = this.kit.matte,
     quat?: T.Quaternion,
   ) {
-    const geo = source.index ? source.toNonIndexed() : source.clone()
+    const geo = source.clone()
     for (const attr of Object.keys(geo.attributes))
       if (attr !== 'position' && attr !== 'normal') geo.deleteAttribute(attr)
     if (!geo.attributes.normal) geo.computeVertexNormals()
+    // Everything in a batch is indexed so the merge keeps shared vertices.
+    if (!geo.index) {
+      const count = geo.attributes.position.count
+      const order = new (count > 65535 ? Uint32Array : Uint16Array)(count)
+      for (let i = 0; i < count; i++) order[i] = i
+      geo.setIndex(new T.BufferAttribute(order, 1))
+    }
     const size = geo.attributes.position.count
     const colors = new Float32Array(size * 3),
       rgb = new T.Color(color)
@@ -291,7 +304,18 @@ export class Batch {
     this.put(
       this.kit.template(
         'ico' + detail,
-        () => new T.IcosahedronGeometry(1, detail),
+        () => {
+          // Smooth (radial) normals everywhere, so shared corners can be
+          // welded into an index and small blobs shade softly.
+          const g = new T.IcosahedronGeometry(1, detail)
+          const p = g.attributes.position
+          const n = new T.Vector3()
+          for (let i = 0; i < p.count; i++) {
+            n.fromBufferAttribute(p, i).normalize()
+            g.attributes.normal.setXYZ(i, n.x, n.y, n.z)
+          }
+          return g
+        },
       ),
       c,
       p,
@@ -372,9 +396,11 @@ export class Batch {
     // Large flat shapes are split into small triangles so the curved-world
     // bend (applied per vertex) follows the surface instead of cutting chords.
     const fine = tessellate ? new TessellateModifier(1.4, 10).modify(g) : g
-    this.put(fine, c, p, unit, r, mat)
-    g.dispose()
-    if (fine !== g) fine.dispose()
+    for (const attr of Object.keys(fine.attributes))
+      if (attr !== 'position' && attr !== 'normal') fine.deleteAttribute(attr)
+    const welded = mergeVertices(fine, 1e-4)
+    this.put(welded, c, p, unit, r, mat)
+    for (const geometry of new Set([g, fine, welded])) geometry.dispose()
   }
   horizontal(
     points: XZ[],

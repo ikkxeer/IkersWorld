@@ -338,64 +338,94 @@ function tree(
   i: number,
   pine = false,
 ) {
-  b.ball([x, 0.1, z], [0.27 * s, 0.13 * s, 0.27 * s], bark, 1)
-  b.stick([x, 0, z], [x + 0.06 * s, 1.5 * s, z], 0.17 * s, bark, 10, 0.66)
+  const lean = ((i * 0.37) % 1) * 0.12 - 0.06
+  // Roots flaring out of the ground.
+  for (let r = 0; r < 4; r++) {
+    const a = (r / 4) * Math.PI * 2 + i
+    b.stick(
+      [x + Math.cos(a) * 0.3 * s, 0.07, z + Math.sin(a) * 0.3 * s],
+      [x + Math.cos(a) * 0.06 * s, 0.32 * s, z + Math.sin(a) * 0.06 * s],
+      0.075 * s,
+      bark,
+      6,
+      0.55,
+    )
+  }
   if (pine) {
-    // A plump cedar: stacked rounded tiers with a little tuft on top.
-    const tiers = ['#4f8d6d', '#5e9d73', '#76b07c', '#8cc086']
-    for (let j = 0; j < 4; j++)
-      b.cylinder(
-        [x, (0.95 + 0.48 * j) * s, z],
-        0.12 * s,
-        (1.02 - 0.2 * j) * s,
-        (0.95 - 0.08 * j) * s,
-        tiers[j],
-        12,
-        [0, i * 0.5 + j * 0.3, 0],
-        b.kit.leaf,
-      )
-    b.ball([x, 2.78 * s, z], [0.2 * s, 0.22 * s, 0.2 * s], tiers[3], 1, [0, 0, 0], b.kit.leaf)
+    b.stick([x, 0, z], [x + lean * s, 1.1 * s, z], 0.15 * s, bark, 8, 0.7)
+    // A plump cedar: drooping tiers with a scalloped skirt and a top tuft.
+    const tiers = ['#447f62', '#528f6a', '#66a374', '#7fb780']
+    const rim = leafDetail > 1 ? 9 : 6
+    for (let j = 0; j < 4; j++) {
+      const y = (0.95 + 0.47 * j) * s,
+        r = (1.02 - 0.21 * j) * s,
+        h = (0.9 - 0.08 * j) * s
+      const cx = x + lean * s * (1 + j * 0.25)
+      b.cylinder([cx, y, z], 0.1 * s, r * 0.92, h, tiers[j], 12, [0, i * 0.5 + j * 0.3, 0], b.kit.leaf)
+      for (let k = 0; k < rim; k++) {
+        const a = (k / rim) * Math.PI * 2 + j * 0.6 + i
+        // Flattened, overlapping lobes make a soft scalloped skirt.
+        b.ball(
+          [cx + Math.cos(a) * r * 0.78, y - h * 0.4, z + Math.sin(a) * r * 0.78],
+          [0.34 * s * (1 - j * 0.15), 0.1 * s, 0.26 * s * (1 - j * 0.15)],
+          tiers[j],
+          1,
+          [0, -a, 0.38],
+          b.kit.leaf,
+        )
+      }
+    }
+    b.ball([x + lean * s * 2, 2.85 * s, z], [0.2 * s, 0.25 * s, 0.2 * s], tiers[3], 1, [0, 0, 0], b.kit.leaf)
     return
   }
   const blossom = i % 7 === 5
   const cols = blossom
-    ? ['#f2a7b8', '#f7bfca', '#fbd5dc']
+    ? ['#e993a8', '#f4b2c2', '#fbd4dd']
     : i % 3 === 0
-      ? ['#6fa758', '#88bb62', '#a2cc6f']
+      ? ['#5f9a4c', '#7cb15a', '#9fcb6c']
       : i % 3 === 1
-        ? ['#66a96a', '#7fbb70', '#9fcd7e']
-        : ['#7db267', '#97c472', '#b1d482']
+        ? ['#5a9c5e', '#73b268', '#98c97a']
+        : ['#6aa65a', '#86ba66', '#aad37d']
+  const top = 1.5 * s
+  b.stick([x, 0, z], [x + lean * s, top, z], 0.17 * s, bark, 10, 0.66)
   for (const side of [-1, 1])
     b.stick(
-      [x, 1.05 * s, z],
-      [x + side * 0.5 * s, 1.6 * s, z + 0.07 * s],
-      0.085 * s,
+      [x + lean * s * 0.7, 1.0 * s, z],
+      [x + side * 0.55 * s, 1.62 * s, z + 0.12 * s * side],
+      0.075 * s,
       bark,
       7,
-      0.62,
+      0.55,
     )
-  // A fluffy crown: one big puff ringed by smaller lobes and a top knot.
-  b.ball([x, 2.0 * s, z], [0.98 * s, 0.86 * s, 0.94 * s], cols[1], leafDetail, [0.1, i, 0], b.kit.leaf)
-  for (let k = 0; k < 5; k++) {
-    const a = (k * Math.PI * 2) / 5 + i * 0.7
+  // A fluffy crown: a shaded core wrapped in leafy clumps spread over a
+  // sphere, brighter where the sun catches the top.
+  const cx = x + lean * s * 1.2,
+    cy = 2.05 * s
+  b.ball([cx, cy, z], [0.9 * s, 0.78 * s, 0.86 * s], cols[0], 1, [0.1, i, 0], b.kit.leaf)
+  const clumps = leafDetail > 1 ? 14 : 9
+  for (let k = 0; k < clumps; k++) {
+    // Fibonacci sphere, skipping the very bottom.
+    const yN = 1 - ((k + 0.5) / clumps) * 1.55
+    const ring = Math.sqrt(Math.max(0, 1 - yN * yN))
+    const a = k * 2.39996 + i
+    const size = (0.42 + 0.1 * ((k * 0.618 + i * 0.3) % 1)) * s
     b.ball(
-      [x + Math.cos(a) * 0.62 * s, (1.68 + (k % 2) * 0.22) * s, z + Math.sin(a) * 0.55 * s],
-      [0.6 * s, 0.55 * s, 0.6 * s],
-      cols[k % 2 ? 0 : 2],
-      leafDetail,
-      [0, a, 0.1],
+      [cx + Math.cos(a) * ring * 0.78 * s, cy + yN * 0.62 * s, z + Math.sin(a) * ring * 0.74 * s],
+      [size, size * 0.86, size],
+      cols[yN > 0.35 ? 2 : yN > -0.2 ? 1 : 0],
+      1,
+      [0, a, 0.2],
       b.kit.leaf,
     )
   }
-  b.ball([x + 0.08 * s, 2.62 * s, z - 0.05 * s], [0.58 * s, 0.5 * s, 0.56 * s], cols[2], leafDetail, [0, i, 0], b.kit.leaf)
   if (blossom || i % 3 === 0)
     for (let j = 0; j < 7; j++) {
       const a = j * 2.4 + i,
-        dx = Math.sin(a) * 0.98 * s,
-        dz = Math.cos(a) * 0.9 * s
+        dx = Math.sin(a) * 1.0 * s,
+        dz = Math.cos(a) * 0.94 * s
       b.ball(
-        [x + dx, 1.7 * s + (j % 3) * 0.2 * s, z + dz],
-        blossom ? [0.11 * s, 0.1 * s, 0.11 * s] : [0.15 * s, 0.16 * s, 0.15 * s],
+        [cx + dx, (1.75 + (j % 3) * 0.22) * s, z + dz],
+        blossom ? [0.1 * s, 0.09 * s, 0.1 * s] : [0.14 * s, 0.15 * s, 0.14 * s],
         blossom ? '#fff1f3' : j % 2 ? '#f29a5e' : '#e2784f',
         1,
       )
@@ -408,7 +438,7 @@ function tulip(b: Batch, x: number, z: number, c: string, r: number) {
   b.ball([x + 0.04, h * 0.55, z], [0.1, 0.03, 0.035], '#7ba561', 0, [0, r * 3, 0.5], b.kit.petals)
   for (let j = 0; j < 3; j++) {
     const a = (j * Math.PI * 2) / 3 + r
-    b.ball([x + Math.cos(a) * 0.03, h + 0.04, z + Math.sin(a) * 0.03], [0.05, 0.075, 0.05], c, 1, [0, a, 0], b.kit.petals)
+    b.ball([x + Math.cos(a) * 0.03, h + 0.04, z + Math.sin(a) * 0.03], [0.05, 0.075, 0.05], c, 0, [0, a, 0], b.kit.petals)
   }
 }
 function flower(b: Batch, x: number, z: number, c: string, r: number) {

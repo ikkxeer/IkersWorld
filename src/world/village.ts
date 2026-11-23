@@ -124,33 +124,27 @@ export function building(
   kit: ModelKit,
   zone: 'about' | 'tech' | 'journey' | 'skills',
 ) {
+  if (zone === 'about') return cottage(kit)
   const b = new Batch(kit)
   const isLab = zone === 'tech',
     isCafe = zone === 'skills',
-    station = zone === 'journey',
-    home = zone === 'about'
+    station = zone === 'journey'
   const w = station ? 3.9 : isLab ? 3.3 : 3.0,
     d = isLab ? 2.7 : 2.3,
     eave = isLab ? 2.15 : 1.92,
     peak = isCafe ? 2.8 : 3.19,
     face = d / 2
-  const color = home
-    ? '#f4dca3'
-    : station
+  const color = station
       ? '#e7bd7c'
       : isCafe
         ? '#f5d9a5'
         : '#c4d6bf'
-  const roofColor = home
-    ? '#b9573f'
-    : isLab
+  const roofColor = isLab
       ? '#488477'
       : isCafe
         ? '#d78a47'
         : '#577d85'
-  const seam = home
-    ? '#dc8057'
-    : isLab
+  const seam = isLab
       ? '#71a592'
       : isCafe
         ? '#eaa85a'
@@ -179,38 +173,13 @@ export function building(
   }
   b.block([0, 0.41, face + 0.01], [w, 0.14, 0.1], wood)
   roof(b, w + 0.14, d, eave, peak, roofColor, seam)
-  if (home || isCafe) {
+  if (isCafe) {
     b.block([-0.85, 2.53, -0.43], [0.46, 1.33, 0.46], '#a96e53')
     b.block([-0.85, 3.23, -0.43], [0.59, 0.17, 0.59], clay)
     for (let i = 0; i < 3; i++)
       b.block([-0.85, 2.49 + i * 0.22, -0.19], [0.45, 0.025, 0.02], '#c98961')
   }
-  if (home) {
-    door(b, -0.59, face, '#7c9c82')
-    windowBox(b, 0.68, 1.16, face, 0.7, 0.67, true)
-    b.ball([0, 2.4, face + 0.05], [0.3, 0.3, 0.1], timber, 1)
-    b.ball(
-      [0, 2.4, face + 0.16],
-      [0.21, 0.21, 0.04],
-      '#edbd78',
-      1,
-      [0, 0, 0],
-      kit.glass,
-    )
-    b.block([0.68, 0.66, face + 0.22], [1.16, 0.22, 0.3], '#a56a42')
-    for (let i = 0; i < 7; i++) {
-      b.ball(
-        [0.21 + i * 0.15, 0.82, face + 0.23],
-        [0.17, 0.12, 0.14],
-        '#638d52',
-      )
-      b.ball(
-        [0.25 + i * 0.14, 0.91, face + 0.28],
-        [0.085, 0.085, 0.085],
-        i % 2 ? '#ed8d77' : '#eaac4e',
-      )
-    }
-  } else if (isLab) {
+  if (isLab) {
     // Open-front wood and metal workbench, framed by a roll-up shop door.
     b.block(
       [-0.48, 1.02, face + 0.045],
@@ -349,15 +318,14 @@ export function building(
     b.stick([0.41, 2.72, face + 0.14], [0.25, 2.55, face + 0.14], 0.05, trim)
   }
   // A welcoming porch: wall lanterns that glow at dusk, potted plants and a
-  // doormat; Iker's own door wears a wreath.
-  const doorX = home ? -0.59 : isLab ? 1.02 : station ? 0 : -0.83
+  // doormat.
+  const doorX = isLab ? 1.02 : station ? 0 : -0.83
   const lanterns = isCafe ? [doorX - 0.6] : [doorX - 0.6, doorX + 0.6]
   for (const x of lanterns) wallLantern(b, x, 1.32, face)
   b.block([doorX, 0.105, face + 0.78], [0.7, 0.02, 0.36], '#c6774f', [0, 0, 0], true)
   b.block([doorX, 0.11, face + 0.78], [0.56, 0.02, 0.24], '#e9a66a', [0, 0, 0], true)
   const pots = isCafe ? [1.62] : [doorX - 0.78, doorX + 0.78]
-  pots.forEach((x, i) => pottedPlant(b, x, face + 0.48, i + (home ? 0 : isLab ? 2 : 4)))
-  if (home) wreath(b, doorX, 1.0, face + 0.25)
+  pots.forEach((x, i) => pottedPlant(b, x, face + 0.48, i + (isLab ? 2 : 4)))
   return b.finish()
 }
 
@@ -472,4 +440,156 @@ export function pickable(
   group.userData.zone = zone
   if (project !== undefined) group.userData.project = project
   return group
+}
+
+/**
+ * Iker's cottage: a timber-framed storybook house on a stone plinth, with a
+ * shingled roof, a dormer, a stone chimney, a little door canopy, climbing
+ * ivy and a cosy porch. Same footprint and door as before.
+ */
+function cottage(kit: ModelKit) {
+  const b = new Batch(kit)
+  const w = 3.0,
+    d = 2.3,
+    eave = 1.95,
+    peak = 3.3,
+    face = d / 2,
+    doorX = -0.59
+  const plaster = '#f7e4b8',
+    shingles = ['#c4573f', '#d06a4c', '#b94f39']
+  // Stone plinth with rounded stones along the visible sides.
+  b.block([0, 0.09, 0], [w + 0.26, 0.22, d + 0.24], '#b8a894', [0, 0, 0], true)
+  const stones = ['#cdbfae', '#b9aa98', '#d8ccbc', '#c3b3a2']
+  for (let x = -w / 2 + 0.1, k = 0; x < w / 2; x += 0.3, k++)
+    if (Math.abs(x - doorX) > 0.5) b.ball([x, 0.16, face + 0.13], [0.15, 0.1, 0.05], stones[k % 4], 1, [0, 0, k * 0.4])
+  for (const side of [-1, 1])
+    for (let z = -d / 2 + 0.1, k = 0; z < d / 2; z += 0.3, k++)
+      b.ball([side * (w / 2 + 0.13), 0.16, z], [0.05, 0.1, 0.15], stones[(k + 2) % 4], 1, [k * 0.4, 0, 0])
+  // Plastered walls and a timber frame.
+  b.block([0, eave / 2 + 0.1, 0], [w, eave, d], plaster, [0, 0, 0], true)
+  for (const sx of [-1, 1])
+    for (const sz of [-1, 1]) b.block([sx * (w / 2 - 0.03), eave / 2 + 0.08, sz * (d / 2 - 0.03)], [0.14, eave, 0.14], timber)
+  for (const y of [0.42, eave])
+    for (const sz of [-1, 1]) b.block([0, y, sz * (d / 2 + 0.03)], [w + 0.04, 0.1, 0.06], y < 1 ? wood : timber)
+  for (const side of [-1, 1]) {
+    b.block([side * (w / 2 + 0.03), eave, 0], [0.06, 0.1, d + 0.04], timber)
+    // Cross braces and a glowing side window.
+    for (const [z0, z1] of [
+      [-1.05, -0.35],
+      [-0.35, -1.05],
+    ])
+      b.stick([side * (w / 2 + 0.035), 0.5, z0], [side * (w / 2 + 0.035), eave - 0.05, z1], 0.035, timber, 5)
+    b.block([side * (w / 2 + 0.04), 1.15, 0.45], [0.09, 0.82, 0.78], timber)
+    b.block([side * (w / 2 + 0.09), 1.15, 0.45], [0.04, 0.66, 0.62], '#95c2bb', [0, 0, 0], false, kit.glass)
+    b.block([side * (w / 2 + 0.12), 1.15, 0.45], [0.05, 0.05, 0.66], trim)
+    b.block([side * (w / 2 + 0.12), 1.15, 0.45], [0.05, 0.68, 0.05], trim)
+    b.block([side * (w / 2 + 0.16), 0.74, 0.45], [0.14, 0.08, 0.84], trim)
+  }
+  // Gable end: plaster infill with decorative half-timbering.
+  for (const z of [face, -face])
+    b.prism(
+      [
+        [-w / 2, eave],
+        [w / 2, eave],
+        [0, peak],
+      ],
+      0.06,
+      plaster,
+      [0, 0, z - 0.03],
+    )
+  b.block([0, eave + 0.42, face + 0.04], [w * 0.62, 0.08, 0.05], timber)
+  for (const side of [-1, 1])
+    b.stick([side * 0.18, eave + 0.05, face + 0.04], [side * 0.62, eave + 0.42, face + 0.04], 0.03, timber, 5)
+  // Round attic window that glows at night.
+  b.ball([0, 2.72, face + 0.05], [0.27, 0.27, 0.08], timber, 1)
+  b.ball([0, 2.72, face + 0.1], [0.2, 0.2, 0.04], '#f4c77d', 1, [0, 0, 0], kit.glass)
+  b.block([0, 2.72, face + 0.13], [0.03, 0.38, 0.02], trim)
+  b.block([0, 2.72, face + 0.13], [0.38, 0.03, 0.02], trim)
+
+  // Shingled roof: stepped rows with a scalloped eave.
+  const slope = Math.atan2(peak - eave, w / 2),
+    run = Math.hypot(w / 2, peak - eave)
+  const rows = 6
+  for (const side of [-1, 1]) {
+    const rot: XYZ = [0, 0, -side * slope]
+    for (let r = 0; r < rows; r++) {
+      const t = (r + 0.5) / rows
+      const x = side * (w / 2 + 0.16) * t,
+        y = peak - (peak - eave) * t + 0.13 + r * 0.012
+      b.block([x, y, 0], [run / rows + 0.12, 0.09, d + 0.62], shingles[r % 3], rot, true)
+    }
+    for (let z = -d / 2 - 0.27, k = 0; z <= d / 2 + 0.28; z += 0.23, k++)
+      b.ball([side * (w / 2 + 0.2), eave - 0.02, z], [0.1, 0.07, 0.13], shingles[k % 3], 1, [0, 0, -side * slope])
+    for (const end of [-1, 1])
+      b.stick([0, peak + 0.15, end * (d / 2 + 0.3)], [side * (w / 2 + 0.2), eave + 0.02, end * (d / 2 + 0.3)], 0.06, trim)
+  }
+  b.block([0, peak + 0.2, 0], [0.22, 0.16, d + 0.7], '#a54833', [0, 0, 0], true)
+  // Weather vane on the ridge.
+  b.ball([0, peak + 0.32, face + 0.3], [0.07, 0.07, 0.07], '#e8b85a', 1)
+  b.stick([0, peak + 0.25, -0.5], [0, peak + 0.95, -0.5], 0.02, '#5b4a3e', 5)
+  b.block([0, peak + 0.82, -0.5], [0.02, 0.06, 0.5], '#5b4a3e')
+  b.prism(
+    [
+      [0, 0],
+      [0.14, 0.08],
+      [0, 0.16],
+    ],
+    0.02,
+    '#e8b85a',
+    [-0.01, peak + 0.74, -0.24],
+    [0, -Math.PI / 2, 0],
+  )
+  b.ball([0, peak + 0.97, -0.5], [0.04, 0.04, 0.04], '#e8b85a', 1)
+
+  // Dormer on the sunny slope, with its own little gable.
+  const dx = 0.72,
+    dy = eave + 0.55,
+    dz = -0.35
+  b.block([dx, dy, dz], [0.6, 0.55, 0.72], plaster, [0, 0, 0], true)
+  b.block([dx + 0.31, dy - 0.02, dz], [0.06, 0.4, 0.42], timber)
+  b.block([dx + 0.34, dy - 0.02, dz], [0.03, 0.3, 0.32], '#f4c77d', [0, 0, 0], false, kit.glass)
+  b.block([dx + 0.36, dy - 0.02, dz], [0.03, 0.32, 0.03], trim)
+  for (const side of [-1, 1])
+    b.block([dx + 0.05, dy + 0.38, dz + side * 0.22], [0.78, 0.07, 0.5], shingles[1], [side * 0.62, 0, 0], true)
+
+  // Stone chimney with two pots (smoke rises from here).
+  const cx = -0.85,
+    cz = -0.43
+  b.block([cx, 2.55, cz], [0.46, 1.6, 0.46], '#bfae9c', [0, 0, 0], true)
+  for (let row = 0; row < 6; row++)
+    for (let k = 0; k < 2; k++) {
+      const y = 1.95 + row * 0.24
+      const off = (k - 0.5) * 0.22 + (row % 2) * 0.05
+      b.ball([cx + off, y, cz + 0.24], [0.11, 0.09, 0.04], stones[(row + k) % 4], 1)
+      b.ball([cx + 0.24, y, cz + off], [0.04, 0.09, 0.11], stones[(row + k + 1) % 4], 1)
+    }
+  b.block([cx, 3.37, cz], [0.6, 0.09, 0.6], '#a89886', [0, 0, 0], true)
+  for (const k of [-1, 1]) b.cylinder([cx + k * 0.12, 3.47, cz], 0.07, 0.08, 0.14, clay, 8)
+
+  // The front: arched door under a little canopy, shuttered window with a
+  // flower box, lanterns, ivy, hedges, pots, doormat and a wreath.
+  door(b, doorX, face, '#7c9c82')
+  for (const side of [-1, 1]) {
+    b.stick([doorX + side * 0.5, 1.45, face + 0.02], [doorX + side * 0.5, 1.62, face + 0.38], 0.03, timber, 5)
+    b.block([doorX + side * 0.28, 1.72, face + 0.24], [0.62, 0.06, 0.55], shingles[0], [0, 0, -side * 0.45], true)
+  }
+  windowBox(b, 0.68, 1.16, face, 0.7, 0.67, true)
+  b.block([0.68, 0.66, face + 0.22], [1.16, 0.22, 0.3], '#a56a42')
+  for (let i = 0; i < 7; i++) {
+    b.ball([0.21 + i * 0.15, 0.82, face + 0.23], [0.17, 0.12, 0.14], '#638d52', 1, [0, i, 0], kit.leaf)
+    b.ball([0.25 + i * 0.14, 0.91, face + 0.28], [0.085, 0.085, 0.085], i % 2 ? '#ed8d77' : '#eaac4e', 1, [0, 0, 0], kit.petals)
+  }
+  for (const x of [doorX - 0.6, doorX + 0.6]) wallLantern(b, x, 1.32, face)
+  for (let i = 0; i < 9; i++) {
+    const y = 0.3 + i * 0.19
+    b.ball([-w / 2 - 0.02 + Math.sin(i * 1.7) * 0.05, y, face + 0.06], [0.14, 0.13, 0.1], i % 2 ? '#5f9a58' : '#73ad62', 1, [0, i, 0], kit.leaf)
+    if (i % 3 === 1) b.ball([-w / 2 + 0.06, y + 0.05, face + 0.14], [0.04, 0.04, 0.03], '#f3a6b5', 1, [0, 0, 0], kit.petals)
+  }
+  for (const x of [-w / 2 - 0.25, w / 2 + 0.25])
+    b.ball([x, 0.32, face + 0.25], [0.34, 0.3, 0.3], '#6fa65a', 1, [0, x, 0], kit.leaf)
+  b.block([doorX, 0.105, face + 0.78], [0.7, 0.02, 0.36], '#c6774f', [0, 0, 0], true)
+  b.block([doorX, 0.11, face + 0.78], [0.56, 0.02, 0.24], '#e9a66a', [0, 0, 0], true)
+  ;[doorX - 0.78, doorX + 0.78].forEach((x, i) => pottedPlant(b, x, face + 0.48, i))
+  wreath(b, doorX, 1.0, face + 0.25)
+  return b.finish()
 }
