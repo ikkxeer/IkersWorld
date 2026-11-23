@@ -127,6 +127,9 @@ const es = {
   wave: 'Saludar',
   photo: 'Modo foto',
   photoExit: 'P para volver',
+  pressStart: 'Pulsa cualquier tecla para empezar',
+  tapStart: 'Toca la pantalla para empezar',
+  credits: 'Un portfolio jugable de Iker Aramburu Muñoz',
 }
 type Dictionary = typeof es
 const ca: Dictionary = {
@@ -225,6 +228,9 @@ const ca: Dictionary = {
   wave: 'Saludar',
   photo: 'Mode foto',
   photoExit: 'P per tornar',
+  pressStart: 'Prem qualsevol tecla per començar',
+  tapStart: 'Toca la pantalla per començar',
+  credits: 'Un portafolis jugable de l’Iker Aramburu Muñoz',
 }
 const en: Dictionary = {
   brand: 'Interactive portfolio',
@@ -323,6 +329,9 @@ const en: Dictionary = {
   wave: 'Wave',
   photo: 'Photo mode',
   photoExit: 'P to go back',
+  pressStart: 'Press any key to start',
+  tapStart: 'Tap the screen to start',
+  credits: 'A playable portfolio by Iker Aramburu Muñoz',
 }
 export const copy = { es, ca, en }
 export const placeKeys: Record<Zone, keyof Dictionary> = {

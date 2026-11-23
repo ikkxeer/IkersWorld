@@ -45,9 +45,19 @@ import type {
 } from './world/contracts'
 import Game from './ui/Game'
 import Arrival from './ui/Arrival'
+import Title from './ui/Title'
 import Journal from './ui/Panel'
 import VillageMap, { ZoneIcon } from './ui/Map'
 const languageNames = { es: 'Español', ca: 'Català', en: 'English' }
+const titleKey = 'ikers-world-title'
+/** The title screen shows once per browser session. */
+function titleSeen() {
+  try {
+    return sessionStorage.getItem(titleKey) === '1'
+  } catch {
+    return false
+  }
+}
 function readLang(): Lang {
   try {
     const s = localStorage.getItem('ikers-world-lang')
@@ -181,7 +191,11 @@ function App() {
     [photo, setPhoto] = useState(false)
   const [ready, setReady] = useState(false),
     [arrivalGone, setArrivalGone] = useState(false),
-    [intro, setIntro] = useState(!deep)
+    [intro, setIntro] = useState(!deep),
+    [titleOn, setTitleOn] = useState(() => !deep && !titleSeen()),
+    [titleLeaving, setTitleLeaving] = useState(false),
+    [hud, setHud] = useState<'hidden' | 'enter' | 'shown'>(() => (!deep && !titleSeen() ? 'hidden' : 'shown')),
+    [welcome, setWelcome] = useState(false)
   const ctl = useRef<VillageController | null>(null),
     pending = useRef<Zone | null>(null),
     languageBox = useRef<HTMLDivElement>(null)
@@ -251,6 +265,10 @@ function App() {
         setHover(target ? { target, exhibit } : null)
       },
       inside: setInside,
+      landed() {
+        setHud((h) => (h === 'hidden' ? 'enter' : h))
+        setWelcome(true)
+      },
       gift(index) {
         setGift(index)
       },
@@ -292,9 +310,37 @@ function App() {
       arrival()
     }
   }
+  const start = useCallback(() => {
+    if (!titleOn || titleLeaving) return
+    setTitleLeaving(true)
+    ctl.current?.start()
+    try {
+      sessionStorage.setItem(titleKey, '1')
+    } catch {
+      /* Private sessions just see the title again. */
+    }
+    setTimeout(() => setTitleOn(false), 450)
+  }, [titleOn, titleLeaving])
+  // Any key (or a tap) leaves the title screen.
+  useEffect(() => {
+    if (!titleOn || !ready) return
+    const press = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.altKey || e.metaKey || e.key === 'Tab' || e.key === 'Shift') return
+      e.preventDefault()
+      start()
+    }
+    window.addEventListener('keydown', press)
+    return () => window.removeEventListener('keydown', press)
+  }, [titleOn, ready, start])
+  useEffect(() => {
+    if (!welcome) return
+    const id = setTimeout(() => setWelcome(false), 4900)
+    return () => clearTimeout(id)
+  }, [welcome])
   useEffect(() => {
     const action = (e: KeyboardEvent) => {
       if (
+        titleOn ||
         ctl.current?.transitioning() ||
         e.repeat ||
         e.ctrlKey ||
@@ -329,7 +375,7 @@ function App() {
     }
     window.addEventListener('keydown', action)
     return () => window.removeEventListener('keydown', action)
-  }, [menu, panel, intro, open, inside, ready])
+  }, [menu, panel, intro, open, inside, ready, titleOn])
   useEffect(() => {
     if (gift === null) return
     const id = setTimeout(() => setGift(null), 9000)
@@ -343,7 +389,35 @@ function App() {
   }, [ready])
   const hasCover = light || !ready
   return (
-    <main className={'screen ' + 'playing' + (light ? ' light-mode' : '') + (photo && !panel ? ' photo-mode' : '')}>
+    <main
+      className={
+        'screen playing' +
+        (light ? ' light-mode' : '') +
+        (photo && !panel ? ' photo-mode' : '') +
+        (titleOn && !light ? ' title-mode' : '') +
+        (hud === 'hidden' && !light ? ' hud-hidden' : hud === 'enter' ? ' hud-enter' : '')
+      }
+    >
+      {titleOn && ready && !light && (
+        <Title
+          subtitle={t.brand}
+          prompt={matchMedia('(pointer: coarse)').matches ? t.tapStart : t.pressStart}
+          credits={t.credits}
+          leaving={titleLeaving}
+          sound={sound}
+          soundLabel={sound ? t.soundOff : t.soundOn}
+          onStart={start}
+          onSound={toggleSound}
+        />
+      )}
+      {welcome && !panel && (
+        <div className="welcome-banner" role="status">
+          <b>{t.welcome} Iker’s World</b>
+          <small>
+            {new Intl.DateTimeFormat(lang, { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }).format(new Date())}
+          </small>
+        </div>
+      )}
       {photo && !panel && (
         <button className="photo-badge" onClick={() => setPhoto(false)}>
           {t.photo} · {t.photoExit}
@@ -357,6 +431,7 @@ function App() {
           ready={loaded}
           paused={!!panel || menu}
           workshop={t.workshopSign}
+          title={titleOn}
           guide={t.guideName}
           exhibit={exhibit}
           openLabel={t.open}
@@ -505,7 +580,7 @@ function App() {
               <kbd>E</kbd>
               {placeName(near.target, lang, near.exhibit, inside)}
             </button>
-          ) : !near && intro ? (
+          ) : !near && intro && hud !== 'hidden' ? (
             <div className="intro-toast">
               <span className="intro-icon">
                 <Footprints />

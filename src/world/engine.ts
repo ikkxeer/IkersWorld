@@ -128,6 +128,8 @@ export function startVillage(
   const landingSpot = new T.Vector3(2.5, islandFloorHeight(2.5, shape.pierFrom + 1.7), shape.pierFrom + 1.7)
   let fallT = motion.matches ? FALL + 3 : 0
   let landed = motion.matches
+  /** Title screen ("attract mode"): the island turns slowly until start. */
+  let attract = !!view.title
   const cloudBank = new T.Group()
   const cloudPuff = new T.IcosahedronGeometry(1, 2)
   const cloudMaterial = new T.MeshLambertMaterial({
@@ -152,7 +154,7 @@ export function startVillage(
     cluster.scale.setScalar(0.8 + ((i * 0.29) % 1) * 0.9)
     cloudBank.add(cluster)
   }
-  cloudBank.visible = !landed
+  cloudBank.visible = !landed && !attract
   scene.add(cloudBank)
   const landingShadow = new T.Mesh(
     new T.CircleGeometry(0.42, 24),
@@ -162,6 +164,7 @@ export function startVillage(
   landingShadow.position.set(landingSpot.x, landingSpot.y + 0.03, landingSpot.z)
   scene.add(landingShadow)
   function skipArrival() {
+    attract = false
     if (landed) return
     fallT = FALL + 3
     landed = true
@@ -377,7 +380,7 @@ export function startVillage(
   canvas.addEventListener(
     'pointermove',
     (e) => {
-      if (!paused && !iris.active() && e.pointerType !== 'touch')
+      if (!paused && !attract && !iris.active() && e.pointerType !== 'touch')
         setHover(resolve(e))
     },
     { signal: signal.signal },
@@ -820,9 +823,11 @@ export function startVillage(
       if (Math.abs(delta) < 0.02) faceYaw = null
     }
     if (rest && rest.stage !== 'approach') speed = distance / Math.max(dt, 1e-3)
+    visitor.group.visible = !attract
+    landingShadow.visible = !attract && !landed
     if (!landed && !inside) {
       if (fallT === 0) visitor.umbrella?.(true)
-      if (!paused) fallT += dt
+      if (!paused && !attract) fallT += dt
       const u = Math.min(1, fallT / FALL)
       const left = 1 - u
       p.set(
@@ -841,6 +846,7 @@ export function startVillage(
         visitor.group.rotation.z = 0
         visitor.land?.()
         play('land')
+        events.landed?.()
         cloudBank.visible = false
         landingShadow.visible = false
       }
@@ -910,7 +916,7 @@ export function startVillage(
     // the screen, right where the circle shrinks to and reopens from.
     // With reduced motion the camera stays put and the circle closes on the
     // visitor where they stand instead.
-    const steer = motion.matches ? 0 : iris.framing()
+    const steer = motion.matches || attract ? 0 : iris.framing()
     if (steer > 0) {
       steerTarget.set(p.x, p.y + 0.9, p.z)
       desired.lerp(steerTarget, steer)
@@ -936,13 +942,20 @@ export function startVillage(
           intro,
         )
     cameraOffset.set(8, 19, 27)
+    if (attract) {
+      // A slow establishing orbit around the whole island.
+      const a = motion.matches ? 0.3 : 0.3 + elapsed * 0.05
+      cameraOffset.set(8 * Math.cos(a) - 27 * Math.sin(a), 21, 27 * Math.cos(a) + 8 * Math.sin(a))
+      focus.set(0, 0, 1.5)
+    }
     // A gentle diorama curve outdoors; rooms stay flat.
     worldCurve.value = inside ? 0 : 0.0072
     worldCurveFocus.value = cameraOffset.length()
-    camera.left = -span * aspect
-    camera.right = span * aspect
-    camera.top = span
-    camera.bottom = -span
+    const shown = attract ? (aspect < 0.9 ? 22 : 13.5) : span
+    camera.left = -shown * aspect
+    camera.right = shown * aspect
+    camera.top = shown
+    camera.bottom = -shown
     camera.position.copy(focus).add(cameraOffset)
     camera.lookAt(focus)
     camera.updateProjectionMatrix()
@@ -1103,6 +1116,22 @@ export function startVillage(
       if (!iris.active()) stick.set(x, y)
     },
     interact,
+    start() {
+      if (!attract || iris.active()) return
+      if (landed) {
+        // Reduced motion: no fall, straight onto the pier.
+        attract = false
+        snapCamera = true
+        events.landed?.()
+        return
+      }
+      play('fanfare')
+      iris.start(() => {
+        attract = false
+        snapCamera = true
+        cloudBank.visible = true
+      })
+    },
     dispose() {
       dead = true
       cancelAnimationFrame(frame)

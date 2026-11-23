@@ -19,6 +19,8 @@ export interface VillageEvents {
   angler?: (update: AnglerUpdate) => void
   /** A popped gift balloon reveals one of the projects. */
   gift?: (project: number) => void
+  /** The visitor has touched down on the island (end of the arrival). */
+  landed?: () => void
 }
 export interface VillageController {
   pause: (value: boolean) => void
@@ -28,6 +30,8 @@ export interface VillageController {
   touch: (x: number, y: number) => void
   leave: () => void
   interact: () => void
+  /** Leave the title screen: wipe to the arrival through the clouds. */
+  start: () => void
   dispose: () => void
 }
 
@@ -35,4 +39,6 @@ export interface VillageView {
   signs: (HTMLElement | null)[]
   exhibit: HTMLElement | null
   iris: HTMLElement | null
+  /** Begin on the title screen: the camera circles the island and waits. */
+  title?: boolean
 }

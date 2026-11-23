@@ -1692,3 +1692,286 @@ kbd {
   border-radius: 999px;
   cursor: pointer;
 }
+
+/* ------------------------------ Title screen ------------------------------ */
+.title-screen {
+  position: absolute;
+  inset: 0;
+  z-index: 14;
+  display: grid;
+  grid-template-rows: 1fr auto auto 1.2fr auto;
+  justify-items: center;
+  cursor: pointer;
+  background: radial-gradient(ellipse at 50% 34%, #fff6e000 30%, #12302733 100%),
+    linear-gradient(180deg, #0e2a2340 0%, transparent 38%, transparent 72%, #0e2a2333 100%);
+  animation: title-in 0.6s ease both;
+}
+@keyframes title-in {
+  from {
+    opacity: 0;
+  }
+}
+.title-screen.leaving {
+  animation: title-out 0.45s ease forwards;
+}
+.title-screen.leaving .title-logo {
+  animation: logo-out 0.45s cubic-bezier(0.5, 0, 0.8, 0.4) forwards;
+}
+@keyframes title-out {
+  to {
+    opacity: 0;
+  }
+}
+@keyframes logo-out {
+  to {
+    transform: scale(1.35) translateY(-30px);
+    opacity: 0;
+  }
+}
+.title-logo {
+  grid-row: 2;
+  margin: 0;
+  display: grid;
+  justify-items: center;
+  line-height: 0.82;
+  font-family: 'Lilita One', system-ui, sans-serif;
+  font-weight: 400;
+  letter-spacing: 0.01em;
+  filter: drop-shadow(0 10px 18px #12302766);
+}
+.title-word {
+  display: flex;
+  font-size: clamp(2.6rem, 8vw, 4.6rem);
+}
+.title-word.big {
+  font-size: clamp(3.6rem, 13vw, 7.4rem);
+}
+.title-letter {
+  display: inline-block;
+  animation: letter-drop 0.75s cubic-bezier(0.2, 1.7, 0.4, 1) both;
+  animation-delay: calc(var(--i) * 65ms + 0.25s);
+}
+.title-letter > span {
+  display: inline-block;
+  color: var(--fill);
+  -webkit-text-stroke: 0.13em #2b5d50;
+  paint-order: stroke fill;
+  text-shadow: 0 0.08em 0 #1f4a3e;
+  animation: letter-bob 2.8s ease-in-out infinite;
+  animation-delay: calc(1.6s + var(--i) * 0.12s);
+}
+@keyframes letter-drop {
+  from {
+    transform: translateY(-140%) scale(0.5) rotate(-12deg);
+    opacity: 0;
+  }
+  60% {
+    opacity: 1;
+  }
+}
+@keyframes letter-bob {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0);
+  }
+  50% {
+    transform: translateY(-0.06em) rotate(-2deg);
+  }
+}
+.title-ribbon {
+  grid-row: 3;
+  margin: 18px 0 0;
+  padding: 0 34px;
+  position: relative;
+  animation: ribbon-in 0.6s cubic-bezier(0.2, 1.5, 0.4, 1) 1s both;
+}
+.title-ribbon span {
+  display: block;
+  padding: 8px 26px;
+  font-weight: 900;
+  font-size: clamp(0.85rem, 2.4vw, 1.05rem);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #fff8e7;
+  background: #ef6c5c;
+  clip-path: polygon(0 0, 100% 0, 96% 50%, 100% 100%, 0 100%, 4% 50%);
+  box-shadow: 0 4px 0 #b84a3c;
+}
+@keyframes ribbon-in {
+  from {
+    transform: scaleX(0.2);
+    opacity: 0;
+  }
+}
+.title-start {
+  grid-row: 5;
+  margin-bottom: clamp(48px, 12vh, 110px);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 24px 12px 12px;
+  font: inherit;
+  font-weight: 900;
+  font-size: clamp(0.95rem, 2.6vw, 1.15rem);
+  color: #2f4a3c;
+  background: #fffae9f2;
+  border: 3px solid #2b5d50;
+  border-radius: 999px;
+  box-shadow: 0 5px 0 #2b5d50;
+  cursor: pointer;
+  animation: start-in 0.5s ease 1.7s both, start-pulse 1.4s ease-in-out 2.2s infinite;
+}
+.title-start:focus-visible {
+  outline: 3px solid #ffc94d;
+  outline-offset: 4px;
+}
+@keyframes start-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+}
+@keyframes start-pulse {
+  50% {
+    transform: scale(1.05);
+    box-shadow: 0 5px 0 #2b5d50, 0 0 0 8px #ffc94d44;
+  }
+}
+.title-a {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  font-family: 'Lilita One', system-ui, sans-serif;
+  font-weight: 400;
+  font-size: 1.2rem;
+  color: #fff;
+  background: radial-gradient(circle at 35% 30%, #ff9b8a, #e2574c);
+  box-shadow: inset 0 -3px 0 #0002;
+}
+.title-foot {
+  position: absolute;
+  inset: auto 18px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: #fff8e7;
+  font-weight: 800;
+  text-shadow: 0 2px 6px #12302799;
+  animation: start-in 0.5s ease 2s both;
+}
+.title-sound {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  color: #2f4a3c;
+  background: #fffae9e6;
+  border: 2px solid #647e60;
+  border-radius: 50%;
+  cursor: pointer;
+}
+.title-sparkles i {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  background: #fff6cf;
+  clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%);
+  filter: drop-shadow(0 0 6px #fff3b0);
+  animation: twinkle 1.8s ease-in-out infinite;
+  animation-delay: calc(1.2s + var(--k) * 0.27s);
+  opacity: 0;
+}
+@keyframes twinkle {
+  0%,
+  100% {
+    transform: scale(0.2) rotate(0);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1) rotate(45deg);
+    opacity: 1;
+  }
+}
+
+/* ------------------------- HUD entrance & welcome ------------------------- */
+.hud-hidden .hud-top,
+.hud-hidden .hud-bottom,
+.hud-hidden .game-tools,
+.hud-hidden .touch-pad,
+.title-mode .hud-top,
+.title-mode .hud-bottom,
+.title-mode .game-tools,
+.title-mode .touch-pad {
+  visibility: hidden;
+}
+.hud-enter .hud-top {
+  animation: hud-top-in 0.7s cubic-bezier(0.2, 1.4, 0.4, 1) 0.1s both;
+}
+.hud-enter .hud-bottom {
+  animation: hud-bottom-in 0.7s cubic-bezier(0.2, 1.4, 0.4, 1) 0.25s both;
+}
+.hud-enter .game-tools,
+.hud-enter .touch-pad {
+  animation: hud-side-in 0.7s cubic-bezier(0.2, 1.4, 0.4, 1) 0.4s both;
+}
+@keyframes hud-top-in {
+  from {
+    transform: translateY(-120%);
+    opacity: 0;
+  }
+}
+@keyframes hud-bottom-in {
+  from {
+    transform: translateY(120%);
+    opacity: 0;
+  }
+}
+@keyframes hud-side-in {
+  from {
+    transform: translateX(140%);
+    opacity: 0;
+  }
+}
+.welcome-banner {
+  position: absolute;
+  z-index: 13;
+  top: 92px;
+  left: 50%;
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  padding: 10px 34px 12px;
+  color: #fff8e7;
+  text-align: center;
+  background: #2b5d50;
+  clip-path: polygon(0 0, 100% 0, 97% 50%, 100% 100%, 0 100%, 3% 50%);
+  box-shadow: 0 4px 0 #1f4a3e;
+  pointer-events: none;
+  animation: welcome 4.8s cubic-bezier(0.2, 1.3, 0.4, 1) forwards;
+}
+.welcome-banner b {
+  font-family: 'Lilita One', system-ui, sans-serif;
+  font-weight: 400;
+  font-size: clamp(1.2rem, 4vw, 1.6rem);
+}
+.welcome-banner small {
+  font-weight: 800;
+  opacity: 0.85;
+}
+@keyframes welcome {
+  0% {
+    transform: translate(-50%, -40px) scale(0.7);
+    opacity: 0;
+  }
+  12%,
+  85% {
+    transform: translate(-50%, 0) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -30px) scale(0.9);
+    opacity: 0;
+  }
+}
