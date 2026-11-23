@@ -21,7 +21,7 @@ export function startVillage(
 ): VillageController {
   const low = window.innerWidth < 760 || navigator.hardwareConcurrency <= 4
   const motion = matchMedia('(prefers-reduced-motion: reduce)')
-  const iris = makeIris(view.iris, motion)
+  const iris = makeIris(view.iris)
   const renderer = new T.WebGLRenderer({
     canvas,
     antialias: !low,
@@ -483,7 +483,9 @@ export function startVillage(
     )
     // Around the iris, glide the camera so the visitor sits in the middle of
     // the screen, right where the circle shrinks to and reopens from.
-    const steer = iris.framing()
+    // With reduced motion the camera stays put and the circle closes on the
+    // visitor where they stand instead.
+    const steer = motion.matches ? 0 : iris.framing()
     if (steer > 0) {
       steerTarget.set(p.x, p.y + 0.9, p.z)
       desired.lerp(steerTarget, steer)
@@ -569,7 +571,19 @@ export function startVillage(
         view.exhibit.hidden = false
       }
     } else if (view.exhibit) view.exhibit.hidden = true
-    if (iris.active()) iris.draw(canvas.clientWidth, canvas.clientHeight)
+    if (iris.active()) {
+      const width = canvas.clientWidth,
+        height = canvas.clientHeight
+      if (motion.matches) {
+        projected.set(p.x, p.y + 0.9, p.z).project(camera)
+        iris.draw(
+          width,
+          height,
+          T.MathUtils.clamp(((projected.x + 1) * width) / 2, 0, width),
+          T.MathUtils.clamp(((1 - projected.y) * height) / 2, 0, height),
+        )
+      } else iris.draw(width, height)
+    }
     renderer.render(inside ? rooms[inside].scene : scene, camera)
   }
   document.addEventListener(
