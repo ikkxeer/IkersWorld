@@ -142,6 +142,8 @@ const es = {
   mapRecenter: 'Centrar en mí',
   mapReset: 'Ver toda la isla',
   bench: 'Sentarse en el banco',
+  lookout: 'Sentarse a mirar el cielo',
+  rise: 'Levantarse',
   dojo: 'Santuario · entrenar',
   gong: 'Tocar el gong',
 }
@@ -257,6 +259,8 @@ const ca: Dictionary = {
   mapRecenter: 'Centrar en mi',
   mapReset: 'Veure tota l’illa',
   bench: 'Seure al banc',
+  lookout: 'Seure a mirar el cel',
+  rise: 'Aixecar-se',
   dojo: 'Santuari · entrenar',
   gong: 'Tocar el gong',
 }
@@ -372,6 +376,8 @@ const en: Dictionary = {
   mapRecenter: 'Centre on me',
   mapReset: 'Whole island',
   bench: 'Sit on the bench',
+  lookout: 'Sit and watch the sky',
+  rise: 'Stand up',
   dojo: 'Shrine · train',
   gong: 'Strike the gong',
 }

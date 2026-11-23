@@ -1,3 +1,4 @@
+import { disposeRadio, positionRadio } from '../audio/beachRadio'
 import * as T from 'three'
 import { makeSky } from '../environment/sky'
 import { makeIris } from './iris'
@@ -5,7 +6,7 @@ import { createPostFX } from './postfx'
 import { daylight } from '../environment/daylight'
 import { bendScene, projectCurved, unbendRay, worldCurve, worldCurveFocus } from './curve'
 import { anchors, destinations } from '../data/village'
-import { benchSites, campfire, fishingSpot, shape, shrine, tideOrgan } from '../data/island'
+import { benchSites, campfire, fishingSpot, shape, shrine, radioCove, tideOrgan } from '../data/island'
 import { createFishing } from './fishing'
 import { organNote, play } from '../audio/sfx'
 import { createVisitor, createGuide, createCat, angleDelta } from './character'
@@ -238,7 +239,7 @@ export function startVillage(
   const benchSpots = benchSites.map(([bx, bz], i) => {
     const spot = new T.Group()
     spot.position.set(bx, 0, bz)
-    spot.userData.zone = 'bench'
+    spot.userData.zone = benchSites[i] === radioCove.bench ? 'lookout' : 'bench'
     spot.userData.project = fireSeats.length + i
     const hit = new T.Mesh(new T.BoxGeometry(1.5, 1, 0.9), new T.MeshBasicMaterial({ visible: false }))
     hit.position.y = 0.5
@@ -327,6 +328,7 @@ export function startVillage(
     timer: number
     from: [number, number]
   } | null = null
+  let lookout = 0
   let cozy = 0
   let running = false
   /** A tree the visitor is walking over to shake, and where to face. */
@@ -647,7 +649,8 @@ export function startVillage(
     if (target === 'wardrobe') {
       faceTowards(target)
       events.wardrobe?.()
-    } else if (target === 'bench') {
+    } else if (target === 'rise') standUp()
+    else if (target === 'bench' || target === 'lookout') {
       if (rest) standUp()
       else beginRest(exhibit)
     } else if (target === 'dojo') {
@@ -788,7 +791,7 @@ export function startVillage(
             ? 2.3
             : zone === 'fishing'
               ? 1.6
-              : zone === 'bench'
+              : zone === 'bench' || zone === 'lookout'
                 ? 1.8
                 : zone === 'dojo'
                   ? 2.7
@@ -805,6 +808,7 @@ export function startVillage(
         project = o.userData.project
       }
     }
+    if (rest?.stage === 'seated') reach = 'rise'
     // Nothing to interact with mid-transition: hide the prompt during wipes.
     if (iris.active()) {
       reach = null
@@ -1169,7 +1173,16 @@ export function startVillage(
           (streetSpan / zoom) * (1 - 0.2 * cozy),
           intro,
         )
+    const beachSeat = benchSeats[benchSites.indexOf(radioCove.bench)]
+    const watching = rest?.seat === beachSeat && rest.stage === 'seated'
+    lookout = motion.matches ? Number(watching) : T.MathUtils.damp(lookout, Number(watching), 2.4, dt)
     cameraOffset.set(8, 19, 27)
+    if (lookout > 0.001) {
+      const yaw = T.MathUtils.lerp(Math.atan2(8, 27), Math.PI * 1.25, lookout)
+      const radius = T.MathUtils.lerp(Math.hypot(8, 27), 3.75, lookout)
+      cameraOffset.set(radius * Math.sin(yaw), T.MathUtils.lerp(19, 0.13 - night * 0.28, lookout), radius * Math.cos(yaw))
+      focus.lerp(steerTarget.set(p.x + 4, 1.45 + night * 0.6, p.z + 4), lookout)
+    }
     if (attract) {
       // A slow establishing orbit around the whole island.
       const a = motion.matches ? 0.3 : 0.3 + elapsed * 0.05
@@ -1177,9 +1190,9 @@ export function startVillage(
       focus.set(0, 0, 1.5)
     }
     // A gentle diorama curve outdoors; rooms stay flat.
-    worldCurve.value = inside ? 0 : 0.0072
+    worldCurve.value = inside ? 0 : 0.0072 * (1 - lookout)
     worldCurveFocus.value = cameraOffset.length()
-    const shown = attract ? (aspect < 0.9 ? 22 : 13.5) : span
+    const shown = attract ? (aspect < 0.9 ? 22 : 13.5) : T.MathUtils.lerp(span, aspect < 0.9 ? 3.1 : 2.45, lookout)
     camera.left = -shown * aspect
     camera.right = shown * aspect
     camera.top = shown
@@ -1192,6 +1205,7 @@ export function startVillage(
     }
     camera.updateProjectionMatrix()
     camera.updateMatrixWorld()
+    positionRadio(p.x, p.y + 1.25, p.z, Math.atan2(cameraOffset.x, cameraOffset.z), !!inside)
     view.signs.forEach((sign, index) => {
       if (!sign) return
       const [x, z] = index === 0 ? anchors.tech : anchors.npc
@@ -1357,6 +1371,7 @@ export function startVillage(
       })
     },
     dispose() {
+      disposeRadio()
       dead = true
       cancelAnimationFrame(frame)
       signal.abort()

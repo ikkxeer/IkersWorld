@@ -54,6 +54,7 @@ export default function Journal({
   position,
   fallback,
   useMap,
+  enableSound,
 }: {
   page: Panel
   lang: Lang
@@ -64,6 +65,7 @@ export default function Journal({
   visitPlace: (place: MapPlace) => void
   position: [number, number]
   fallback: boolean
+  enableSound: () => void
   useMap: () => void
 }) {
   const t = copy[lang],
@@ -132,7 +134,7 @@ export default function Journal({
           </button>
         </header>
         <div className="journal-body" key={page + (project ?? '')}>
-          {page === 'radio' && <BeachRadio lang={lang} />}
+          {page === 'radio' && <BeachRadio enableSound={enableSound} lang={lang} />}
           {(page === 'intro' || page === 'controls') && (
             <>
               {page === 'intro' && <p>{t.introBody}</p>}

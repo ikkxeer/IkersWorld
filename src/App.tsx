@@ -83,7 +83,7 @@ function placeName(
   if (place === 'campfire') return t.campfire
   if (place === 'fishing') return t.fishing
   if (place === 'wardrobe') return t.wardrobe
-  if (place === 'bench') return t.bench
+  if (place === 'bench' || place === 'lookout' || place === 'rise') return t[place]
   if (place === 'dojo') return t.dojo
   if (place === 'gong') return t.gong
   if (place === 'about' && inside) return t.album
@@ -182,7 +182,7 @@ function App() {
           : null
   const [lang, setLang] = useState<Lang>(readLang),
     [menu, setMenu] = useState(false),
-    [sound, toggleSound] = useAmbience()
+    [sound, toggleSound, enableSound] = useAmbience()
   const [mode, setMode] = useState<'game' | 'light'>('game'),
     [panel, setPanel] = useState<Panel | null>(deep),
     [project, setProject] = useState<number | null>(null)
@@ -706,6 +706,7 @@ function App() {
       </footer>
       {panel && (
         <Journal
+          enableSound={enableSound}
           page={panel}
           lang={lang}
           project={project}

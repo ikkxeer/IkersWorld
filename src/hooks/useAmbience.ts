@@ -1,3 +1,4 @@
+import { muteRadio } from '../audio/beachRadio'
 import { useEffect, useState } from 'react'
 import { setSoundEnabled } from '../audio/sfx'
 
@@ -5,6 +6,7 @@ import { setSoundEnabled } from '../audio/sfx'
 export function useAmbience() {
   const [on, setOn] = useState(false)
   useEffect(() => {
+    muteRadio(!on)
     setSoundEnabled(on)
     if (!on) return
     const ctx = new AudioContext(),
@@ -66,5 +68,5 @@ export function useAmbience() {
       void ctx.close()
     }
   }, [on])
-  return [on, () => setOn((v) => !v)] as const
+  return [on, () => setOn((v) => !v), () => setOn(true)] as const
 }

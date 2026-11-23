@@ -34,8 +34,9 @@ export const tideOrgan = {
 export const radioCove = {
   center: [19.25, -0.95] as XZ,
   rx: 3.25, rz: 2.55,
+  bench: [19.75, 0.29] as XZ,
   speaker: [20.3, -0.65] as XZ,
-  stand: [20.15, 0.3] as XZ,
+  stand: [20.85, -0.45] as XZ,
 }
 export function onCoveSand(x: number, z: number) {
   return ((x - radioCove.center[0]) / radioCove.rx) ** 2 +
@@ -137,6 +138,7 @@ export const benchSites: XZ[] = [
   [-15.9, 1.6],
   // A quiet bench on the islet, looking out to sea.
   [-24.9, 3.15],
+  radioCove.bench,
 ]
 
 export const cafeTables: XZ[] = [

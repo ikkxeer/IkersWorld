@@ -1,36 +1,30 @@
-import { useState } from 'react'
-import { ExternalLink, Music2, Play } from 'lucide-react'
+import { useState, useSyncExternalStore } from 'react'
+import { Music2, Play, Square } from 'lucide-react'
+import { playRadio, radioSnapshot, stopRadio, subscribeRadio, tracks } from '../audio/beachRadio'
 import type { Lang } from '../data/village'
 
-const songs = [
-  { title: 'GREEDY', artist: 'PARTYNEXTDOOR & Drake', video: 'NdnlUby4NWU' },
-  { title: 'Marvins Room', artist: 'Drake', video: 'ssuClMbm18w' },
-  { title: 'Over My Dead Body', artist: 'Drake', video: 'PMk8L9FNqnY' },
-  { title: 'Otra Noche en Miami', artist: 'Bad Bunny', video: 'hoQmSA6MRAk' },
-]
-const openLabel = { es: 'Abrir en YouTube', ca: 'Obrir a YouTube', en: 'Open on YouTube' }
+const labels = {
+  es: ['Detener', 'No se ha podido reproducir la canción.'],
+  ca: ['Atura', 'No s’ha pogut reproduir la cançó.'],
+  en: ['Stop', 'The song could not be played.'],
+}
 
-export default function BeachRadio({lang}: {lang: Lang}) {
-  const [selected, select] = useState<number | null>(null)
-  const current = selected === null ? null : songs[selected]
+export default function BeachRadio({lang, enableSound}: {lang: Lang; enableSound: () => void}) {
+  const current = useSyncExternalStore(subscribeRadio, radioSnapshot)
+  const [error, setError] = useState(false)
+  const [stop, failed] = labels[lang]
   return <div className="cove-radio">
     <div className="cove-tracks">
-      {songs.map((song, i) =>
-        <button key={song.video} aria-pressed={selected === i} onClick={() => select(i)}>
-          {selected === i ? <Music2 size={18} /> : <Play size={18} />}
-          <span><strong>{song.title}</strong><small>{song.artist}</small></span>
-        </button>
-      )}
+      {tracks.map((song, i) => <button key={song.title} aria-pressed={current === i} onClick={() => {
+        enableSound()
+        setError(false)
+        void playRadio(i).catch(() => setError(true))
+      }}>
+        {current === i ? <Music2 size={18} /> : <Play size={18} />}
+        <span><strong>{song.title}</strong><small>{song.artist}</small></span>
+      </button>)}
+      {current >= 0 && <button onClick={stopRadio}><Square size={16}/>{stop}</button>}
     </div>
-    {current && <>
-      <iframe key={current.video}
-        title={current.title + ' · ' + current.artist}
-        src={'https://www.youtube-nocookie.com/embed/' + current.video + '?autoplay=1&playsinline=1'}
-        allow="autoplay; encrypted-media; fullscreen" allowFullScreen
-        referrerPolicy="strict-origin-when-cross-origin" />
-      <a href={'https://www.youtube.com/watch?v=' + current.video} target="_blank" rel="noreferrer">
-        {openLabel[lang]} <ExternalLink size={16} />
-      </a>
-    </>}
+    {error && <p role="alert">{failed}</p>}
   </div>
 }

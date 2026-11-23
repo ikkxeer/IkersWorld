@@ -1,3 +1,4 @@
+import { route } from '../world/navigation'
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react'
 import {
@@ -172,6 +173,9 @@ export const AtlasArt = memo(function AtlasArt({ detail = true }: { detail?: boo
       ))}
       <path d={`M ${tideOrgan.bridgeStart} ${tideOrgan.center[1]} H ${tideOrgan.center[0]}`} stroke="#bc9364" strokeWidth={tideOrgan.bridgeWidth} />
       <circle cx={tideOrgan.center[0]} cy={tideOrgan.center[1]} r={tideOrgan.radius} fill="#b7895d" stroke="#876648" strokeWidth=".12" />
+      <path d="M10.95 -5.25 L11.16 -6.94 L11.83 -6.94 L12.05 -5.25 Z" fill="#f5e9cd" stroke="#755344" strokeWidth=".1" />
+      <path d="M11.04 -5.84 L11.1 -6.29 L11.9 -6.29 L11.96 -5.84 Z M10.97 -6.95 L11.5 -7.38 L12.03 -6.95 Z" fill="#a75743" />
+      <path d="M19.12 .29 h1.26 m-1.16 .16 h1.06" stroke="#785d44" strokeWidth=".12" strokeLinecap="round" />
       {tideOrgan.pads.map(p => <circle key={p.hz} cx={p.x} cy={p.z} r=".42" fill={p.color} />)}
       <rect x={islet.bridgeTo - 0.2} y={islet.bridgeZ - islet.bridgeWidth / 2} width={islet.bridgeFrom - islet.bridgeTo + 0.4} height={islet.bridgeWidth} rx="0.15" fill="#c99a62" stroke="#8a5a3a" strokeWidth="0.08" />
       <rect x={1.6} y={shape.pierFrom} width={1.8} height={shape.pierTo - shape.pierFrom} rx="0.12" fill="#c99a62" stroke="#8a5a3a" strokeWidth="0.08" />
@@ -397,6 +401,7 @@ export default function Atlas({
     animate({ x: place.at[0], z: place.at[1] + 2 / Math.max(view.zoom, 2.2), zoom: Math.max(view.zoom, 2.2) })
   }
 
+  const trail = useMemo(() => selected ? route(position, selected.stand) : [], [selected, position])
   const visible = places.filter((p) => filter === 'all' || p.kind === filter)
   const pinScale = Math.max(0.4, Math.min(1.05, unitsPerPixel * 17))
   const showLabels = view.zoom > 1.45
@@ -418,6 +423,11 @@ export default function Atlas({
         >
           <AtlasDefs />
           <AtlasArt />
+          {trail.length > 0 && <g fill="none" strokeLinejoin="round" strokeLinecap="round" pointerEvents="none">
+            <polyline points={pts([position, ...trail])} stroke="#fff5cf" strokeWidth=".53" />
+            <polyline points={pts([position, ...trail])} stroke="#9e5239" strokeWidth=".22" strokeDasharray=".4 .34" />
+            <circle cx={selected!.stand[0]} cy={selected!.stand[1]} r=".32" fill="#9e5239" stroke="#fff5cf" strokeWidth=".13" />
+          </g>}
           {visible.map((place) => {
             const Icon = placeIcons[place.icon]
             const active = selected?.id === place.id || hovered === place.id

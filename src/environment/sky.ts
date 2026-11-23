@@ -65,6 +65,14 @@ export function makeSky(scene: T.Scene, low: boolean) {
   const starPos = []
   for (let i = 0; i < 230; i++)
     starPos.push((random() - 0.5) * 150, random() * 36 + 4, -28 - random() * 45)
+  // A southern star field faces the beach lookout across the water.
+  for (let i = 0; i < 480; i++)
+    starPos.push(19.75 + (random() - 0.5) * 45, 0.9 + random() * 18, 28 + random() * 34)
+  for (let i = 0; i < 500; i++) {
+    const forward = 30 + random() * 28
+    const side = (random() - 0.5) * 23
+    starPos.push(19.75 + (forward + side) * 0.707, 1.4 + random() * 10, (forward - side) * 0.707)
+  }
   const sg = new T.BufferGeometry()
   sg.setAttribute('position', new T.Float32BufferAttribute(starPos, 3))
   const starMat = new T.PointsMaterial({
@@ -82,6 +90,11 @@ export function makeSky(scene: T.Scene, low: boolean) {
   )
   orb.material.userData.noBend = true
   scene.add(orb)
+  const coveMoon = new T.Mesh(new T.SphereGeometry(0.58, 24, 16),
+    new T.MeshBasicMaterial({color: '#fff2c6', fog: false}))
+  coveMoon.material.userData.noBend = true
+  coveMoon.position.set(49.1, 4.15, 32.4)
+  scene.add(coveMoon)
   // Small luminous points hover just above the meadow when the local sun sets.
   const fliesGeometry = new T.BufferGeometry()
   const fireflies = new Float32Array((low ? 12 : 28) * 3)
@@ -157,6 +170,7 @@ export function makeSky(scene: T.Scene, low: boolean) {
     sun.color.lerp(tmp.set('#ffa98a'), golden * 0.5)
     flies.visible = s.night > 0.18
     flyMaterial.opacity = s.night
+    coveMoon.visible = s.night > 0.55
     starMat.opacity = s.night
     nightLevel = s.night
     orb.material.color.set(s.night > 0.55 ? '#e5e9ff' : '#ffebae')

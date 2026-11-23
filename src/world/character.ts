@@ -1240,14 +1240,18 @@ export function createVisitor(initialOutfit?: string): IslandCharacter {
     lastYaw = group.rotation.y
   }
 
+  let wasAirborne = false
   const animate: IslandCharacter['animate'] = (time, reduced, move) => {
     const dt = Math.min(0.1, Math.max(0, time - previous))
     previous = time
     const scale = group.scale.x || 1
     const speed = move?.speed ?? 0
     const liftOff = (move?.jumpHeight ?? 0) / scale
+    if (wasAirborne && !liftOff) landing.kick(reduced ? -0.35 : -0.95)
+    wasAirborne = liftOff > 0
     const travelled = (move?.distance ?? 0) / scale
-    const nowMoving = travelled > 1e-5 && speed > 0.08
+    const airborne = liftOff > 0
+    const nowMoving = !airborne && travelled > 1e-5 && speed > 0.08
 
     if (nowMoving && !moving) {
       // Begin with a foot already peeling off, and blend from wherever the
@@ -1294,7 +1298,7 @@ export function createVisitor(initialOutfit?: string): IslandCharacter {
     lastYaw = group.rotation.y
 
     /* ---- Idle actions: little bits of personality when standing still ---- */
-    if (moving || reduced || seated || sitW > 0.02 || holding || showing || floating) {
+    if (moving || airborne || reduced || seated || sitW > 0.02 || holding || showing || floating) {
       idleSince = time
       nextAction = time + 6 + random() * 4
       action = null
@@ -1347,7 +1351,15 @@ export function createVisitor(initialOutfit?: string): IslandCharacter {
     lastSpin = spin
 
     /* ---- Feet ---- */
-    if (moving) {
+    if (airborne) {
+      const tuck = Math.min(1, liftOff * 2)
+      legs.forEach(leg => {
+        leg.pose.y = (0.12 + (leg.side > 0 ? 0.08 : 0)) * tuck
+        leg.pose.z = leg.side * 0.13 * tuck
+        leg.pose.pitch = (leg.side > 0 ? -0.16 : 0.30) * tuck
+        leg.planted = false
+      })
+    } else if (moving) {
       const before = phase
       phase = (phase + travelled / length) % 1
       blendIn = Math.min(1, blendIn + dt / 0.14)
@@ -1471,7 +1483,7 @@ export function createVisitor(initialOutfit?: string): IslandCharacter {
 
     legs.forEach((leg) => {
       hip.set(leg.side * HIP_X, -0.02, 0).applyMatrix4(pelvis.matrix)
-      ankle.set(leg.side * FOOT_X, ANKLE_Y + leg.pose.y + liftOff * 0.18, leg.pose.z - liftOff * 0.12)
+      ankle.set(leg.side * FOOT_X, ANKLE_Y + leg.pose.y, leg.pose.z)
       const solved = solveLeg(leg, hip, ankle)
       leg.shoe.position.copy(solved)
       leg.shoe.rotation.set(leg.pose.pitch, leg.side * 0.08, 0)
@@ -1528,6 +1540,12 @@ export function createVisitor(initialOutfit?: string): IslandCharacter {
         const out = Math.max(twirling, changing)
         shoulder.rotation.x = lerp(shoulder.rotation.x, -0.5 - 1.2 * hopping, Math.max(hopping, out * 0.4))
         shoulder.rotation.z = lerp(shoulder.rotation.z, side * (0.35 + 0.9 * out), Math.max(hopping, out))
+      }
+      if (airborne) {
+        const reach = Math.min(1, liftOff * 2.5)
+        shoulder.rotation.x = lerp(0, -0.94, reach)
+        shoulder.rotation.z = side * (0.28 + reach * 0.55)
+        elbow.rotation.x = -0.3 - 0.48 * reach
       }
       if (sitting > 0) {
         // Warm both hands at the fire (or rest them on the knees on a
