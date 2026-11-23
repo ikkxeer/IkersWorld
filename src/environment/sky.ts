@@ -90,9 +90,34 @@ export function makeSky(scene: T.Scene, low: boolean) {
   )
   orb.material.userData.noBend = true
   scene.add(orb)
-  const coveMoon = new T.Mesh(new T.SphereGeometry(0.58, 24, 16),
-    new T.MeshBasicMaterial({color: '#fff2c6', fog: false}))
-  coveMoon.material.userData.noBend = true
+  // Hand-painted waxing moon. The terminator and crater rims stay readable
+  // at the low magnification of the lookout.
+  const lunarDisc = document.createElement('canvas')
+  lunarDisc.width = lunarDisc.height = 256
+  const moonInk = lunarDisc.getContext('2d')!
+  moonInk.beginPath()
+  moonInk.arc(128, 128, 112, -Math.PI / 2, Math.PI / 2)
+  moonInk.bezierCurveTo(63, 240, 63, 16, 128, 16)
+  moonInk.clip()
+  const moonlight = moonInk.createLinearGradient(60, 185, 225, 65)
+  moonlight.addColorStop(0, '#7695bd')
+  moonlight.addColorStop(0.55, '#becfe7')
+  moonlight.addColorStop(1, '#e5efff')
+  moonInk.fillStyle = moonlight
+  moonInk.fillRect(0, 0, 256, 256)
+  for (const [x, y, r] of [[156, 70, 21], [127, 97, 14], [172, 139, 28], [212, 102, 10], [131, 172, 17], [177, 197, 11], [213, 163, 8]]) {
+    moonInk.beginPath()
+    moonInk.ellipse(x, y, r, r * .72, -.35, 0, Math.PI * 2)
+    moonInk.fillStyle = '#506e984f'
+    moonInk.fill()
+    moonInk.strokeStyle = '#e5efff67'
+    moonInk.lineWidth = 2
+    moonInk.stroke()
+  }
+  const moonMap = new T.CanvasTexture(lunarDisc)
+  moonMap.colorSpace = T.SRGBColorSpace
+  const coveMoon = new T.Sprite(new T.SpriteMaterial({ map: moonMap, fog: false, depthWrite: false }))
+  coveMoon.scale.setScalar(1.14)
   coveMoon.position.set(49.1, 4.15, 32.4)
   scene.add(coveMoon)
   // Small luminous points hover just above the meadow when the local sun sets.

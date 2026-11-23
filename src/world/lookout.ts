@@ -1,10 +1,5 @@
 import * as T from 'three'
 
-const constellations = [
-  [[-.91, .03], [-.72, .48], [-.44, .55], [-.16, .26], [.02, .10], [.28, .24], [.53, .47], [.86, .52], [.84, .2], [.55, .07], [.25, .06], [-.09, -.12], [-.43, -.23], [-.75, -.16], [-.91, .03]],
-  [[-.84, -.06], [-.52, .21], [-.39, .61], [-.08, .28], [.32, .08], [.8, .13], [.61, -.12], [.8, -.41], [.33, -.35], [-.13, -.32], [-.48, -.18], [-.84, -.06]],
-]
-
 export function createLookout(canvas: HTMLCanvasElement, scene: T.Scene) {
   const ink = canvas.getContext('2d')
   const wildlife = new T.Group()
@@ -139,23 +134,6 @@ export function createLookout(canvas: HTMLCanvasElement, scene: T.Scene) {
     ink.setTransform(ratio, 0, 0, ratio, 0, 0)
     ink.clearRect(0, 0, w, h)
     const span = Math.min(w, h)
-    const constellationTime = (clock + 1) % 18
-    const fade = Math.min(1, constellationTime, (10 - constellationTime) / 1.8)
-    if (fade > 0) {
-      const figure = constellations[Math.floor((clock + 1) / 18) % constellations.length]
-      const points = figure.map(([x,y]) => [w * .53 + x * span * .23, h * .35 - y * span * .22])
-      ink.strokeStyle = 'rgba(158,216,248,' + fade * .56 + ')'
-      ink.lineWidth = 1.4
-      ink.beginPath()
-      points.forEach(([x,y], i) => i ? ink.lineTo(x,y) : ink.moveTo(x,y))
-      ink.stroke()
-      for (const [x,y] of points) {
-        ink.fillStyle = 'rgba(255,245,205,' + fade + ')'
-        ink.beginPath()
-        ink.arc(x, y, 2, 0, Math.PI * 2)
-        ink.fill()
-      }
-    }
     function streak(x: number, y: number, length: number, tilt: number, color: string, opacity: number, thickness: number) {
       if (!ink) return
       const tx = x - length, ty = y - length * tilt

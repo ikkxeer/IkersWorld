@@ -1384,8 +1384,8 @@ export function startVillage(
         textures = new Set<T.Texture>()
       const collect = (root: T.Scene) =>
         root.traverse((o) => {
-          if (o instanceof T.Mesh || o instanceof T.Points) {
-            geometries.add(o.geometry)
+          if (o instanceof T.Mesh || o instanceof T.Points || o instanceof T.Sprite) {
+            if (!(o instanceof T.Sprite)) geometries.add(o.geometry)
             for (const m of [o.material].flat()) {
               materials.add(m)
               for (const v of Object.values(m))
