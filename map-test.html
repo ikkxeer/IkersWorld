@@ -1,0 +1,20 @@
+<!doctype html><html><body style="margin:0"><canvas id="c" style="width:100vw;height:100vh;display:block"></canvas>
+<script type="module">
+import * as THREE from 'three'
+import { createScenery } from '/src/world/scenery.ts'
+import { makeSky } from '/src/environment/sky.ts'
+import { bendScene, worldCurve, worldCurveFocus } from '/src/world/curve.ts'
+const q = new URLSearchParams(location.search)
+const r = new THREE.WebGLRenderer({ canvas: document.getElementById('c'), antialias: true })
+r.setSize(innerWidth, innerHeight, false); r.outputColorSpace = THREE.SRGBColorSpace; r.toneMapping = THREE.NeutralToneMapping; r.shadowMap.enabled = true
+const scene = new THREE.Scene(); const sky = makeSky(scene, false); const night = sky.update(new Date(2026,10,23,Number(q.get('h') ?? 12)))
+const s = createScenery(false); scene.add(s.group)
+const a = innerWidth / innerHeight, h = Number(q.get('span') ?? 3)
+const cam = new THREE.OrthographicCamera(-h*a, h*a, h, -h, 0.1, 200)
+const tx = Number(q.get('x') ?? -9), tz = Number(q.get('z') ?? 1.5)
+if (q.has('top')) { cam.position.set(tx, 60, tz); cam.up.set(0,0,-1) } else cam.position.set(tx + 8, 19, tz + 27)
+cam.lookAt(tx, 0, tz); cam.updateMatrixWorld()
+if (!q.has('top')) { worldCurve.value = 0.0072; worldCurveFocus.value = Math.hypot(8,19,27); bendScene(scene) }
+for (let i=0;i<3;i++) { s.animate(3+i*0.02, night, Number(q.get('px') ?? 100), Number(q.get('pz') ?? 100), false, 0); sky.animate(3) }
+r.render(scene, cam); console.log('calls', r.info.render.calls, 'tris', r.info.render.triangles)
+</script></body></html>

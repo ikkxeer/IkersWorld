@@ -151,6 +151,10 @@ export function paintSea(material: T.MeshStandardMaterial, clock: Uniform) {
         vec2 p = vSeaWorld.xz;
         float r = length(p / vec2(21.15, 15.45));
         float dist = (r - 1.) * mix(15.45, 21.15, abs(p.x) / (abs(p.x) + abs(p.y) * 1.37 + .001));
+        // The shrine islet off the west coast has its own shoreline.
+        vec2 q = p - vec2(-26.2, 1.2);
+        float islet = (length(q / vec2(5.0, 4.24)) - 1.) * mix(4.24, 5.0, abs(q.x) / (abs(q.x) + abs(q.y) * 1.18 + .001));
+        dist = min(dist, islet);
         float wobble = islandNoise(p * .35 + seaTime * .08);
         float shore = 1. - smoothstep(0., 10., dist);
         vec3 base = diffuseColor.rgb;

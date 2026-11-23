@@ -31,6 +31,8 @@ interface AmbienceOptions {
   lamps: XZ[]
   campfire: XZ
   lanterns: [number, number, number][]
+  /** The shrine: where its gentle aura floats, and its stone lanterns. */
+  shrineAura: { center: XZ; radius: number; stoneLanterns: XZ[] }
   chimneys: [number, number, number][]
   river: (z: number) => number
   riverWidth: (z: number) => number
@@ -41,7 +43,7 @@ interface AmbienceOptions {
  * dusk, a crackling campfire, chimney smoke, drifting pollen by day, fish
  * shadows in the stream and gulls wheeling over the sea.
  */
-export function createAmbience({ kit, crowns, perches, low, lamps, campfire, lanterns, chimneys, river, riverWidth }: AmbienceOptions) {
+export function createAmbience({ kit, crowns, perches, low, lamps, campfire, lanterns, shrineAura, chimneys, river, riverWidth }: AmbienceOptions) {
   const group = new T.Group()
   group.name = 'ambience'
   const glowTexture = softDot('rgba(255,244,214,1)', 'rgba(255,205,120,0.45)')
@@ -361,6 +363,60 @@ export function createAmbience({ kit, crowns, perches, low, lamps, campfire, lan
     return { bit, v: new T.Vector3(), spin: new T.Vector3(), age: 1 }
   })
 
+  /* ---------------------------- Shrine aura ---------------------------- */
+  // A calm presence rather than a spectacle: a faint golden pool on the
+  // ground that breathes slowly, motes drifting up around the ring, and
+  // the stone lanterns glowing after dusk.
+  const [sx, sz] = shrineAura.center
+  const auraPool = new T.Mesh(
+    new T.CircleGeometry(shrineAura.radius + 1.2, 48),
+    new T.MeshBasicMaterial({
+      map: softDot('rgba(255,236,170,0.9)', 'rgba(255,214,120,0.35)'),
+      transparent: true,
+      depthWrite: false,
+      blending: T.AdditiveBlending,
+      opacity: 0.18,
+    }),
+  )
+  auraPool.rotation.x = -Math.PI / 2
+  auraPool.position.set(sx, 0.24, sz)
+  auraPool.renderOrder = 2
+  group.add(auraPool)
+  const auraCount = low ? 18 : 36
+  const auraMotes = new Float32Array(auraCount * 3)
+  const auraSeeds = Array.from({ length: auraCount }, (_, i) => ({
+    a: i * 2.399,
+    r: 0.6 + ((i * 0.618) % 1) * (shrineAura.radius + 0.9),
+    speed: 0.12 + ((i * 0.37) % 1) * 0.12,
+    phase: (i * 0.29) % 1,
+  }))
+  const auraGeometry = new T.BufferGeometry()
+  auraGeometry.setAttribute('position', new T.BufferAttribute(auraMotes, 3))
+  const auraMaterial = new T.PointsMaterial({
+    map: softDot('rgba(255,248,210,1)', 'rgba(255,220,130,0.5)'),
+    color: '#ffe7a3',
+    size: 0.16,
+    transparent: true,
+    depthWrite: false,
+    blending: T.AdditiveBlending,
+    opacity: 0.7,
+  })
+  const auraPoints = new T.Points(auraGeometry, auraMaterial)
+  auraPoints.frustumCulled = false
+  group.add(auraPoints)
+  const stoneGlows = shrineAura.stoneLanterns.map(([x, z]) => {
+    const glow = new T.Sprite(
+      new T.SpriteMaterial({ map: glowTexture, color: '#ffd28a', transparent: true, depthWrite: false, blending: T.AdditiveBlending, opacity: 0 }),
+    )
+    glow.position.set(x, 0.75, z)
+    glow.scale.setScalar(0.9)
+    group.add(glow)
+    return glow
+  })
+  const shrineLight = new T.PointLight('#ffc27a', 0, 6.5, 1.5)
+  shrineLight.position.set(sx, 1.6, sz)
+  group.add(shrineLight)
+
   let lastTime = 0
   let clockTime = 0
   return {
@@ -496,6 +552,27 @@ export function createAmbience({ kit, crowns, perches, low, lamps, campfire, lan
         light.intensity = dusk * 7
       })
 
+      // Shrine aura: always faintly there, warmer once night falls.
+      const breath = reduced ? 0.5 : 0.5 + 0.5 * Math.sin(time * 0.6)
+      auraPool.material.opacity = 0.1 + 0.08 * breath + 0.14 * dusk
+      auraPool.scale.setScalar(0.96 + 0.06 * breath)
+      auraPoints.visible = !reduced
+      if (!reduced) {
+        auraMaterial.opacity = 0.45 + 0.4 * dusk
+        auraSeeds.forEach(({ a, r, speed, phase }, i) => {
+          const t = (time * speed + phase) % 1
+          auraMotes[i * 3] = sx + Math.cos(a + time * 0.15) * r
+          auraMotes[i * 3 + 1] = 0.3 + t * 2.2
+          auraMotes[i * 3 + 2] = sz + Math.sin(a + time * 0.15) * r
+        })
+        auraGeometry.attributes.position.needsUpdate = true
+      }
+      stoneGlows.forEach((glow, i) => {
+        glow.visible = dusk > 0.01
+        glow.material.opacity = dusk * (0.8 + (reduced ? 0 : 0.1 * Math.sin(time * 2 + i)))
+      })
+      shrineLight.visible = dusk > 0.01
+      shrineLight.intensity = dusk * 6
       lanternGlows.forEach((glow, i) => {
         glow.visible = dusk > 0.01
         glow.material.opacity = dusk * (0.75 + (reduced ? 0 : 0.15 * Math.sin(time * 1.7 + i * 1.3)))

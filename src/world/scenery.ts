@@ -34,6 +34,9 @@ import {
   shrine,
   inShrine,
   shrineFloor,
+  islet,
+  onBridge,
+  bridgeDeck,
   wellSite,
 } from '../data/island'
 import { walkable } from './navigation'
@@ -215,6 +218,7 @@ export function islandFloorHeight(x: number, z: number) {
     if (across >= 0 && across <= 1) return bridgeTop(across)
   }
   if (z > shape.pierFrom + 0.15 && Math.abs(x - 2.5) < 0.9) return -0.06
+  if (onBridge(x, z)) return bridgeDeck(x)
   if (inShrine(x, z)) return shrineFloor(x, z)
   // The bevel rises above the nominal top of the grass extrusion.
   return 0.1
@@ -988,6 +992,115 @@ function mountainShrine(b: Batch) {
     b.block([fx + 0.16, 1.55, fz], [0.3, 0.95, 0.02], i % 2 ? '#e8b85a' : '#c8323a', [0, 0.4, 0])
     b.block([fx + 0.16, 1.55, fz + 0.012], [0.12, 0.12, 0.01], i % 2 ? '#c8323a' : '#e8b85a', [0, 0.4, 0])
   })
+  // Strings of paper lanterns (chōchin) looping round the ring.
+  const posts = shrine.lanternPosts
+  posts.forEach(([px, pz], i) => {
+    b.stick([px, 0.1, pz], [px, 1.7, pz], 0.04, '#3a2a26', 6)
+    b.ball([px, 1.72, pz], [0.05, 0.05, 0.05], '#e8b85a', 1)
+    const [qx, qz] = posts[(i + 1) % posts.length]
+    let prev: [number, number, number] = [px, 1.62, pz]
+    for (const [lx, ly, lz] of chochinPoints(px, pz, qx, qz)) {
+      b.stick(prev, [lx, ly + 0.02, lz], 0.007, '#4a3a30', 3)
+      prev = [lx, ly + 0.02, lz]
+    }
+    b.stick(prev, [qx, 1.62, qz], 0.007, '#4a3a30', 3)
+  })
+  for (const [lx, ly, lz] of shrineLanterns()) chochin(b, lx, ly, lz)
+  // Two big lanterns hanging from the torii's lower beam.
+  for (const side of [-1, 1]) {
+    const across = shrine.gateYaw + Math.PI / 2
+    const hx = gx + Math.sin(across) * 0.42 * side,
+      hz = gz + Math.cos(across) * 0.42 * side
+    b.stick([hx, 1.46, hz], [hx, 1.3, hz], 0.008, '#3a2a26', 3)
+    chochin(b, hx, 1.1, hz, 1.35)
+  }
+  // Stepping stones from the gate up to the ring.
+  for (let k = 0; k < 4; k++) {
+    const t = (k + 0.5) / 4
+    const x = gx + (cx - gx) * t * 0.45,
+      z = gz + (cz - gz) * t * 0.45
+    b.ball([x, 0.1, z + (k % 2 ? 0.1 : -0.1)], [0.25, 0.05, 0.21], '#c6b2a4', 1, [0, k, 0])
+  }
+}
+/** A round paper lantern: red body, white band, black caps. */
+function chochin(b: Batch, x: number, y: number, z: number, s = 1) {
+  b.ball([x, y, z], [0.1 * s, 0.13 * s, 0.1 * s], '#e2493c', 1, [0, 0, 0], b.kit.glass)
+  b.ball([x, y, z], [0.104 * s, 0.03 * s, 0.104 * s], '#fff1dc', 1, [0, 0, 0], b.kit.glass)
+  for (const dy of [-1, 1]) b.cylinder([x, y + dy * 0.125 * s, z], 0.05 * s, 0.055 * s, 0.03 * s, '#1f1b1b', 8)
+  b.stick([x, y - 0.14 * s, z], [x, y - 0.22 * s, z], 0.012 * s, '#f6c84a', 3)
+}
+/** Lantern positions along a sagging string between two posts. */
+function chochinPoints(ax: number, az: number, bx: number, bz: number): [number, number, number][] {
+  return [0.25, 0.5, 0.75].map((t) => [ax + (bx - ax) * t, 1.6 - Math.sin(Math.PI * t) * 0.28 - 0.04, az + (bz - az) * t])
+}
+/** Every paper lantern on the strings (also used for their night glow). */
+export function shrineLanterns() {
+  const posts = shrine.lanternPosts
+  return posts.flatMap(([px, pz], i) => {
+    const [qx, qz] = posts[(i + 1) % posts.length]
+    return chochinPoints(px, pz, qx, qz).map(([x, y, z]) => [x, y - 0.17, z] as [number, number, number])
+  })
+}
+
+/** The shrine islet: the same stacked sand, cliff and lawn as the island. */
+function isletTerrain(b: Batch) {
+  const [cx, cz] = islet.center
+  const coast: XZ[] = []
+  for (let i = 0; i < 64; i++) {
+    const a = (i / 64) * Math.PI * 2
+    const ripple = 1 + 0.03 * Math.sin(a * 5 + 1) + 0.02 * Math.cos(a * 7)
+    coast.push([cx + Math.cos(a) * islet.coastX * ripple, cz + Math.sin(a) * islet.coastZ * ripple])
+  }
+  const scaled = (k: number): XZ[] => coast.map(([x, z]) => [cx + (x - cx) * k, cz + (z - cz) * k])
+  b.horizontal(scaled(1.087), -0.81, 0.21, '#efcc92', undefined, 0.08, 4)
+  b.horizontal(scaled(1.044), -0.62, 0.37, '#f3d7a2', undefined, 0.1, 4, true)
+  b.horizontal(coast, -0.28, 0.39, '#d4a36a', undefined, 0.155, 4)
+  b.horizontal(coast, -0.12, 0.19, '#dbb87d', undefined, 0.105, 4)
+  b.horizontal(coast, 0.005, 0.14, '#8fbf66', b.kit.grass, 0.095, 5, true)
+  const rand = seeded(311)
+  for (let i = 0; i < 26; i++) {
+    const a = rand() * Math.PI * 2
+    const s = 0.12 + rand() * 0.22
+    b.ball(
+      [cx + Math.cos(a) * islet.coastX * 1.03, -0.5 - rand() * 0.2, cz + Math.sin(a) * islet.coastZ * 1.03],
+      [s * 1.6, s, s * 1.2],
+      ['#b6a491', '#c9ac88', '#d6b48a'][i % 3],
+      0,
+      [0, rand() * 6, 0.1],
+    )
+  }
+}
+/** A long arched footbridge across the strait, with rope railings. */
+function isletBridge(b: Batch) {
+  const z = islet.bridgeZ,
+    from = islet.bridgeFrom + 0.3,
+    to = islet.bridgeTo - 0.3,
+    w = islet.bridgeWidth
+  const planks = Math.round((from - to) / 0.24)
+  for (let i = 0; i <= planks; i++) {
+    const x = from - ((from - to) * i) / planks
+    b.block([x, bridgeDeck(x) - 0.06, z], [0.22, 0.09, w], i % 3 === 1 ? '#c7925b' : '#dcac70', [0, 0, 0], true)
+  }
+  for (let i = 0; i <= 6; i++) {
+    const x = from - ((from - to) * i) / 6
+    for (const side of [-1, 1]) {
+      const pz = z + side * (w / 2 + 0.02)
+      b.stick([x, -0.9, pz], [x, bridgeDeck(x) + 0.55, pz], 0.06, timber, 7)
+      b.ball([x, bridgeDeck(x) + 0.58, pz], [0.07, 0.06, 0.07], trim, 1)
+      if (i < 6) {
+        const nx = from - ((from - to) * (i + 1)) / 6
+        // A sagging rope railing.
+        for (let k = 0; k < 4; k++) {
+          const t0 = k / 4,
+            t1 = (k + 1) / 4
+          const xa = x + (nx - x) * t0,
+            xb = x + (nx - x) * t1
+          const sag = (t: number) => -Math.sin(Math.PI * t) * 0.1
+          b.stick([xa, bridgeDeck(xa) + 0.5 + sag(t0), pz], [xb, bridgeDeck(xb) + 0.5 + sag(t1), pz], 0.018, '#c9a56e', 4)
+        }
+      }
+    }
+  }
 }
 
 /** Plant little clumps of flowers along the verges of every path. */
@@ -1149,7 +1262,7 @@ export function createScenery(low: boolean) {
   path(staticParts, [[-8.48, 1.05], [-11.0, 0.4], [-11.1, -3.0], [-11.0, -5.9], [-9.6, -8.4]], 1.05)
   path(staticParts, [[1.8, -2.6], [3.2, -4.6], [3.7, -7.0], [5.0, -8.9]], 1.0)
   path(staticParts, [[9.7, 5.75], [10.6, 7.0], [11.0, 8.1]], 1.05)
-  path(staticParts, [[-13, 0.7], [-15.2, 0.85]], 1.1)
+  path(staticParts, [[-13, 0.7], [-15.2, 0.85], [-17.9, 0.9]], 1.1)
   decoratePlaza(staticParts)
   bridge(staticParts, 1)
   bridge(staticParts, 6.5)
@@ -1170,8 +1283,11 @@ export function createScenery(low: boolean) {
   beachDressing(staticParts)
   palmSites.forEach(([x, z], i) => palm(staticParts, x, z, 0.6 + i * 2.1))
   telescope(staticParts, ...telescopeSite)
+  isletTerrain(staticParts)
+  isletBridge(staticParts)
   mountainShrine(staticParts)
-  path(staticParts, [[-8.6, 5.6], [-9.16, 6.38], [-9.75, 6.85]], 1.05)
+  shrine.sakura.forEach(([x, z, s]) => tree(staticParts, x, z, s, 5))
+  path(staticParts, [[-22.4, 0.9], [-23.6, 1.0], [-24.6, 1.1]], 1.05)
   group.add(createPond(...pond.center, pond.radius, kit.clock))
   // Wildflowers scattered across the wide outer meadow.
   for (let i = 0; i < (low ? 26 : 60); i++) {
@@ -1294,7 +1410,8 @@ export function createScenery(low: boolean) {
     low,
     lamps: lampSites,
     campfire: fireSite,
-    lanterns: lanternPoints(),
+    lanterns: [...lanternPoints(), ...shrineLanterns()],
+    shrineAura: { center: shrine.center, radius: shrine.radius, stoneLanterns: shrine.lanterns },
     chimneys: [
       [-7.85, 3.4, -3.43],
       [7.15, 3.4, 3.57],

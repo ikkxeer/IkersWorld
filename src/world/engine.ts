@@ -746,7 +746,7 @@ export function startVillage(
               : zone === 'bench'
                 ? 1.8
                 : zone === 'dojo'
-                  ? 2.2
+                  ? 2.7
                   : zone === 'gong'
                     ? 1.4
                     : 3.5
@@ -1051,7 +1051,9 @@ export function startVillage(
     const aspect = canvas.clientWidth / Math.max(1, canvas.clientHeight)
     const closeToPlaza =
       1 - T.MathUtils.smoothstep(Math.hypot(p.x + 5.7, p.z - 4.6), 2.6, 7.9)
-    const follow = aspect < 0.9 ? 0.88 : 0.74 + 0.1 * closeToPlaza
+    // Far out (the islet, the pier's end) the camera follows the visitor fully.
+    const remote = T.MathUtils.smoothstep(Math.abs(p.x), 14, 21)
+    const follow = T.MathUtils.lerp(aspect < 0.9 ? 0.88 : 0.74 + 0.1 * closeToPlaza, 1, remote)
     desired.set(
       inside ? 0 : p.x * follow,
       inside ? 0.55 : 0,
