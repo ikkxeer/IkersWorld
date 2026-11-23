@@ -21,15 +21,15 @@ npm run preview
 
 ## Jugar
 
-Camina con WASD, las flechas, los botones táctiles o un toque en el terreno. La tecla E abre el lugar cercano. También puedes pulsar directamente sobre un edificio o expositor. Usa M para viajar por el mapa y la rueda del ratón o los botones + y − para ajustar la cámara. En la plaza, el expositor seleccionado se ilumina y muestra el nombre y la tecnología del proyecto. Pulsa E o el botón del cartel para abrirlo. Pip da la bienvenida cerca del muelle. Entra en la casa de Iker por su puerta o desde el mapa y abre el álbum de la sala para ver su perfil. Escape cierra la ventana activa o te lleva al exterior de la casa. Al cruzar la puerta, una transición circular cierra y vuelve a abrir la vista.
+Camina con WASD, las flechas, los botones táctiles o un toque en el terreno. La tecla E abre el lugar cercano. También puedes pulsar directamente sobre un edificio o expositor. Usa M para viajar por el mapa y la rueda del ratón o los botones + y − para ajustar la cámara. En la plaza, el expositor seleccionado se ilumina y muestra el nombre y la tecnología del proyecto. Pulsa E o el botón del cartel para abrirlo. Pip, un pingüino con gorra de capitán, da la bienvenida junto al muelle: se gira hacia ti, saluda con la aleta y, cuando está solo, se balancea o da una vueltecita. Entra en la casa de Iker por su puerta o desde el mapa y abre el álbum de la sala para ver su perfil. Escape cierra la ventana activa o te lleva al exterior de la casa. Al cruzar la puerta, una transición circular cierra y vuelve a abrir la vista.
 
-El reloj y la iluminación siguen la hora local del navegador. El sonido se activa desde el altavoz. El juego recuerda el idioma y respeta la preferencia de movimiento reducido. La guía de controles da acceso a la versión ligera con mapa, que también se abre cuando WebGL no está disponible.
+El reloj y la iluminación siguen la hora local del navegador: de noche se encienden las farolas, las ventanas y la hoguera, y salen las luciérnagas; de día el río fluye, el humo sale de las chimeneas, flota el polen y las gaviotas sobrevuelan el mar. El sonido se activa desde el altavoz. El juego recuerda el idioma y respeta la preferencia de movimiento reducido. La guía de controles da acceso a la versión ligera con mapa, que también se abre cuando WebGL no está disponible.
 
 ## Editar el portfolio
 
 - `src/data/portfolio.ts` contiene el perfil, los seis proyectos, las tecnologías, la trayectoria, las asignaturas, las habilidades y los enlaces de contacto en los tres idiomas.
 - `src/data/village.ts` contiene los nombres de los lugares, los textos de la interfaz y los destinos del mapa.
-- `src/world/` contiene los modelos procedurales, el personaje, el movimiento y las interacciones. El motor Three.js se carga al entrar al pueblo.
+- `src/world/` contiene los modelos procedurales, el personaje, el movimiento y las interacciones. El motor Three.js se carga al entrar al pueblo. `character.ts` define al protagonista y a Pip con sus animaciones; `water.ts`, el río, el mar y las cascadas; `ambience.ts`, las luces, el humo, el polen, los peces y las gaviotas.
 - `src/environment/` contiene los horarios de las fases de luz y la atmósfera de la isla.
 - `public/art/` contiene la portada original y las versiones optimizadas de la fotografía y del logo.
 

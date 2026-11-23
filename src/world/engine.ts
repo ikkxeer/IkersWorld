@@ -31,8 +31,10 @@ export function startVillage(
   renderer.shadowMap.enabled = true
   renderer.shadowMap.type = T.PCFShadowMap
   renderer.outputColorSpace = T.SRGBColorSpace
-  renderer.toneMapping = T.ACESFilmicToneMapping
-  renderer.toneMappingExposure = 1.08
+  // Neutral tone mapping keeps pastel colours bright and clean instead of
+  // the filmic desaturation ACES applies.
+  renderer.toneMapping = T.NeutralToneMapping
+  renderer.toneMappingExposure = 1.0
   const scene = new T.Scene(),
     camera = new T.OrthographicCamera(-20, 20, 14, -14, 0.1, 160)
   const atmosphere = makeSky(scene, low)
@@ -48,7 +50,7 @@ export function startVillage(
   const dust = visitor.effects ?? new T.Group()
   scene.add(scenery.group, visitor.group, guide.group, dust)
   visitor.group.position.set(2.5, -0.06, 11.6)
-  visitor.group.scale.setScalar(1.33)
+  visitor.group.scale.setScalar(1.36)
   const outdoorPickables = [...scenery.interactives, guide.group]
   const rooms = { about: makeInterior(), tech: makeGallery() }
   let inside: Interior = false

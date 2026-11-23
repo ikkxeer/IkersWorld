@@ -12,6 +12,9 @@ import {
 import { building, lighthouse, pickable } from './village'
 import { decoratePlaza, exhibit } from './exhibits'
 import { exhibitSpots } from '../data/exhibits'
+import { walkable } from './navigation'
+import { createRiver, paintFalls } from './water'
+import { createAmbience } from './ambience'
 
 const river = (z: number) =>
   -2.5 + Math.sin(z * 0.64) * 0.14 + Math.sin(z * 0.28) * 0.12
@@ -80,15 +83,8 @@ function terrain(b: Batch) {
     }
     b.horizontal(outline, -0.28, 0.39, '#d4a36a', undefined, 0.155)
     b.horizontal(outline, -0.12, 0.19, '#dbb87d', undefined, 0.105)
-    b.horizontal(outline, 0.005, 0.14, '#a3c575', undefined, 0.095)
+    b.horizontal(outline, 0.005, 0.14, '#9fca72', b.kit.grass, 0.095)
   }
-  const stream: XZ[] = []
-  for (const side of [-1, 1])
-    for (let i = 0; i <= 40; i++) {
-      const z = endZ + ((frontZ - endZ) * (side < 0 ? i : 40 - i)) / 40
-      stream.push([river(z) + side * (riverWidth(z) + 0.15), z])
-    }
-  b.horizontal(stream, -0.145, 0.06, '#63bdb5', b.kit.water)
   // Short stepped waterfalls drop into the inlet at either end of the island.
   for (const s of [-1, 1]) {
     b.block(
@@ -127,28 +123,8 @@ function terrain(b: Batch) {
     )
   }
 }
-function meadow(b: Batch, low: boolean) {
+function meadow(b: Batch) {
   const rand = seeded(931)
-  // Flat islands of a neighbouring grass tone break up broad lawns like painted turf.
-  for (let i = 0; i < (low ? 40 : 83); i++) {
-    const a = rand() * Math.PI * 2,
-      r = Math.sqrt(rand()) * 0.94
-    const x = 15.4 * r * Math.cos(a),
-      z = 10 * r * Math.sin(a),
-      w = 0.18 + rand() * 0.63,
-      d = 0.09 + rand() * 0.36
-    if (Math.abs(x - river(z)) < 1.25 + w) continue
-    const patch: XZ[] = []
-    for (let j = 0; j < 7; j++) {
-      const angle = (j * Math.PI * 2) / 7,
-        scale = 0.72 + rand() * 0.3
-      patch.push([
-        x + w * scale * Math.cos(angle),
-        z + d * scale * Math.sin(angle),
-      ])
-    }
-    b.horizontal(patch, 0.053, 0.003, i % 3 === 0 ? '#aacf80' : '#9ec171')
-  }
   for (const [x, z] of [
     [-10.6, 1.1],
     [-8, 1.17],
@@ -166,8 +142,8 @@ function meadow(b: Batch, low: boolean) {
       const dx = (rand() - 0.5) * 0.47,
         dz = (rand() - 0.5) * 0.3
       b.ball(
-        [x + dx, 0.071, z + dz],
-        [0.06 + rand() * 0.05, 0.018, 0.033 + rand() * 0.03],
+        [x + dx, 0.118, z + dz],
+        [0.07 + rand() * 0.05, 0.022, 0.04 + rand() * 0.03],
         j % 2 ? '#cbb68b' : '#edd8b0',
         0,
       )
@@ -190,7 +166,9 @@ function meadow(b: Batch, low: boolean) {
     }
   }
 }
-function path(b: Batch, pts: XZ[], width: number, c = '#e8cf9d') {
+/** Every path drawn, so flowers can be planted along the verges. */
+const routes: { pts: XZ[]; width: number }[] = []
+function path(b: Batch, pts: XZ[], width: number, c = '#ecd3a0') {
   const left: XZ[] = [],
     right: XZ[] = []
   pts.forEach(([x, z], i) => {
@@ -202,7 +180,8 @@ function path(b: Batch, pts: XZ[], width: number, c = '#e8cf9d') {
     left.push([x - ((dz / l) * width) / 2, z + ((dx / l) * width) / 2])
     right.push([x + ((dz / l) * width) / 2, z - ((dx / l) * width) / 2])
   })
-  b.horizontal([...left, ...right.reverse()], 0.067, 0.027, c)
+  b.horizontal([...left, ...right.reverse()], 0.104, 0.02, c, b.kit.soil, 0.008)
+  routes.push({ pts, width })
 }
 const bridgeWidth = 2.9
 const bridgeTop = (progress: number) =>
@@ -299,20 +278,40 @@ function bench(b: Batch, x: number, z: number) {
       true,
     )
 }
-function bush(b: Batch, x: number, z: number, s: number, c: string) {
+/** Canopy smoothness: rounder blobs read softer and friendlier. */
+let leafDetail = 2
+function bush(b: Batch, x: number, z: number, s: number, c: string, bloom?: string) {
   for (let i = -1; i <= 1; i++)
     b.ball(
-      [x + i * s * 0.33, 0.23 * s, z],
+      [x + i * s * 0.33, 0.25 * s, z],
       [
         s * (0.45 + 0.08 * (1 - Math.abs(i))),
         s * (0.37 + 0.13 * (1 - Math.abs(i))),
         s * 0.43,
       ],
       c,
-      1,
+      leafDetail,
       [0, i + 0.4, 0],
       b.kit.leaf,
     )
+  // Flowering shrubs: little clusters of blossoms dotted over the leaves.
+  if (bloom)
+    for (let j = 0; j < 9; j++) {
+      const a = j * 2.39,
+        up = 0.35 + 0.5 * ((j * 0.37) % 1)
+      b.ball(
+        [
+          x + Math.cos(a) * s * 0.55 * (1 - up * 0.4),
+          s * (0.2 + 0.42 * up),
+          z + Math.sin(a) * s * 0.38 * (1 - up * 0.4),
+        ],
+        [0.075 * s, 0.065 * s, 0.075 * s],
+        j % 3 ? bloom : '#fff6e6',
+        1,
+        [0, a, 0],
+        b.kit.leaf,
+      )
+    }
 }
 function tree(
   b: Batch,
@@ -322,76 +321,82 @@ function tree(
   i: number,
   pine = false,
 ) {
-  b.stick([x, 0, z], [x + 0.07 * s, 1.44 * s, z], 0.17 * s, bark, 8, 0.68)
+  b.ball([x, 0.1, z], [0.27 * s, 0.13 * s, 0.27 * s], bark, 1)
+  b.stick([x, 0, z], [x + 0.06 * s, 1.5 * s, z], 0.17 * s, bark, 10, 0.66)
   if (pine) {
-    for (let j = 0; j < 3; j++)
+    // A plump cedar: stacked rounded tiers with a little tuft on top.
+    const tiers = ['#4f8d6d', '#5e9d73', '#76b07c', '#8cc086']
+    for (let j = 0; j < 4; j++)
       b.cylinder(
-        [x, (1.05 + 0.57 * j) * s, z],
-        0.025,
-        (1.01 - 0.2 * j) * s,
-        (1.21 - 0.1 * j) * s,
-        ['#548e70', '#65a076', '#87b681'][j],
-        8,
+        [x, (0.95 + 0.48 * j) * s, z],
+        0.12 * s,
+        (1.02 - 0.2 * j) * s,
+        (0.95 - 0.08 * j) * s,
+        tiers[j],
+        12,
         [0, i * 0.5 + j * 0.3, 0],
         b.kit.leaf,
       )
-  } else {
-    const cols =
-      i % 3 === 0
-        ? ['#77a45c', '#91b864', '#a4c771']
-        : i % 3 === 1
-          ? ['#73a569', '#88b56f', '#a4c47e']
-          : ['#83ac69', '#9cbd75', '#b3cf83']
-    for (const side of [-1, 1])
-      b.stick(
-        [x, 1.03 * s, z],
-        [x + side * 0.53 * s, 1.58 * s, z + 0.07 * s],
-        0.087 * s,
-        bark,
-        7,
-        0.62,
+    b.ball([x, 2.78 * s, z], [0.2 * s, 0.22 * s, 0.2 * s], tiers[3], 1, [0, 0, 0], b.kit.leaf)
+    return
+  }
+  const blossom = i % 7 === 5
+  const cols = blossom
+    ? ['#f2a7b8', '#f7bfca', '#fbd5dc']
+    : i % 3 === 0
+      ? ['#6fa758', '#88bb62', '#a2cc6f']
+      : i % 3 === 1
+        ? ['#66a96a', '#7fbb70', '#9fcd7e']
+        : ['#7db267', '#97c472', '#b1d482']
+  for (const side of [-1, 1])
+    b.stick(
+      [x, 1.05 * s, z],
+      [x + side * 0.5 * s, 1.6 * s, z + 0.07 * s],
+      0.085 * s,
+      bark,
+      7,
+      0.62,
+    )
+  // A fluffy crown: one big puff ringed by smaller lobes and a top knot.
+  b.ball([x, 2.0 * s, z], [0.98 * s, 0.86 * s, 0.94 * s], cols[1], leafDetail, [0.1, i, 0], b.kit.leaf)
+  for (let k = 0; k < 5; k++) {
+    const a = (k * Math.PI * 2) / 5 + i * 0.7
+    b.ball(
+      [x + Math.cos(a) * 0.62 * s, (1.68 + (k % 2) * 0.22) * s, z + Math.sin(a) * 0.55 * s],
+      [0.6 * s, 0.55 * s, 0.6 * s],
+      cols[k % 2 ? 0 : 2],
+      leafDetail,
+      [0, a, 0.1],
+      b.kit.leaf,
+    )
+  }
+  b.ball([x + 0.08 * s, 2.62 * s, z - 0.05 * s], [0.58 * s, 0.5 * s, 0.56 * s], cols[2], leafDetail, [0, i, 0], b.kit.leaf)
+  if (blossom || i % 3 === 0)
+    for (let j = 0; j < 7; j++) {
+      const a = j * 2.4 + i,
+        dx = Math.sin(a) * 0.98 * s,
+        dz = Math.cos(a) * 0.9 * s
+      b.ball(
+        [x + dx, 1.7 * s + (j % 3) * 0.2 * s, z + dz],
+        blossom ? [0.11 * s, 0.1 * s, 0.11 * s] : [0.15 * s, 0.16 * s, 0.15 * s],
+        blossom ? '#fff1f3' : j % 2 ? '#f29a5e' : '#e2784f',
+        1,
       )
-    b.ball(
-      [x - 0.4 * s, 1.64 * s, z + 0.1 * s],
-      [0.84 * s, 0.83 * s, 0.84 * s],
-      cols[0],
-      1,
-      [0.13, i, 0.12],
-      b.kit.leaf,
-    )
-    b.ball(
-      [x + 0.45 * s, 1.81 * s, z + 0.05 * s],
-      [0.87 * s, 0.9 * s, 0.85 * s],
-      cols[1],
-      1,
-      [0.17, i + 0.4, 0],
-      b.kit.leaf,
-    )
-    b.ball(
-      [x, 2.13 * s, z - 0.13 * s],
-      [0.84 * s, 0.83 * s, 0.8 * s],
-      cols[2],
-      1,
-      [0.25, i * 0.52, -0.1],
-      b.kit.leaf,
-    )
-    if (i % 3 === 0)
-      for (let j = 0; j < 6; j++) {
-        const a = j * 2.4,
-          dx = Math.sin(a) * 0.9 * s,
-          dz = Math.cos(a) * 0.83 * s
-        b.ball(
-          [x + dx, 1.67 * s + (j % 3) * 0.13 * s, z + dz],
-          [0.15 * s, 0.16 * s, 0.15 * s],
-          j % 2 ? '#eb9861' : '#d87950',
-          1,
-        )
-      }
+    }
+}
+/** A cup-shaped tulip on a tall stem. */
+function tulip(b: Batch, x: number, z: number, c: string, r: number) {
+  const h = 0.27 + 0.1 * r
+  b.stick([x, 0.1, z], [x, h, z], 0.014, '#6e9256', 4)
+  b.ball([x + 0.04, h * 0.55, z], [0.1, 0.03, 0.035], '#7ba561', 0, [0, r * 3, 0.5], b.kit.petals)
+  for (let j = 0; j < 3; j++) {
+    const a = (j * Math.PI * 2) / 3 + r
+    b.ball([x + Math.cos(a) * 0.03, h + 0.04, z + Math.sin(a) * 0.03], [0.05, 0.075, 0.05], c, 1, [0, a, 0], b.kit.petals)
   }
 }
 function flower(b: Batch, x: number, z: number, c: string, r: number) {
-  const h = 0.22 + 0.11 * r
-  b.stick([x, 0, z], [x, h, z], 0.014, '#6e9256', 4)
+  const h = 0.24 + 0.11 * r
+  b.stick([x, 0.1, z], [x, h, z], 0.014, '#6e9256', 4)
   b.ball(
     [x - 0.045, h * 0.6, z],
     [0.1, 0.034, 0.035],
@@ -518,14 +523,146 @@ function bird(kit: ModelKit) {
   return b.finish()
 }
 
+/* ------------------------------------------------------------------------ */
+/* Cosy outdoor props.                                                       */
+
+/** Stone-ringed fire pit with log seats around it. */
+function campfire(b: Batch, x: number, z: number) {
+  for (let i = 0; i < 9; i++) {
+    const a = (i / 9) * Math.PI * 2
+    b.ball([x + Math.cos(a) * 0.36, 0.15, z + Math.sin(a) * 0.36], [0.12, 0.09, 0.11], i % 2 ? '#b8ad9c' : '#cfc4b0', 1, [0, a, 0])
+  }
+  b.cylinder([x, 0.12, z], 0.3, 0.3, 0.03, '#5b4a3e', 12)
+  for (let i = 0; i < 3; i++) {
+    const a = (i / 3) * Math.PI * 2 + 0.3
+    b.stick([x + Math.cos(a) * 0.24, 0.14, z + Math.sin(a) * 0.24], [x - Math.cos(a) * 0.05, 0.3, z - Math.sin(a) * 0.05], 0.05, '#8a5a3a', 6)
+  }
+  for (const [dx, dz, turn] of [
+    [-0.78, -0.12, 1.4],
+    [0.62, 0.48, -0.75],
+    [-0.12, 0.86, 0.15],
+  ]) {
+    const cx = x + dx,
+      cz = z + dz
+    const ex = Math.cos(turn) * 0.36,
+      ez = Math.sin(turn) * 0.36
+    b.stick([cx - ex, 0.24, cz - ez], [cx + ex, 0.24, cz + ez], 0.14, '#9a6a45', 10)
+    for (const end of [-1, 1])
+      b.cylinder([cx + end * ex * 1.01, 0.24, cz + end * ez * 1.01], 0.125, 0.125, 0.02, '#e2bd8a', 10, [0, -turn, Math.PI / 2])
+  }
+}
+/** A gingham picnic blanket with a basket, a teapot and cups. */
+function picnic(b: Batch, x: number, z: number) {
+  const rot: [number, number, number] = [0, 0.35, 0]
+  b.block([x, 0.118, z], [1.35, 0.02, 1.0], '#fbeee0', rot, true)
+  for (let i = -2; i <= 2; i++) {
+    b.block([x + i * 0.26 * Math.cos(0.35), 0.13, z - i * 0.26 * Math.sin(0.35)], [0.12, 0.012, 1.0], '#ee8f86', rot)
+    b.block([x + i * 0.2 * Math.sin(0.35), 0.131, z + i * 0.2 * Math.cos(0.35)], [1.35, 0.012, 0.1], '#ee8f86', rot)
+  }
+  b.cylinder([x + 0.32, 0.25, z - 0.12], 0.2, 0.16, 0.22, '#d8a25e', 10)
+  b.cylinder([x + 0.32, 0.37, z - 0.12], 0.21, 0.21, 0.03, '#c58c4c', 10)
+  b.stick([x + 0.15, 0.37, z - 0.12], [x + 0.32, 0.55, z - 0.12], 0.018, '#b87c41', 5)
+  b.stick([x + 0.32, 0.55, z - 0.12], [x + 0.49, 0.37, z - 0.12], 0.018, '#b87c41', 5)
+  b.ball([x - 0.25, 0.22, z + 0.1], [0.12, 0.1, 0.12], '#a9d3e8', 1)
+  b.ball([x - 0.25, 0.33, z + 0.1], [0.04, 0.03, 0.04], '#fff7ea', 1)
+  b.stick([x - 0.14, 0.22, z + 0.1], [x - 0.06, 0.28, z + 0.1], 0.022, '#a9d3e8', 5)
+  for (const [dx, dz] of [
+    [-0.05, 0.32],
+    [0.1, -0.35],
+  ])
+    b.cylinder([x + dx, 0.16, z + dz], 0.05, 0.04, 0.07, '#fff7ea', 8)
+  b.ball([x - 0.05, 0.15, z - 0.25], [0.09, 0.05, 0.09], '#e86a5e', 1)
+}
+/** Old stone well with a little shingled roof and a bucket. */
+function well(b: Batch, x: number, z: number) {
+  b.cylinder([x, 0.36, z], 0.5, 0.52, 0.5, '#c9c0b0', 14)
+  for (let i = 0; i < 14; i++) {
+    const a = (i / 14) * Math.PI * 2
+    b.ball([x + Math.cos(a) * 0.5, 0.25 + (i % 2) * 0.17, z + Math.sin(a) * 0.5], [0.13, 0.08, 0.13], i % 3 ? '#b6ab99' : '#d8cfbe', 1, [0, a, 0])
+  }
+  b.cylinder([x, 0.62, z], 0.53, 0.53, 0.06, '#e0d6c4', 14)
+  b.cylinder([x, 0.6, z], 0.4, 0.4, 0.02, '#4f8f9a', 14, [0, 0, 0], b.kit.water)
+  for (const s of [-1, 1]) b.stick([x + s * 0.45, 0.6, z], [x + s * 0.45, 1.55, z], 0.05, timber, 7)
+  b.stick([x - 0.5, 1.28, z], [x + 0.5, 1.28, z], 0.04, wood, 7)
+  b.prism([[-0.7, 1.45], [0.7, 1.45], [0, 1.9]], 0.9, '#b45f4b', [x, 0, z - 0.45], [0, 0, 0], 0.03)
+  b.stick([x, 1.28, z], [x, 0.95, z], 0.008, '#8a6a4a', 4)
+  b.cylinder([x, 0.88, z], 0.1, 0.08, 0.14, '#8fb7c2', 8)
+}
+/** A striped beach parasol with a deck chair. */
+function parasol(b: Batch, x: number, z: number) {
+  b.stick([x, 0.05, z], [x + 0.08, 1.75, z], 0.03, '#f4ead8', 6)
+  b.cylinder([x + 0.08, 1.72, z], 0.04, 0.98, 0.36, '#ef7d6b', 16)
+  b.cylinder([x + 0.08, 1.8, z], 0.04, 0.55, 0.2, '#fdf4e3', 16)
+  for (let i = 0; i < 12; i++) {
+    const a = (i / 12) * Math.PI * 2
+    b.ball([x + 0.08 + Math.cos(a) * 0.95, 1.53, z + Math.sin(a) * 0.95], [0.09, 0.05, 0.09], i % 2 ? '#fdf4e3' : '#ef7d6b', 1)
+  }
+  b.ball([x + 0.08, 1.84, z], [0.06, 0.06, 0.06], '#f6c86a', 1)
+  const cx = x + 0.75,
+    cz = z + 0.2
+  b.block([cx, 0.22, cz], [0.5, 0.05, 0.62], '#f6d38a', [0.12, 0.3, 0], true)
+  b.block([cx - 0.08, 0.42, cz - 0.38], [0.5, 0.05, 0.42], '#f6d38a', [1.0, 0.3, 0], true)
+  for (const s of [-1, 1]) b.stick([cx + s * 0.24, 0.05, cz + 0.25], [cx + s * 0.2, 0.22, cz + 0.2], 0.02, timber, 5)
+}
+function mushrooms(b: Batch, x: number, z: number, seed: number) {
+  for (let i = 0; i < 3; i++) {
+    const a = seed * 3 + i * 2.1,
+      mx = x + Math.cos(a) * 0.13 * i,
+      mz = z + Math.sin(a) * 0.13 * i,
+      h = 0.13 + 0.05 * ((seed + i) % 2)
+    b.cylinder([mx, 0.1 + h / 2, mz], 0.035, 0.045, h, '#fbf1dc', 7)
+    b.ball([mx, 0.11 + h, mz], [0.09, 0.06, 0.09], i === 1 ? '#f0b85e' : '#e4574a', 1)
+    if (i !== 1)
+      for (let j = 0; j < 3; j++)
+        b.ball([mx + Math.cos(j * 2.1) * 0.05, 0.145 + h, mz + Math.sin(j * 2.1) * 0.05], [0.016, 0.01, 0.016], '#fff9ee', 0)
+  }
+}
+function mossyRocks(b: Batch, x: number, z: number, s: number) {
+  b.ball([x, 0.16 * s, z], [0.42 * s, 0.3 * s, 0.36 * s], '#bcb3a4', 1, [0, x, 0.1])
+  b.ball([x + 0.38 * s, 0.1 * s, z + 0.12 * s], [0.24 * s, 0.18 * s, 0.22 * s], '#cfc7b8', 1, [0, z, 0])
+  b.ball([x - 0.05 * s, 0.32 * s, z - 0.04 * s], [0.3 * s, 0.1 * s, 0.26 * s], '#8fbb6d', 1, [0, x, 0.1])
+}
+/** Plant little clumps of flowers along the verges of every path. */
+function verges(b: Batch, rand: () => number, low: boolean) {
+  const palette = ['#fcf2c7', '#f09aa4', '#f6c768', '#b9a2d9', '#f6a77d', '#9ccbf0', '#ffffff']
+  for (const { pts, width } of routes)
+    for (let i = 0; i < pts.length - 1; i++) {
+      const [ax, az] = pts[i],
+        [bx, bz] = pts[i + 1],
+        span = Math.hypot(bx - ax, bz - az),
+        nx = -(bz - az) / span,
+        nz = (bx - ax) / span
+      for (let d = 0.4; d < span; d += low ? 1.5 : 0.95) {
+        for (const side of [-1, 1]) {
+          if (rand() > 0.5) continue
+          const off = width / 2 + 0.28 + rand() * 0.35
+          const x = ax + ((bx - ax) * d) / span + nx * off * side,
+            z = az + ((bz - az) * d) / span + nz * off * side
+          if (Math.abs(x - river(z)) < 1.35 || !walkable(x, z)) continue
+          if (x > -8.9 && x < -3.3 && z > 2.0 && z < 6.6) continue
+          const c = palette[Math.floor(rand() * palette.length)],
+            tall = rand() < 0.35
+          for (let k = 0; k < 3; k++) {
+            const fx = x + (rand() - 0.5) * 0.34,
+              fz = z + (rand() - 0.5) * 0.26
+            if (tall) tulip(b, fx, fz, c, rand())
+            else flower(b, fx, fz, c, rand())
+          }
+        }
+      }
+    }
+}
+
 export function createScenery(low: boolean) {
   const kit = new ModelKit(),
     group = new T.Group(),
     staticParts = new Batch(kit),
     objects: T.Object3D[] = [],
     rand = seeded(602)
+  leafDetail = low ? 1 : 2
+  routes.length = 0
   terrain(staticParts)
-  meadow(staticParts, low)
+  meadow(staticParts)
   path(
     staticParts,
     [
@@ -633,9 +770,10 @@ export function createScenery(low: boolean) {
       [-7.94, 6.29],
       [-8.54, 5.76],
     ],
-    0.077,
-    0.045,
-    '#d9c49a',
+    0.104,
+    0.02,
+    '#e3cfa2',
+    staticParts.kit.soil,
   )
   decoratePlaza(staticParts)
   bridge(staticParts, 1)
@@ -665,15 +803,30 @@ export function createScenery(low: boolean) {
     [8.48, 7.01],
     [9.65, 6.81],
   ])
-  for (const [x, z] of [
+  const lampSites: XZ[] = [
     [-8.25, 0.03],
     [0.82, -2.9],
     [9.99, -0.27],
     [6.85, 5.42],
     [-8.55, 6.35],
     [2.05, 8.72],
+  ]
+  for (const [x, z] of lampSites) lamp(staticParts, x, z)
+  // Cosy corners: a campfire circle, a picnic, the old well and a beach nook.
+  const fireSite: XZ = [-0.45, 4.2]
+  campfire(staticParts, ...fireSite)
+  picnic(staticParts, 4.4, 3.5)
+  well(staticParts, 5.7, -4.9)
+  parasol(staticParts, 12.1, 4.1)
+  for (const [x, z, k] of [
+    [-12.7, -1.4, 1],
+    [11.9, -1.7, 0.8],
+    [-3.6, -8.2, 0.9],
+    [7.2, 8.25, 0.85],
+    [-9.9, -6.2, 0.7],
+    [13.1, 1.2, 0.75],
   ])
-    lamp(staticParts, x, z)
+    mossyRocks(staticParts, x, z, k)
   bench(staticParts, -5.92, -0.24)
   bench(staticParts, 5.88, -0.14)
   bench(staticParts, -9.96, 4.01)
@@ -726,17 +879,13 @@ export function createScenery(low: boolean) {
     [0.43, 8.3],
     [5.66, 8.11],
   ]
-  treeSites.forEach(([x, z], i) =>
-    tree(
-      staticParts,
-      x,
-      z,
-      0.77 + rand() * 0.59,
-      i,
-      i % 5 === 1 || i % 7 === 3,
-    ),
-  )
-  for (const [x, z] of [
+  treeSites.forEach(([x, z], i) => {
+    const pine = i % 5 === 1 || i % 7 === 3
+    tree(staticParts, x, z, 0.77 + rand() * 0.59, i, pine)
+    if (!pine && i % 4 === 1) mushrooms(staticParts, x + 0.72, z + 0.42, i)
+  })
+  verges(staticParts, rand, low)
+  const bushSites: XZ[] = [
     [-8.78, -2],
     [-5.48, -2],
     [-10.24, 1.79],
@@ -753,8 +902,17 @@ export function createScenery(low: boolean) {
     [4.47, 7.84],
     [10.67, 5.24],
     [3.98, -2.01],
-  ])
-    bush(staticParts, x, z, 0.79 + rand() * 0.36, '#79a967')
+  ]
+  bushSites.forEach(([x, z], i) =>
+    bush(
+      staticParts,
+      x,
+      z,
+      0.79 + rand() * 0.36,
+      ['#79a967', '#6fa262', '#84b36c'][i % 3],
+      i % 3 === 1 ? ['#f3a6b5', '#c9a6e0', '#9fc6ec', '#f6c66a'][i % 4] : undefined,
+    ),
+  )
   const flowerSites: XZ[] = [
     [-8.83, -1.78],
     [-5.3, -1.68],
@@ -822,42 +980,21 @@ export function createScenery(low: boolean) {
   add(pickable(mailbox(kit), 'contact', 2, 5.5))
   add(pickable(sign(kit), 'map', 0, 2))
   group.add(staticParts.finish())
-  const ripples = new T.InstancedMesh(
-    new T.SphereGeometry(1, 8, 4),
-    new T.MeshBasicMaterial({
-      color: '#d5fff0',
-      transparent: true,
-      opacity: 0.72,
-      depthWrite: false,
-    }),
-    low ? 26 : 58,
-  )
-  ripples.frustumCulled = false
-  const wave = new T.Object3D()
-  const flow = Array.from({ length: ripples.count }, () => ({
-    start: rand() * 21,
-    offset: (rand() - 0.5) * 0.96,
-    speed: 0.95 + rand() * 0.9,
-    length: 0.12 + rand() * 0.38,
-  }))
-  function flowRiver(time: number) {
-    flow.forEach(({ start, offset, speed, length }, index) => {
-      const z = endZ + ((start + time * speed) % 21)
-      const fade = Math.min(1, (z - endZ) * 1.5, (frontZ - z) * 1.5)
-      wave.position.set(
-        river(z) + offset + Math.sin(z * 1.5 + index) * 0.048,
-        -0.119,
-        z,
-      )
-      wave.scale.set((0.024 + (index % 3) * 0.012) * fade, 0.009, length * fade)
-      wave.rotation.y = 0.17 * Math.cos(z + index)
-      wave.updateMatrix()
-      ripples.setMatrixAt(index, wave.matrix)
-    })
-    ripples.instanceMatrix.needsUpdate = true
-  }
-  flowRiver(0)
-  group.add(ripples)
+  const daylightGlow = { value: 1 }
+  group.add(createRiver(river, riverWidth, endZ - 0.35, frontZ + 0.35, kit.clock, daylightGlow))
+  paintFalls(kit.water, kit.clock)
+  const ambience = createAmbience({
+    low,
+    lamps: lampSites,
+    campfire: fireSite,
+    chimneys: [
+      [-7.85, 3.4, -3.43],
+      [7.15, 3.4, 3.57],
+    ],
+    river,
+    riverWidth,
+  })
+  group.add(ambience.group)
   const seabirds = [
     [2.95, 12.52],
     [-10.9, 6.15],
@@ -907,9 +1044,10 @@ export function createScenery(low: boolean) {
       kit.walker.value.set(px, pz)
       kit.walkerFloor.value = floor
       kit.motion.value = reduced ? 0 : 1
-      kit.glass.emissiveIntensity = 0.04 + night * 1.35
+      kit.glass.emissiveIntensity = 0.04 + night * 1.6
+      daylightGlow.value = 1 - night * 0.7
+      ambience.update(time, night, px, pz, reduced)
       if (reduced) return
-      flowRiver(time)
       seabirds.forEach((g, i) => {
         g.rotation.z = 0.035 * Math.sin(time * 1.46 + i)
         g.rotation.y = 1.43 - i * 2.25 + 0.18 * Math.sin(time * 0.63 + i)
