@@ -78,6 +78,7 @@ function placeName(
   const t = copy[lang]
   if (place === 'projects' && exhibit !== undefined)
     return portfolio(lang).projects[exhibit].name
+  if (place === 'radio') return t.radio
   if (place === 'exit') return inside === 'tech' ? t.leaveLab : t.leaveHouse
   if (place === 'campfire') return t.campfire
   if (place === 'fishing') return t.fishing
@@ -306,6 +307,7 @@ function App() {
   }, [])
   /** Travel to any place on the map (buildings go through `visit`). */
   function visitPlace(place: MapPlace) {
+    if (light && place.id === 'radio-cove') { open('radio'); return }
     if (place.zone) {
       visit(place.zone)
       return

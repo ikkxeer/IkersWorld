@@ -1,6 +1,8 @@
+import BeachRadio from './BeachRadio'
 import { stations } from '../data/gallery'
 import { useEffect, useRef, type CSSProperties } from 'react'
 import {
+  Music2,
   X,
   Map,
   Gamepad2,
@@ -80,7 +82,7 @@ export default function Journal({
     }
   }, [])
   const station = page === 'tech' && project !== null ? stations[project] : undefined
-  const title = station ? station[lang] : isZone
+  const title = page === 'radio' ? t.radio : station ? station[lang] : isZone
     ? t[placeKeys[page as Zone]]
     : page === 'map'
       ? t.map
@@ -91,7 +93,7 @@ export default function Journal({
           : page === 'subjects'
             ? t.subjects
             : t.guide
-  const MainIcon =
+  const MainIcon = page === 'radio' ? Music2 :
     page === 'map'
       ? Map
       : page === 'npc'
@@ -130,6 +132,7 @@ export default function Journal({
           </button>
         </header>
         <div className="journal-body" key={page + (project ?? '')}>
+          {page === 'radio' && <BeachRadio lang={lang} />}
           {(page === 'intro' || page === 'controls') && (
             <>
               {page === 'intro' && <p>{t.introBody}</p>}

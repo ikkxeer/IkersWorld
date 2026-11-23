@@ -1,6 +1,6 @@
 import type { Lang, Zone } from './village'
 import { anchors, destinations } from './village'
-import { beach, campfire, fishingSpot, pond, shrine, tideOrgan, telescopeSite, tulipField } from './island'
+import { beach, campfire, fishingSpot, pond, shrine, radioCove, tideOrgan, telescopeSite, tulipField } from './island'
 
 type XZ = [number, number]
 export type PlaceKind = 'building' | 'activity' | 'nook'
@@ -138,6 +138,16 @@ export const places: MapPlace[] = [
       es: 'Un rincón tranquilo con farolillos y cerezos. Entrena en el ring y toca el gong.',
       ca: 'Un racó tranquil amb fanalets i cirerers. Entrena al ring i toca el gong.',
       en: 'A quiet corner of lanterns and cherry trees. Train in the ring and strike the gong.',
+    },
+  },
+  {
+    id: 'radio-cove', kind: 'nook', icon: 'music', color: '#a66345',
+    at: radioCove.speaker, stand: radioCove.stand,
+    name: { es: 'Cala del Dial', ca: 'Cala del Dial', en: 'Radio Cove' },
+    blurb: {
+      es: 'Arena junto al viejo muelle. Acércate al altavoz y elige una canción.',
+      ca: 'Sorra al costat del moll vell. Acosta’t a l’altaveu i tria una cançó.',
+      en: 'Soft sand beside the old pier. Walk up to the speaker and choose a song.',
     },
   },
   {

@@ -26,6 +26,7 @@ import {
 import type { LucideIcon } from 'lucide-react'
 import {
   tideOrgan,
+  radioCove,
   beach,
   bushSites,
   isPine,
@@ -158,6 +159,7 @@ export const AtlasArt = memo(function AtlasArt({ detail = true }: { detail?: boo
           <line key={c} x1={tulipField.center[0] - tulipField.width / 2} x2={tulipField.center[0] + tulipField.width / 2} y1={tulipField.center[1] - tulipField.depth / 2 + (i * tulipField.depth) / 4} y2={tulipField.center[1] - tulipField.depth / 2 + (i * tulipField.depth) / 4} stroke={c} strokeWidth="0.2" strokeDasharray="0.15 0.27" strokeLinecap="round" />
         ))}
       <ellipse cx={beach.center[0]} cy={beach.center[1]} rx={beach.radiusX} ry={beach.radiusZ} fill="#f5e2b6" />
+      <ellipse cx={radioCove.center[0]} cy={radioCove.center[1]} rx={radioCove.rx} ry={radioCove.rz} fill="#ead39d" />
       {pathways.map(({ pts: line, width }, i) => (
         <polyline key={i} points={pts(line)} fill="none" stroke="#ead2a1" strokeWidth={width * 0.9} strokeLinecap="round" strokeLinejoin="round" />
       ))}
@@ -493,7 +495,7 @@ export default function Atlas({
               <small>{kindNames[selected.kind][lang]}</small>
               <b>{selected.name[lang]}</b>
               <p>{selected.blurb[lang]}</p>
-              {(canTravel || selected.zone) && (
+              {(canTravel || selected.zone || selected.id === 'radio-cove') && (
                 <button className="primary small" onClick={() => onVisit(selected)}>
                   {canTravel ? text.travel : text.open}
                 </button>

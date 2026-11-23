@@ -3,9 +3,9 @@ import type { AnglerUpdate } from './fishing'
 export type { AnglerUpdate }
 export type Interior = 'about' | 'tech' | false
 /** 'campfire' is handled in-world (the visitor sits down), never as a panel. */
-export type Target = Place | 'exit' | 'campfire' | 'fishing' | 'wardrobe' | 'bench' | 'dojo' | 'gong'
+export type Target = Place | 'radio' | 'exit' | 'campfire' | 'fishing' | 'wardrobe' | 'bench' | 'dojo' | 'gong'
 export interface VillageEvents {
-  open: (place: Place, project?: number) => void
+  open: (place: Place | 'radio', project?: number) => void
   position: (
     x: number,
     z: number,

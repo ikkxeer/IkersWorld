@@ -3,7 +3,7 @@ export type Lang = (typeof languages)[number]
 export type Zone =
   'about' | 'tech' | 'projects' | 'journey' | 'skills' | 'contact'
 export type Place = Zone | 'map' | 'npc'
-export type Panel = Place | 'controls' | 'intro' | 'subjects'
+export type Panel = Place | 'radio' | 'controls' | 'intro' | 'subjects'
 export const zones: Zone[] = [
   'about',
   'tech',
@@ -110,6 +110,7 @@ const es = {
   focus: 'Recorrer los controles',
   home: 'Inicio',
   loading3D: 'Cargando la isla 3D…',
+  radio: 'Altavoz de la cala',
   campfire: 'Fogata · sentarse',
   jump: 'Saltar',
   space: 'Espacio',
@@ -224,6 +225,7 @@ const ca: Dictionary = {
   focus: 'Recórrer els controls',
   home: 'Inici',
   loading3D: 'Carregant l’illa 3D…',
+  radio: 'Altaveu de la cala',
   campfire: 'Foguera · seure',
   jump: 'Saltar',
   space: 'Espai',
@@ -338,6 +340,7 @@ const en: Dictionary = {
   focus: 'Navigate the controls',
   home: 'Home',
   loading3D: 'Loading the 3D island…',
+  radio: 'Cove speaker',
   campfire: 'Campfire · sit down',
   jump: 'Jump',
   space: 'Space',

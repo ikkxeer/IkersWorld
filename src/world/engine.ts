@@ -782,7 +782,7 @@ export function startVillage(
         : zone === 'projects' ||
             zone === 'npc' ||
             zone === 'map' ||
-            zone === 'contact'
+            zone === 'contact' || zone === 'radio'
           ? 1.8
           : zone === 'campfire'
             ? 2.3

@@ -2558,3 +2558,12 @@ kbd {
     grid-column: 1 / -1;
   }
 }
+
+.cove-radio { display: grid; gap: 1rem; }
+.cove-tracks { display: grid; gap: .35rem; }
+.cove-tracks button { display: flex; align-items: center; gap: 1rem; text-align: left; padding: .7rem .95rem; border-radius: .65rem; background: #eee2c6; color: #32483e; }
+.cove-tracks button[aria-pressed="true"] { background: #285545; color: #fff4d5; }
+.cove-tracks strong, .cove-tracks small { display: block; }
+.cove-tracks small { font-size: .875rem; }
+.cove-radio iframe { width: 100%; aspect-ratio: 16 / 9; min-height: 200px; border: 0; border-radius: .5rem; }
+.cove-radio a { display: inline-flex; gap: .45rem; align-items: center; text-decoration: underline; }

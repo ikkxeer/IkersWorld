@@ -31,6 +31,17 @@ export const tideOrgan = {
     { x: 22.15, z: -4.12, color: '#ed8f94', hz: 587 },
   ],
 }
+export const radioCove = {
+  center: [19.25, -0.95] as XZ,
+  rx: 3.25, rz: 2.55,
+  speaker: [20.3, -0.65] as XZ,
+  stand: [20.15, 0.3] as XZ,
+}
+export function onCoveSand(x: number, z: number) {
+  return ((x - radioCove.center[0]) / radioCove.rx) ** 2 +
+    ((z - radioCove.center[1]) / radioCove.rz) ** 2 <= 0.95 ** 2
+}
+
 export function onOrganDeck(x: number, z: number) {
   const [cx, cz] = tideOrgan.center
   return Math.hypot(x - cx, z - cz) < tideOrgan.radius - 0.13 ||
@@ -305,6 +316,7 @@ export function propColliders() {
         out.push([ax + ((bx - ax) * s) / steps, az + ((bz - az) * s) / steps, 0.16])
     }
   out.push([...wellSite, 0.62], [...parasolSite, 0.25], [parasolSite[0] + 0.73, parasolSite[1] + 0.2, 0.42])
+  out.push([...radioCove.speaker, 0.45], [18.2, 0.15, 0.22])
   for (const {x, z} of tideOrgan.pads) out.push([x, z - 0.72, 0.32])
   for (const [x, z] of palmSites) out.push([x, z, 0.3])
   out.push([...telescopeSite, 0.3])
