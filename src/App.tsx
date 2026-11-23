@@ -430,6 +430,7 @@ function App() {
           title={t.wardrobe}
           hint={t.wardrobeHint}
           wearing={t.wearing}
+          wearLabel={t.wearIt}
           closeLabel={t.close}
           onClose={closeWardrobe}
           onPick={(id) => {

@@ -1,0 +1,17 @@
+<!doctype html><html><body style="margin:0;background:#efe4cc"><canvas id="c" style="width:100vw;height:100vh;display:block"></canvas>
+<script type="module">
+import * as THREE from 'three'
+import { createVisitor } from '/src/world/character.ts'
+import { outfits } from '/src/data/outfits.ts'
+const q = new URLSearchParams(location.search)
+const r = new THREE.WebGLRenderer({ canvas: document.getElementById('c'), antialias: true })
+r.setSize(innerWidth, innerHeight, false); r.outputColorSpace = THREE.SRGBColorSpace; r.toneMapping = THREE.NeutralToneMapping
+const scene = new THREE.Scene(); scene.background = new THREE.Color('#efe4cc')
+scene.add(new THREE.HemisphereLight('#fff7e0', '#b7a6d6', 1.8)); const sun = new THREE.DirectionalLight('#fff1d0', 2.2); sun.position.set(3, 6, 5); scene.add(sun)
+const ids = (q.get('ids') ?? '').split(',')
+const n = ids.length
+ids.forEach((id, i) => [0.4, 2.8].forEach((yaw, k) => { const v = createVisitor(id); v.group.scale.setScalar(1.36); v.group.position.set((i - (n - 1) / 2) * 2.6 + (k - 0.5) * 1.15, 0, 0); v.group.rotation.y = yaw; v.animate(1, true, { distance: 0, speed: 0, turn: 0 }, null); scene.add(v.group) }))
+const a = innerWidth / innerHeight, w = n * 1.3 + 0.2
+const cam = new THREE.OrthographicCamera(-w, w, w / a + 0.95, -w / a + 0.95, 0.1, 100); cam.position.set(0, 1.3, 10); cam.lookAt(0, 0.95, 0); cam.updateProjectionMatrix()
+r.render(scene, cam)
+</script></body></html>
