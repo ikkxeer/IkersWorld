@@ -33,12 +33,14 @@ const blocks: [Zone, number, number][] = [
   ['skills', 2.03, 1.52],
 ]
 export function walkable(x: number, z: number) {
-  if (Math.abs(x - 2.5) < 0.63 && z > shape.pierFrom - 0.4 && z < shape.pierTo - 0.3) return true
   const nearby = cells.get(cellKey(Math.floor(x), Math.floor(z)))
   if (nearby?.some(([ox, oz, r]) => (x - ox) ** 2 + (z - oz) ** 2 < r ** 2))
     return false
   if (onBridge(x, z)) return true
-  if ((x / shape.walkX) ** 2 + (z / shape.walkZ) ** 2 > 1 && !onIslet(x, z)) return false
+  if ((x / shape.walkX) ** 2 + (z / shape.walkZ) ** 2 > 1 && !onIslet(x, z)) {
+    // Outside the lawn, continue its southern edge all the way onto the pier.
+    return z > 0 && Math.abs(x - 2.5) < 0.63 && z < shape.pierTo - 0.3
+  }
   if (
     Math.abs(x + 2.5) < 1.05 &&
     Math.abs(z - 1) > 0.84 &&
