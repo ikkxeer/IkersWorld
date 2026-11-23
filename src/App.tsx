@@ -48,6 +48,7 @@ import Arrival from './ui/Arrival'
 import Title from './ui/Title'
 import Wardrobe from './ui/Wardrobe'
 import { loadOutfit, saveOutfit } from './data/outfits'
+import type { MapPlace } from './data/places'
 import Journal from './ui/Panel'
 import VillageMap, { ZoneIcon } from './ui/Map'
 const languageNames = { es: 'Español', ca: 'Català', en: 'English' }
@@ -303,6 +304,17 @@ function App() {
       pending.current = null
     }
   }, [])
+  /** Travel to any place on the map (buildings go through `visit`). */
+  function visitPlace(place: MapPlace) {
+    if (place.zone) {
+      visit(place.zone)
+      return
+    }
+    if (light || ctl.current?.transitioning()) return
+    setIntro(false)
+    setPanel(null)
+    ctl.current?.goTo(place.stand, place.at)
+  }
   function visit(id: Zone) {
     setIntro(false)
     setProject(null)
@@ -698,7 +710,7 @@ function App() {
           setProject={setProject}
           open={open}
           close={close}
-          visit={visit}
+          visitPlace={visitPlace}
           position={pos}
           fallback={light}
           useMap={() => {

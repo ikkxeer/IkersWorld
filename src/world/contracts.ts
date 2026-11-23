@@ -28,6 +28,8 @@ export interface VillageController {
   pause: (value: boolean) => void
   zoom: (delta: number) => void
   travel: (place: Zone, arrived?: () => void) => void
+  /** Travel to any walkable spot, facing `look` (map places and activities). */
+  goTo: (stand: [number, number], look: [number, number], arrived?: () => void) => void
   transitioning: () => boolean
   touch: (x: number, y: number) => void
   leave: () => void

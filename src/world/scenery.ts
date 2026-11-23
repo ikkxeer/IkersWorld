@@ -13,6 +13,9 @@ import { building, lighthouse, pickable } from './village'
 import { decoratePlaza, exhibit } from './exhibits'
 import { exhibitSpots } from '../data/exhibits'
 import {
+  riverAt,
+  riverWidthAt,
+  pathways,
   shape,
   lanternPoints,
   benchSites,
@@ -43,10 +46,8 @@ import { walkable } from './navigation'
 import { createPond, createRiver } from './water'
 import { createAmbience } from './ambience'
 
-const river = (z: number) =>
-  -2.5 + Math.sin(z * 0.64) * 0.14 + Math.sin(z * 0.28) * 0.12
-const riverWidth = (z: number) =>
-  0.66 + 0.09 * Math.cos(z * 0.72) + 0.035 * Math.cos(z * 1.8)
+const river = riverAt
+const riverWidth = riverWidthAt
 
 function terrain(b: Batch) {
   const rand = seeded(71)
@@ -1144,101 +1145,13 @@ export function createScenery(low: boolean) {
   routes.length = 0
   terrain(staticParts)
   meadow(staticParts)
-  path(
-    staticParts,
-    [
-      [-13, 0.7],
-      [-10, 1.04],
-      [-8, 1.14],
-      [-5, 1],
-      [-3.8, 1],
-    ],
-    1.34,
-  )
-  path(
-    staticParts,
-    [
-      [-1.25, 1],
-      [1, 1.12],
-      [3.6, 0.95],
-      [6.3, 0.86],
-      [9, 0.92],
-      [11, 1.45],
-    ],
-    1.4,
-  )
+  for (const { pts, width } of pathways) path(staticParts, pts, width)
   // Flagstones lead up to Iker's front door.
   steppingStones(staticParts, [
     [-7, 1.0],
     [-7.4, 0.25],
     [-7.55, -1.5],
   ])
-  path(
-    staticParts,
-    [
-      [1.15, 1.06],
-      [1.78, -0.92],
-      [1.76, -2.79],
-      [1.44, -4.78],
-    ],
-    1.26,
-  )
-  path(
-    staticParts,
-    [
-      [8.67, 0.91],
-      [8.97, -0.08],
-      [9, -1.78],
-    ],
-    1.34,
-  )
-  path(
-    staticParts,
-    [
-      [10, 1.13],
-      [10.62, 2.35],
-      [10.7, 4.84],
-      [9.7, 5.75],
-      [7.11, 5.72],
-    ],
-    1.2,
-  )
-  path(
-    staticParts,
-    [
-      [-8.48, 1.05],
-      [-8.9, 2.72],
-      [-8.84, 5.76],
-      [-7.88, 6.47],
-      [-3.8, 6.5],
-    ],
-    1.22,
-  )
-  path(
-    staticParts,
-    [
-      [-1.2, 6.5],
-      [1.13, 6.52],
-      [3.6, 6.4],
-      [5.25, 5.72],
-      [7.9, 5.72],
-    ],
-    1.34,
-  )
-  path(
-    staticParts,
-    [
-      [1.38, 1.12],
-      [2.42, 2.95],
-      [2.79, 4.74],
-      [2.83, 6.52],
-      [2.62, 8.64],
-      [2.5, 10.6],
-      [2.5, 12.0],
-      [2.5, 13.2],
-    ],
-    1.13,
-  )
   staticParts.horizontal(
     [
       [-8.6, 2.65],
@@ -1259,10 +1172,6 @@ export function createScenery(low: boolean) {
     true,
   )
   // Paths out to the tulip field, the pond, the beach and the lookout.
-  path(staticParts, [[-8.48, 1.05], [-11.0, 0.4], [-11.1, -3.0], [-11.0, -5.9], [-9.6, -8.4]], 1.05)
-  path(staticParts, [[1.8, -2.6], [3.2, -4.6], [3.7, -7.0], [5.0, -8.9]], 1.0)
-  path(staticParts, [[9.7, 5.75], [10.6, 7.0], [11.0, 8.1]], 1.05)
-  path(staticParts, [[-13, 0.7], [-15.2, 0.85], [-17.9, 0.9]], 1.1)
   decoratePlaza(staticParts)
   bridge(staticParts, 1)
   bridge(staticParts, 6.5)
@@ -1287,7 +1196,6 @@ export function createScenery(low: boolean) {
   isletBridge(staticParts)
   mountainShrine(staticParts)
   shrine.sakura.forEach(([x, z, s]) => tree(staticParts, x, z, s, 5))
-  path(staticParts, [[-22.4, 0.9], [-23.6, 1.0], [-24.6, 1.1]], 1.05)
   group.add(createPond(...pond.center, pond.radius, kit.clock))
   // Wildflowers scattered across the wide outer meadow.
   for (let i = 0; i < (low ? 26 : 60); i++) {
