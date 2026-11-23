@@ -1,9 +1,10 @@
 /**
- * Classic circular "iris" wipe. The circle closes on the centre of the screen,
- * the scene swap runs only while the screen is fully black, then the circle
- * reopens from the centre.
+ * Classic circular "iris" wipe. The circle closes on the centre of the screen
+ * (or on a given point), the scene swap runs only while the screen is fully
+ * black, then the circle reopens from the same spot. It plays even with
+ * reduced motion: the wipe itself moves nothing in the scene.
  */
-export function makeIris(element: HTMLElement | null, motion: MediaQueryList) {
+export function makeIris(element: HTMLElement | null) {
   const closeDuration = 640
   const holdDuration = 220
   const openDuration = 700
@@ -70,7 +71,7 @@ export function makeIris(element: HTMLElement | null, motion: MediaQueryList) {
       if (!action) return
       // Clamp each step so a slow frame (e.g. building a room) never skips
       // the black frame or the start of the reveal.
-      elapsed += previous ? Math.min(now - previous, 40) * (motion.matches ? 2 : 1) : 0
+      elapsed += previous ? Math.min(now - previous, 40) : 0
       previous = now
       if (!swapped && elapsed >= closeDuration) {
         elapsed = closeDuration
@@ -93,16 +94,13 @@ export function makeIris(element: HTMLElement | null, motion: MediaQueryList) {
         framing = 1 - easeInOutCubic(t)
       }
     },
-    draw(width: number, height: number) {
+    draw(width: number, height: number, x = width / 2, y = height / 2) {
       if (!action || !element) return
-      const x = width / 2,
-        y = height / 2
-      const radius = Math.hypot(x, y) + 8
+      const radius = Math.hypot(Math.max(x, width - x), Math.max(y, height - y)) + 8
       element.style.setProperty('--iris-x', x + 'px')
       element.style.setProperty('--iris-y', y + 'px')
       element.style.setProperty('--iris-radius', (radius * aperture).toFixed(2) + 'px')
-      element.classList.toggle('sealed', motion.matches || aperture <= 0.002)
-      element.style.opacity = motion.matches ? String(1 - aperture) : '1'
+      element.classList.toggle('sealed', aperture <= 0.002)
       element.hidden = false
     },
   }
