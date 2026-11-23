@@ -221,6 +221,21 @@ function sculpt(material: THREE.Material) {
         tilt,
       )
     },
+    /** Part of a surface of revolution: capes, coat tails, skirts. */
+    shell(color: string, at: Vec3, profile: [number, number][], phiStart: number, phiLength: number, tilt: Vec3 = [0, 0, 0]) {
+      add(
+        new THREE.LatheGeometry(
+          profile.map(([r, y]) => new THREE.Vector2(r, y)),
+          24,
+          phiStart,
+          phiLength,
+        ),
+        color,
+        at,
+        [1, 1, 1],
+        tilt,
+      )
+    },
     turned(
       color: string,
       at: Vec3,
@@ -461,6 +476,39 @@ export function createVisitor(initialOutfit?: string): IslandCharacter {
     const hips = sculpt(material)
     hips.oval(bottom, [0, 0.03, 0], [0.158, 0.11, 0.135])
     hips.oval(bottomLight, [0, -0.01, -0.118], [0.06, 0.045, 0.02])
+    // Skirts, gowns, robes, hakama and coat tails hang from the waist.
+    const hem = o.hem ?? 'none'
+    const hemColor = o.hemColor ?? bottom
+    if (hem === 'skirt' || hem === 'gown' || hem === 'robe' || hem === 'hakama') {
+      const drop = hem === 'skirt' ? 0.17 : hem === 'hakama' ? 0.25 : 0.27
+      const flare = hem === 'skirt' ? 0.245 : hem === 'hakama' ? 0.22 : 0.27
+      const profile: [number, number][] = [
+        [0.165, 0.11],
+        [0.18, 0.05],
+        [flare * 0.92, 0.11 - drop * 0.6],
+        [flare, 0.11 - drop],
+        [flare - 0.02, 0.11 - drop - 0.012],
+      ]
+      // Lathe faces point outwards when the profile runs bottom to top.
+      hips.turned(hemColor, [0, 0, 0], [...profile].reverse(), 0.95)
+      // Inner lining so the hem never looks hollow from below.
+      hips.turned(o.hemLining ?? bottomLight, [0, 0, 0], profile.map(([r, y]) => [r * 0.97, y + 0.004] as [number, number]), 0.95)
+      if (hem === 'skirt' || hem === 'hakama')
+        // Pleats.
+        for (let k = 0; k < 10; k++) {
+          const a = (k / 10) * TAU
+          hips.oval(hem === 'skirt' ? bottomLight : bottom, [Math.sin(a) * flare * 0.9, 0.11 - drop * 0.62, Math.cos(a) * flare * 0.86], [0.012, drop * 0.36, 0.012], [Math.cos(a) * 0.35, 0, -Math.sin(a) * 0.35])
+        }
+      if (hem === 'gown')
+        for (let k = 0; k < 12; k++) {
+          const a = (k / 12) * TAU
+          hips.oval(o.hemTrim ?? '#ffffff', [Math.sin(a) * flare * 0.98, 0.11 - drop + 0.005, Math.cos(a) * flare * 0.93], [0.04, 0.025, 0.04])
+        }
+    } else if (hem === 'coat') {
+      // Two coat tails flaring behind the legs.
+      hips.shell(hemColor, [0, 0, 0], [[0.245, -0.18], [0.24, -0.16], [0.2, 0.0], [0.165, 0.11]], Math.PI * 0.62, Math.PI * 0.76)
+      hips.shell(o.hemLining ?? bottomLight, [0, 0, 0], [[0.158, 0.11], [0.193, 0.0], [0.232, -0.16], [0.238, -0.18]], Math.PI * 0.62, Math.PI * 0.76)
+    }
     wear(hips, pelvis)
 
     // Torso.
@@ -535,8 +583,24 @@ export function createVisitor(initialOutfit?: string): IslandCharacter {
       torso.oval('#d8b25a', [-0.17, 0.28, -0.19], [0.045, 0.012, 0.045], [0.15, 0, 0.75])
       torso.oval('#5a3f30', [-0.23, 0.36, -0.2], [0.02, 0.08, 0.02], [0.15, 0, 0.75])
     } else if (o.back === 'cape') {
-      torso.oval(o.backColor, [0, 0.02, -0.17], [0.19, 0.3, 0.045], [0.12, 0, 0])
-      torso.oval(o.backColor, [0, 0.24, -0.1], [0.17, 0.045, 0.08])
+      // A real cape: a flared half-cone from the shoulders, lined inside,
+      // with a round collar and clasps.
+      const outside: [number, number][] = [
+        [0.12, 0.27],
+        [0.19, 0.2],
+        [0.23, 0.0],
+        [0.27, -0.24],
+        [0.275, -0.27],
+      ]
+      torso.shell(o.backColor, [0, 0, -0.02], [...outside].reverse(), Math.PI * 0.55, Math.PI * 0.9)
+      torso.shell(o.capeLining ?? accent, [0, 0, -0.02], outside.map(([r, y]) => [r * 0.95, y] as [number, number]), Math.PI * 0.55, Math.PI * 0.9)
+      torso.ring(o.backColor, [0, 0.255, -0.01], 0.13, 0.03, 0.95)
+      for (const side of [-1, 1]) torso.oval('#e8b85a', [side * 0.1, 0.235, 0.12], [0.025, 0.025, 0.015])
+      if (o.capeTrim)
+        for (let k = 0; k < 9; k++) {
+          const a = Math.PI * 0.6 + (k / 8) * Math.PI * 0.8
+          torso.oval(o.capeTrim, [Math.sin(a) * 0.26, -0.24, Math.cos(a) * 0.26 - 0.02], [0.05, 0.035, 0.05])
+        }
     } else if (o.back === 'wings') {
       for (const side of [-1, 1]) {
         torso.oval(o.backColor, [side * 0.17, 0.2, -0.2], [0.2, 0.13, 0.025], [0.2, side * -0.5, side * 0.55])
@@ -552,7 +616,20 @@ export function createVisitor(initialOutfit?: string): IslandCharacter {
       }
       torso.oval('#8a90a0', [0, 0.18, -0.17], [0.1, 0.1, 0.04])
     }
+    if ((o.extra ?? 'none') === 'belt') {
+      torso.ring(o.extraColor ?? '#5a3a2a', [0, 0.02, 0.004], 0.172, 0.022, 0.86)
+      torso.oval('#e8b85a', [0, 0.02, 0.155], [0.035, 0.03, 0.012])
+    }
     wear(torso, chest)
+    if (o.back === 'tail') {
+      // A curly tail from the small of the back.
+      const tailShape = sculpt(material)
+      for (let k = 0; k < 7; k++) {
+        const t = k / 6
+        tailShape.oval(k === 6 ? o.backColor : o.hair, [0.02 * Math.sin(t * 5), 0.02 + t * 0.2 + Math.sin(t * 3) * 0.05, -0.15 - t * 0.12], [0.04, 0.04, 0.04])
+      }
+      wear(tailShape, pelvis)
+    }
 
     // Scarf tail only with a scarf.
     if (o.collar === 'scarf') {
@@ -574,10 +651,32 @@ export function createVisitor(initialOutfit?: string): IslandCharacter {
       face.oval('#f2a18c', [side * 0.31, -0.022, 0.03], [0.022, 0.035, 0.012])
       face.oval(blush, [side * 0.172, -0.085, 0.232], [0.058, 0.032, 0.012], [0, side * 0.58, 0])
     }
-    face.oval(hair, [0, 0.075, -0.045], [0.326, 0.272, 0.3])
-    face.oval(hair, [0, -0.09, -0.2], [0.24, 0.16, 0.12])
     const style = o.hairStyle
-    if (style === 'swoop') {
+    // Hats that sit on the head hide the top of the hair: only a tucked
+    // fringe and the side and back locks show.
+    const covered = ['cap', 'beanie', 'helmet', 'tricorn', 'straw'].includes(o.hat)
+    face.oval(hair, [0, covered ? 0.04 : 0.075, -0.045], covered ? [0.318, 0.25, 0.295] : [0.326, 0.272, 0.3])
+    face.oval(hair, [0, -0.09, -0.2], [0.24, 0.16, 0.12])
+    if (covered) {
+      for (const side of [-1, 1]) face.oval(hair, [side * 0.275, -0.01, 0.06], [0.05, 0.1, 0.075])
+      // A soft fringe tucked under the brim, hugging the forehead.
+      face.oval(hair, [0, 0.085, 0.17], [0.25, 0.085, 0.1], [0.5, 0, 0])
+      for (let i = 0; i < 3; i++) {
+        const x = -0.1 + i * 0.1
+        face.oval(hair, [x, 0.07, 0.235], [0.06, 0.05, 0.03], [0.5, 0, -x * 1.6])
+      }
+      if (style === 'long') {
+        face.oval(hair, [0, -0.17, -0.16], [0.29, 0.3, 0.15])
+        for (const side of [-1, 1]) face.oval(hair, [side * 0.28, -0.12, 0.02], [0.07, 0.22, 0.09])
+      } else if (style === 'twintails')
+        for (const side of [-1, 1]) face.oval(hair, [side * 0.36, -0.12, -0.1], [0.1, 0.24, 0.1], [0, 0, side * 0.25])
+    } else if (style === 'slick') {
+      // Slicked back with a sharp widow's peak and a glossy streak.
+      for (const side of [-1, 1]) face.oval(hair, [side * 0.27, 0.03, 0.03], [0.05, 0.1, 0.08])
+      for (const side of [-1, 1]) face.oval(hair, [side * 0.08, 0.17, 0.2], [0.13, 0.075, 0.07], [0.5, 0, side * 0.45])
+      face.oval(hair, [0, 0.11, 0.23], [0.035, 0.07, 0.035], [0.3, 0, 0])
+      face.oval(hairLight, [0.07, 0.25, 0.05], [0.16, 0.03, 0.12], [0.2, 0.2, -0.2])
+    } else if (style === 'swoop') {
       for (const side of [-1, 1]) face.oval(hair, [side * 0.272, 0.005, 0.06], [0.05, 0.11, 0.075])
       for (const [x, y, z, angle, w] of [
         [-0.19, 0.11, 0.19, 0.7, 0.085],
@@ -617,8 +716,14 @@ export function createVisitor(initialOutfit?: string): IslandCharacter {
       }
       for (const side of [-1, 1]) face.oval(hair, [side * 0.28, -0.1, 0.02], [0.07, 0.22, 0.09])
       face.oval(hairLight, [0.05, 0.25, 0.1], [0.12, 0.035, 0.05], [0.5, 0.2, -0.25])
-      if (style === 'long') face.oval(hair, [0, -0.17, -0.16], [0.29, 0.3, 0.15])
-      else
+      if (style === 'long') {
+        face.oval(hair, [0, -0.17, -0.16], [0.29, 0.3, 0.15])
+        // Separate locks give the long hair some flow.
+        for (let k = 0; k < 4; k++) {
+          const x = -0.18 + k * 0.12
+          face.oval(k % 2 ? hairLight : hair, [x, -0.3, -0.2 - Math.abs(x) * 0.2], [0.07, 0.17, 0.06], [0.15, 0, x * 0.6])
+        }
+      } else
         for (const side of [-1, 1]) {
           face.oval(hair, [side * 0.36, -0.1, -0.1], [0.1, 0.24, 0.1], [0, 0, side * 0.25])
           face.oval(o.accent, [side * 0.31, 0.12, -0.08], [0.05, 0.05, 0.05])
@@ -651,9 +756,10 @@ export function createVisitor(initialOutfit?: string): IslandCharacter {
       face.oval(o.hatColor, [0.08, 0.29, 0.06], [0.04, 0.04, 0.04])
     } else if (o.hat === 'cap') {
       // A rounded cap with a peak.
-      face.oval(o.hatColor, [0, 0.13, -0.01], [0.32, 0.2, 0.31])
-      face.oval(o.hatColor, [0, 0.07, 0.26], [0.2, 0.025, 0.16], [0.12, 0, 0])
-      face.oval(o.accent, [0, 0.33, -0.01], [0.04, 0.025, 0.04])
+      face.oval(o.hatColor, [0, 0.11, -0.02], [0.342, 0.24, 0.33])
+      face.oval(o.hatBrim ?? o.hatColor, [0, 0.1, 0.27], [0.22, 0.026, 0.17], [0.16, 0, 0])
+      face.ring(o.hatBrim ?? o.hatColor, [0, 0.05, -0.02], 0.31, 0.03, 1, [-0.12, 0, 0])
+      face.oval(o.accent, [0, 0.35, -0.02], [0.045, 0.028, 0.045])
     } else if (o.hat === 'crown') {
       face.turned(
         o.hatColor,
@@ -679,17 +785,25 @@ export function createVisitor(initialOutfit?: string): IslandCharacter {
         face.oval('#f6b0a0', [side * 0.17, 0.28, 0.02], [0.045, 0.07, 0.02], [0, 0, side * -0.35])
       }
     } else if (o.hat === 'beanie') {
-      face.oval(o.hatColor, [0, 0.13, -0.02], [0.325, 0.24, 0.315])
-      face.ring(o.hatColor, [0, 0.05, -0.01], 0.3, 0.04, 0.97, [-0.1, 0, 0])
-      face.oval('#fffaf0', [0, 0.38, -0.04], [0.07, 0.07, 0.07])
+      face.oval(o.hatColor, [0, 0.12, -0.03], [0.342, 0.27, 0.33])
+      face.ring(o.hatBrim ?? o.hatColor, [0, 0.04, -0.02], 0.315, 0.045, 0.98, [-0.12, 0, 0])
+      for (let k = 0; k < 8; k++) {
+        const a = (k / 8) * TAU
+        face.oval(o.hatBrim ?? o.hatColor, [Math.sin(a) * 0.31, 0.04, -0.02 + Math.cos(a) * 0.31], [0.012, 0.04, 0.012])
+      }
+      face.oval('#fffaf0', [0, 0.41, -0.05], [0.08, 0.08, 0.08])
     } else if (o.hat === 'tricorn') {
-      face.oval(o.hatColor, [0, 0.2, -0.02], [0.26, 0.14, 0.25])
+      // A proper tricorn: domed crown and three upturned brim corners.
+      face.oval(o.hatColor, [0, 0.15, -0.03], [0.33, 0.22, 0.32])
+      face.turned(o.hatColor, [0, 0.12, -0.03], [[0, -0.01], [0.42, -0.01], [0.44, 0.02], [0, 0.02]], 1)
       for (let k = 0; k < 3; k++) {
         const a = (k / 3) * TAU
-        face.oval(o.hatColor, [Math.sin(a) * 0.24, 0.2, -0.02 + Math.cos(a) * 0.24], [0.24, 0.08, 0.06], [0.3, a, 0])
+        face.oval(o.hatColor, [Math.sin(a) * 0.3, 0.24, -0.03 + Math.cos(a) * 0.3], [0.3, 0.13, 0.05], [0.0, a, 0])
+        face.oval('#d9b44a', [Math.sin(a) * 0.33, 0.3, -0.03 + Math.cos(a) * 0.33], [0.26, 0.015, 0.02], [0, a, 0])
       }
-      face.ring('#d9b44a', [0, 0.13, -0.02], 0.26, 0.012, 1, [-0.1, 0, 0])
-      face.oval('#f6f1e4', [0, 0.25, 0.24], [0.04, 0.04, 0.01])
+      // A little skull-and-crossbones badge (a friendly one).
+      face.oval('#f6f1e4', [0, 0.27, 0.3], [0.05, 0.045, 0.02])
+      for (const side of [-1, 1]) face.oval('#f6f1e4', [0, 0.21, 0.3], [0.07, 0.012, 0.012], [0, 0, side * 0.6])
     } else if (o.hat === 'helmet') {
       // A rounded helmet; a clear bubble visor for the astronaut look.
       if (o.hatColor === '#cfe7ff') {
@@ -697,9 +811,13 @@ export function createVisitor(initialOutfit?: string): IslandCharacter {
         face.oval('#e6f3ff', [0, 0.12, -0.08], [0.36, 0.34, 0.3])
         face.oval('#9fd0ff', [0, 0.06, 0.28], [0.22, 0.17, 0.04])
       } else {
-        face.oval(o.hatColor, [0, 0.12, -0.02], [0.335, 0.26, 0.325])
-        face.oval('#7a8494', [0, 0.06, 0.29], [0.2, 0.03, 0.03])
-        face.oval(o.accent, [0, 0.33, -0.12], [0.04, 0.14, 0.18], [0.4, 0, 0])
+        // Knight's helm: dome, cheek guards, a brow band and a plume.
+        face.oval(o.hatColor, [0, 0.1, -0.03], [0.345, 0.29, 0.335])
+        face.ring('#e0e6ee', [0, 0.04, -0.02], 0.315, 0.035, 1, [-0.12, 0, 0])
+        for (const side of [-1, 1]) face.oval(o.hatColor, [side * 0.27, -0.08, 0.06], [0.07, 0.13, 0.12])
+        face.oval('#e0e6ee', [0, 0.14, 0.29], [0.025, 0.12, 0.03], [0.3, 0, 0])
+        for (let k = 0; k < 5; k++)
+          face.oval(k % 2 ? o.accent : (o.plume ?? '#e0473b'), [0, 0.38 - k * 0.02, -0.05 - k * 0.07], [0.05, 0.1, 0.06], [-0.4 - k * 0.25, 0, 0])
       }
     } else if (o.hat === 'chef') {
       face.turned(
@@ -742,6 +860,30 @@ export function createVisitor(initialOutfit?: string): IslandCharacter {
       }
     } else if (o.hat === 'halo') {
       face.ring(o.hatColor, [0, 0.47, -0.02], 0.17, 0.025, 1)
+    }
+    // Small extras that give each look its character.
+    const extra = o.extra ?? 'none'
+    if (extra === 'eyepatch') {
+      face.oval('#1f1b1b', [0.11, 0.02, 0.27], [0.065, 0.07, 0.02], [0, 0.38, 0])
+      face.oval('#1f1b1b', [0, 0.1, 0.02], [0.31, 0.015, 0.29], [0.1, 0, -0.35])
+    } else if (extra === 'mask') {
+      // A cloth mask over the nose and mouth, tied at the back.
+      face.oval(o.extraColor ?? '#283246', [0, -0.115, 0.2], [0.22, 0.095, 0.1])
+      face.oval(o.extraColor ?? '#283246', [0, -0.1, 0.02], [0.29, 0.08, 0.23])
+    } else if (extra === 'glasses' || extra === 'shades') {
+      const lens = extra === 'shades' ? '#2a2630' : '#e9f6ff'
+      for (const side of [-1, 1]) {
+        face.ring(o.extraColor ?? '#3a2e2a', [side * 0.11, 0.0, 0.3], 0.062, 0.013, 1, [Math.PI / 2, side * 0.38, 0])
+        face.oval(lens, [side * 0.11, 0.0, 0.298], [0.06, 0.06, 0.008], [0, side * 0.38, 0])
+        face.oval(o.extraColor ?? '#3a2e2a', [side * 0.24, 0.02, 0.18], [0.012, 0.012, 0.09], [0, side * 0.6, 0])
+      }
+      face.oval(o.extraColor ?? '#3a2e2a', [0, 0.01, 0.31], [0.035, 0.011, 0.011])
+    } else if (extra === 'headphones') {
+      face.ring(o.extraColor ?? '#2a2d3a', [0, 0.08, -0.01], 0.33, 0.022, 1, [0, 0, Math.PI / 2])
+      for (const side of [-1, 1]) {
+        face.oval(o.extraColor ?? '#2a2d3a', [side * 0.31, -0.02, 0.0], [0.05, 0.085, 0.085])
+        face.oval(o.accent, [side * 0.345, -0.02, 0.0], [0.015, 0.06, 0.06])
+      }
     }
     wear(face, head, [0, H, 0])
     cowlick.visible = style === 'swoop'

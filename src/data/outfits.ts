@@ -11,7 +11,7 @@ export interface Outfit {
   blurb: Record<Lang, string>
   hair: string
   hairLight: string
-  hairStyle: 'swoop' | 'spiky' | 'long' | 'topknot' | 'twintails'
+  hairStyle: 'swoop' | 'spiky' | 'long' | 'topknot' | 'twintails' | 'slick'
   /** Jumper / jacket / robe colour, with optional stripes. */
   top: string
   stripe: string | null
@@ -43,8 +43,22 @@ export interface Outfit {
     | 'goggles'
     | 'halo'
   hatColor: string
-  back: 'none' | 'katana' | 'cape' | 'wings' | 'backpack' | 'jetpack'
+  back: 'none' | 'katana' | 'cape' | 'wings' | 'backpack' | 'jetpack' | 'tail'
   backColor: string
+  /** Lower garment over the trousers. */
+  hem?: 'none' | 'skirt' | 'gown' | 'coat' | 'robe' | 'hakama'
+  hemColor?: string
+  hemLining?: string
+  hemTrim?: string
+  capeLining?: string
+  /** Fur or ermine dots along the cape's edge. */
+  capeTrim?: string
+  /** Brim or band colour of a cap or beanie. */
+  hatBrim?: string
+  plume?: string
+  /** A finishing touch on the face or waist. */
+  extra?: 'none' | 'eyepatch' | 'mask' | 'glasses' | 'shades' | 'headphones' | 'belt'
+  extraColor?: string
 }
 
 /** Shorthand for new looks: sensible defaults, then the differences. */
@@ -80,7 +94,7 @@ function look(
   }
 }
 
-export const outfits: Outfit[] = [
+const designs: Outfit[] = [
   {
     id: 'explorer',
     name: { es: 'Explorador', ca: 'Explorador', en: 'Explorer' },
@@ -374,6 +388,37 @@ export const outfits: Outfit[] = [
     ], { hair: '#5a3a2a', hairStyle: 'long', top: '#4fb0a8', stripe: '#e8f6f4', collar: 'scarf', accent: '#f6f1e4', bottom: '#3a4a6a', bottomLight: '#4a5c80', boot: '#8a5a3a', bootLight: '#f6f1e4', sole: '#4a3020', hat: 'beanie', hatColor: '#e0473b' }),
   ],
 ]
+
+/**
+ * Finishing touches, outfit by outfit: skirts, gowns, robes, coat tails,
+ * lined capes and the little extras that make each look read at a glance.
+ */
+const skinTone = '#f7cba4'
+const refine: Record<string, Partial<Outfit>> = {
+  ninja: { extra: 'mask', extraColor: '#283246' },
+  hero: { capeLining: '#f6c84a', extra: 'belt', extraColor: '#2a2f3a' },
+  sailor: { hem: 'skirt', hemColor: '#27407a', hemLining: '#1d3060', bottom: skinTone, bottomLight: skinTone },
+  mage: { hem: 'robe', hemColor: '#5b3f8f', hemLining: '#3d2a66', capeLining: '#4a3a8a' },
+  samurai: { hem: 'hakama', hemColor: '#3a3a46', hemLining: '#26262e', extra: 'belt', extraColor: '#d8b25a' },
+  idol: { hem: 'skirt', hemColor: '#ffffff', hemLining: '#ffb3cf', bottom: '#ffe3ee', bottomLight: '#ffe3ee' },
+  golden: { back: 'none', extra: 'belt', extraColor: '#22343a' },
+  pirate: { extra: 'eyepatch', hem: 'coat', hemColor: '#b8323a', hemLining: '#7e2026' },
+  knight: { capeLining: '#e8b85a', plume: '#e0473b', accent: '#e8b85a' },
+  princess: { hem: 'gown', hemColor: '#f59ab8', hemLining: '#ffd9e6', hemTrim: '#ffffff', bottom: '#ffd9e6', bottomLight: '#ffd9e6' },
+  king: { capeTrim: '#fbf6ee', capeLining: '#f6c84a', extra: 'belt', extraColor: '#f6c84a' },
+  chef: { extra: 'belt', extraColor: '#2f3440' },
+  detective: { hem: 'coat', hemColor: '#c8a978', hemLining: '#a88a5a', hatBrim: '#7a5a3a', extra: 'glasses' },
+  gamer: { extra: 'headphones', extraColor: '#2a2d3a', hatBrim: '#3be0b0' },
+  kitty: { back: 'tail', backColor: '#fff1dc' },
+  vampire: { hairStyle: 'slick', back: 'cape', backColor: '#1c1a22', capeLining: '#c8323a' },
+  fairy: { hem: 'skirt', hemColor: '#8fd6a0', hemLining: '#f39ac4', bottom: '#c6f0cf', bottomLight: '#c6f0cf' },
+  angel: { hem: 'robe', hemColor: '#ffffff', hemLining: '#f2d38a' },
+  fisher: { hem: 'coat', hemColor: '#f6c32e', hemLining: '#e0a81a', hatBrim: '#244e74' },
+  rocker: { extra: 'shades', extraColor: '#1c1c20' },
+  scientist: { hem: 'coat', hemColor: '#ffffff', hemLining: '#e3ecf2' },
+  winter: { hem: 'coat', hemColor: '#4fb0a8', hemLining: '#3a8f88', hatBrim: '#f6f1e4' },
+}
+export const outfits: Outfit[] = designs.map((o) => ({ ...o, ...refine[o.id] }))
 
 export const outfitById = (id: string | null | undefined) => outfits.find((o) => o.id === id) ?? outfits[0]
 

@@ -13,10 +13,10 @@ export function makeSky(scene: T.Scene, low: boolean) {
   const hemi = new T.HemisphereLight(0xfff6d8, 0xb7d08c, 1.75)
   const sun = new T.DirectionalLight(0xffecc6, 2.6)
   sun.castShadow = true
-  sun.shadow.mapSize.set(low ? 512 : 1024, low ? 512 : 1024)
+  sun.shadow.mapSize.set(low ? 1024 : 2048, low ? 1024 : 2048)
   Object.assign(sun.shadow.camera, {
-    left: -28,
-    right: 28,
+    left: -33,
+    right: 33,
     top: 23,
     bottom: -23,
     near: 0.1,

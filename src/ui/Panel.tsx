@@ -34,7 +34,9 @@ import {
 import { exhibitColors } from '../data/exhibits'
 import { portfolio } from '../data/portfolio'
 import ContactForm from './ContactForm'
-import VillageMap, { ZoneIcon } from './Map'
+import { ZoneIcon } from './Map'
+import Atlas from './Atlas'
+import { places, type MapPlace } from '../data/places'
 import ProjectIcon from './ProjectIcon'
 const exhibitStyle = (index: number) =>
   ({ '--exhibit-color': exhibitColors[index] }) as CSSProperties
@@ -46,7 +48,7 @@ export default function Journal({
   setProject,
   open,
   close,
-  visit,
+  visitPlace,
   position,
   fallback,
   useMap,
@@ -57,7 +59,7 @@ export default function Journal({
   setProject: (i: number | null) => void
   open: (v: Panel) => void
   close: () => void
-  visit: (zone: Zone) => void
+  visitPlace: (place: MapPlace) => void
   position: [number, number]
   fallback: boolean
   useMap: () => void
@@ -100,7 +102,7 @@ export default function Journal({
   return (
     <dialog
       ref={dialog}
-      className={'journal ' + (page === 'npc' ? 'dialogue' : '')}
+      className={'journal ' + (page === 'npc' ? 'dialogue' : page === 'map' ? 'atlas-dialog' : '')}
       onCancel={(e) => {
         e.preventDefault()
         close()
@@ -194,22 +196,24 @@ export default function Journal({
             </>
           )}
           {page === 'map' && (
-            <>
-              <VillageMap lang={lang} position={position} visit={visit} />
-              <p>{fallback ? t.mapFallback : t.mapTip}</p>
-              <div className="destinations">
-                {zones.map((id) => (
-                  <button key={id} onClick={() => visit(id)}>
-                    <ZoneIcon id={id} />
-                    <span>
-                      {t[placeKeys[id]]}
-                      <small>{t[topicKeys[id]]}</small>
-                    </span>
-                    <ChevronRight size={16} />
-                  </button>
-                ))}
-              </div>
-            </>
+            <Atlas
+              lang={lang}
+              position={position}
+              canTravel={!fallback}
+              onVisit={visitPlace}
+              text={{
+                travel: t.visit,
+                open: t.open,
+                here: t.youAreHere,
+                all: t.mapAll,
+                zoomIn: t.zoomIn,
+                zoomOut: t.zoomOut,
+                recenter: t.mapRecenter,
+                reset: t.mapReset,
+                hint: fallback ? t.mapFallback : t.mapTip,
+                close: t.close,
+              }}
+            />
           )}
           {page === 'about' && (
             <>
@@ -243,7 +247,7 @@ export default function Journal({
             (project === null ? (
               <div className="exhibits">
                 {!fallback && (
-                  <button onClick={() => visit('projects')}>
+                  <button onClick={() => visitPlace(places.find((p) => p.id === 'projects')!)}>
                     <Map size={20} />
                     {t.visit} · {t.projectsPlace}
                   </button>

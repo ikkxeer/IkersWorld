@@ -1,13 +1,14 @@
-import { useEffect, useRef } from 'react'
-import type { CSSProperties } from 'react'
-import { Check, Shirt, X } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { Check, ChevronLeft, ChevronRight, Shirt, X } from 'lucide-react'
 import { outfits } from '../data/outfits'
 import type { Lang } from '../data/village'
 
+type Stage = Awaited<ReturnType<typeof import('../world/preview')['createOutfitStage']>>
+
 /**
- * The wardrobe: a grid of outfit cards, each with a tiny painted figure in
- * that look's colours. Picking one closes the wardrobe and the visitor
- * twirls into it.
+ * The wardrobe: a dressing-room stage where the highlighted outfit turns
+ * slowly on a turntable, next to a grid of rendered portraits. Hover or
+ * arrow through to preview, then put it on.
  */
 export default function Wardrobe({
   lang,
@@ -15,6 +16,7 @@ export default function Wardrobe({
   title,
   hint,
   wearing,
+  wearLabel,
   closeLabel,
   onPick,
   onClose,
@@ -24,19 +26,65 @@ export default function Wardrobe({
   title: string
   hint: string
   wearing: string
+  wearLabel: string
   closeLabel: string
   onPick: (id: string) => void
   onClose: () => void
 }) {
   const box = useRef<HTMLDivElement>(null)
+  const canvas = useRef<HTMLCanvasElement>(null)
+  const stage = useRef<Stage | null>(null)
+  const [selected, setSelected] = useState(current)
+  const [thumbs, setThumbs] = useState<Record<string, string>>({})
+  const index = Math.max(0, outfits.findIndex((o) => o.id === selected))
+  const outfit = outfits[index]
+
+  // Boot the 3D stage (and render the portraits) once.
+  useEffect(() => {
+    let alive = true
+    const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches
+    import('../world/preview').then(({ createOutfitStage }) => {
+      if (!alive || !canvas.current) return
+      const s = createOutfitStage(canvas.current, reduced)
+      stage.current = s
+      s.show(current)
+      void s.thumbnails(168, (id, url) => {
+        if (alive) setThumbs((t) => ({ ...t, [id]: url }))
+      })
+    })
+    return () => {
+      alive = false
+      stage.current?.dispose()
+      stage.current = null
+    }
+  }, [current])
+
+  useEffect(() => {
+    stage.current?.show(selected)
+  }, [selected])
+
   useEffect(() => {
     box.current?.querySelector<HTMLButtonElement>('.outfit-card.on')?.focus()
+  }, [])
+
+  useEffect(() => {
     const key = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose()
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+        e.preventDefault()
+        const step = e.key === 'ArrowLeft' ? -1 : 1
+        setSelected((id) => {
+          const i = outfits.findIndex((o) => o.id === id)
+          return outfits[(i + step + outfits.length) % outfits.length].id
+        })
+      }
     }
     window.addEventListener('keydown', key)
     return () => window.removeEventListener('keydown', key)
   }, [onClose])
+
+  const step = (delta: number) => setSelected(outfits[(index + delta + outfits.length) % outfits.length].id)
+
   return (
     <div className="wardrobe-backdrop" onClick={onClose}>
       <div className="wardrobe" role="dialog" aria-modal="true" aria-label={title} ref={box} onClick={(e) => e.stopPropagation()}>
@@ -52,49 +100,55 @@ export default function Wardrobe({
             <X size={18} />
           </button>
         </header>
-        <div className="outfit-grid">
-          {outfits.map((o) => (
-            <button
-              key={o.id}
-              className={'outfit-card' + (o.id === current ? ' on' : '')}
-              onClick={() => onPick(o.id)}
-              aria-pressed={o.id === current}
-            >
-              <span
-                className={'outfit-doll hair-' + o.hairStyle}
-                aria-hidden="true"
-                style={
-                  {
-                    '--hair': o.hair,
-                    '--top': o.top,
-                    '--stripe': o.stripe ?? o.top,
-                    '--bottom': o.bottom,
-                    '--boot': o.boot,
-                    '--accent': o.accent,
-                    '--hat': o.hatColor,
-                    '--back': o.backColor,
-                  } as CSSProperties
-                }
-              >
-                {o.hat === 'wizard' && <i className="doll-wizard" />}
-                {o.hat === 'bow' && <i className="doll-bow" />}
-                {o.hat === 'headband' && <i className="doll-band" />}
-                {!['none', 'wizard', 'bow', 'headband'].includes(o.hat) && <i className={'doll-hat hat-' + o.hat} />}
-                {o.back !== 'none' && o.back !== 'katana' && <i className={'doll-back back-' + o.back} />}
-                <i className="doll-hair" />
-                <i className="doll-face" />
-                <i className="doll-body" />
-                <i className="doll-legs" />
-              </span>
-              <b>{o.name[lang]}</b>
-              <small>{o.blurb[lang]}</small>
-              {o.id === current && (
-                <em>
-                  <Check size={14} /> {wearing}
-                </em>
-              )}
+        <div className="wardrobe-main">
+          <section className="dressing-stage" aria-live="polite">
+            <canvas ref={canvas} aria-hidden="true" />
+            <button className="stage-arrow prev" onClick={() => step(-1)} aria-label="←">
+              <ChevronLeft size={22} />
             </button>
-          ))}
+            <button className="stage-arrow next" onClick={() => step(1)} aria-label="→">
+              <ChevronRight size={22} />
+            </button>
+            <div className="stage-caption">
+              <small>
+                {index + 1} / {outfits.length}
+              </small>
+              <b>{outfit.name[lang]}</b>
+              <p>{outfit.blurb[lang]}</p>
+              {outfit.id === current ? (
+                <span className="stage-wearing">
+                  <Check size={16} /> {wearing}
+                </span>
+              ) : (
+                <button className="primary small" onClick={() => onPick(outfit.id)}>
+                  <Shirt size={18} /> {wearLabel}
+                </button>
+              )}
+            </div>
+          </section>
+          <div className="outfit-grid">
+            {outfits.map((o) => (
+              <button
+                key={o.id}
+                className={'outfit-card' + (o.id === selected ? ' on' : '') + (o.id === current ? ' worn' : '')}
+                onClick={() => setSelected(o.id)}
+                onDoubleClick={() => onPick(o.id)}
+                onPointerEnter={(e) => e.pointerType === 'mouse' && setSelected(o.id)}
+                aria-pressed={o.id === selected}
+                aria-label={o.name[lang]}
+              >
+                <span className="outfit-thumb" style={{ background: `radial-gradient(circle at 50% 70%, ${o.top}55, ${o.accent}22 70%)` }}>
+                  {thumbs[o.id] ? <img src={thumbs[o.id]} alt="" /> : <i className="thumb-spinner" />}
+                </span>
+                <b>{o.name[lang]}</b>
+                {o.id === current && (
+                  <em>
+                    <Check size={12} />
+                  </em>
+                )}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
     </div>

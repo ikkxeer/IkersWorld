@@ -173,6 +173,39 @@ export function startVillage(
     cloudBank.visible = false
     landingShadow.visible = false
   }
+  /** Teleport to a spot (through the iris), facing a point, with a hop. */
+  function jump(stand: [number, number], look: [number, number], arrived?: () => void) {
+    const move = () => {
+      const [x, z] = stand
+      visitor.group.position.set(x, islandFloorHeight(x, z), z)
+      goal = []
+      keys.clear()
+      stick.set(0, 0)
+      velocity.set(0, 0)
+      rest = null
+      training = null
+      fishing.cancel()
+      visitor.settle()
+      snapCamera = true
+      setHover(null)
+      visitor.group.rotation.y = Math.atan2(look[0] - x, look[1] - z)
+      updateReach()
+    }
+    // A quick hop and sparkle on arrival makes travelling feel magical.
+    const pop = () => {
+      visitor.land?.()
+      play('land')
+    }
+    if (inside) crossDoor(false, () => (move(), pop()), arrived)
+    else if (motion.matches) {
+      move()
+      arrived?.()
+    } else
+      iris.start(() => {
+        move()
+        pop()
+      }, arrived)
+  }
   /** Seats: where to sit, which way to face and where to step off. Logs
    * around the campfire face the fire; every bench faces out from its back. */
   const fireSeats = campfire.logs.map(([dx, dz]) => {
@@ -746,7 +779,7 @@ export function startVillage(
               : zone === 'bench'
                 ? 1.8
                 : zone === 'dojo'
-                  ? 2.2
+                  ? 2.7
                   : zone === 'gong'
                     ? 1.4
                     : 3.5
@@ -1051,7 +1084,9 @@ export function startVillage(
     const aspect = canvas.clientWidth / Math.max(1, canvas.clientHeight)
     const closeToPlaza =
       1 - T.MathUtils.smoothstep(Math.hypot(p.x + 5.7, p.z - 4.6), 2.6, 7.9)
-    const follow = aspect < 0.9 ? 0.88 : 0.74 + 0.1 * closeToPlaza
+    // Far out (the islet, the pier's end) the camera follows the visitor fully.
+    const remote = T.MathUtils.smoothstep(Math.abs(p.x), 14, 21)
+    const follow = T.MathUtils.lerp(aspect < 0.9 ? 0.88 : 0.74 + 0.1 * closeToPlaza, 1, remote)
     desired.set(
       inside ? 0 : p.x * follow,
       inside ? 0.55 : 0,
@@ -1253,47 +1288,18 @@ export function startVillage(
     },
     travel(id, arrived) {
       if (iris.active()) return
-        skipArrival()
+      skipArrival()
       if (id === 'about' || id === 'tech') {
         if (inside !== id) crossDoor(id, undefined, arrived)
         else arrived?.()
         return
       }
-      const move = () => {
-        const [x, z] = destinations[id]
-        visitor.group.position.set(x, 0, z)
-        goal = []
-        keys.clear()
-        stick.set(0, 0)
-        velocity.set(0, 0)
-        rest = null
-        fishing.cancel()
-        visitor.settle()
-        snapCamera = true
-        setHover(null)
-        visitor.group.rotation.y = Math.atan2(
-          anchors[id][0] - x,
-          anchors[id][1] - z,
-        )
-        updateReach()
-      }
-      // A quick hop and sparkle on arrival makes travelling feel magical.
-      const pop = () => {
-        visitor.land?.()
-        play('land')
-      }
-      if (inside) crossDoor(false, () => (move(), pop()), arrived)
-      else if (motion.matches) {
-        move()
-        arrived?.()
-      } else
-        iris.start(
-          () => {
-            move()
-            pop()
-          },
-          arrived,
-        )
+      jump(destinations[id], anchors[id], arrived)
+    },
+    goTo(stand, look, arrived) {
+      if (iris.active()) return
+      skipArrival()
+      jump(stand, look, arrived)
     },
     touch(x, y) {
       if (!iris.active()) stick.set(x, y)

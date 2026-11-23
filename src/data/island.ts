@@ -50,6 +50,8 @@ export const treeSites: XZ[] = [
   [-15.2, 5.1],
   [-6.1, 10.9],
   [-0.4, 11.7],
+  [-9.27, 7.25],
+  [-12.6, 8.9],
   [9.2, -10.9],
   [15.6, -5.2],
   [16.6, 3.6],
@@ -104,6 +106,8 @@ export const benchSites: XZ[] = [
   [-9.96, 4.01],
   // The western lookout, facing the open sea.
   [-15.9, 1.6],
+  // A quiet bench on the islet, looking out to sea.
+  [-24.9, 3.15],
 ]
 
 export const cafeTables: XZ[] = [
@@ -159,39 +163,76 @@ export const palmSites: XZ[] = [
   [13.6, 8.0],
   [10.6, 7.6],
 ]
-export const telescopeSite: XZ = [-16.6, 0.2]
+export const telescopeSite: XZ = [-16.85, -0.7]
 
 /**
  * The mountain shrine (south-west): a raised octagonal tournament ring
  * reached through a torii gate, ringed by rock spires, a gong, a training
  * post, stone lanterns and banners.
  */
-export const shrine = {
-  center: [-11.2, 8.0] as XZ,
-  radius: 1.45,
-  gate: [-9.16, 6.38] as XZ,
-  /** Gate posts sit either side of the path into the ring. */
-  gateYaw: Math.atan2(-11.2 + 9.16, 8.0 - 6.38),
-  spires: [
-    [-13.7, 6.4, 3.0],
-    [-13.9, 9.3, 2.2],
-    [-9.0, 9.9, 1.7],
-    [-12.4, 10.6, 1.4],
-  ] as [number, number, number][],
-  gong: [-13.05, 7.75] as XZ,
-  post: [-9.35, 8.95] as XZ,
-  lanterns: [
-    [-8.93, 7.47],
-    [-10.17, 5.91],
-  ] as XZ[],
-  banners: [
-    [-12.25, 6.7],
-    [-12.45, 9.25],
-    [-11.75, 6.25],
-  ] as XZ[],
+/**
+ * A quiet islet off the west coast, reached by a long wooden bridge from
+ * the lookout. It holds the shrine.
+ */
+export const islet = {
+  center: [-26.2, 1.2] as XZ,
+  /** Coastline radii, and the walkable lawn inside them. */
+  coastX: 4.6,
+  coastZ: 3.9,
+  walkX: 3.85,
+  walkZ: 3.15,
+  /** The bridge runs along z = bridgeZ from the island to the islet. */
+  bridgeZ: 0.9,
+  bridgeFrom: -17.7,
+  bridgeTo: -22.75,
+  bridgeWidth: 1.15,
 }
-/** Is (x, z) inside the shrine grounds (kept clear of flowers and tufts)? */
-export const inShrine = (x: number, z: number) => Math.hypot(x - shrine.center[0], z - shrine.center[1]) < 3.1
+export const onBridge = (x: number, z: number) =>
+  x < islet.bridgeFrom + 0.1 && x > islet.bridgeTo - 0.25 && Math.abs(z - islet.bridgeZ) < islet.bridgeWidth / 2 - 0.08
+export const onIslet = (x: number, z: number) =>
+  ((x - islet.center[0]) / islet.walkX) ** 2 + ((z - islet.center[1]) / islet.walkZ) ** 2 <= 1
+/** Bridge deck height: a gentle arch over the water. */
+export function bridgeDeck(x: number) {
+  const t = Math.min(1, Math.max(0, (islet.bridgeFrom - x) / (islet.bridgeFrom - islet.bridgeTo)))
+  return 0.12 + 0.14 * Math.sin(Math.PI * t)
+}
+
+/**
+ * The mountain shrine on the islet: a raised octagonal tournament ring
+ * reached through a torii gate, ringed by rock spires, a gong, a training
+ * post, stone lanterns, banners, paper lanterns and two cherry trees.
+ */
+export const shrine = {
+  center: [-26.6, 1.3] as XZ,
+  radius: 1.45,
+  gate: [-23.55, 1.0] as XZ,
+  /** Gate posts sit either side of the path into the ring. */
+  gateYaw: Math.atan2(-26.6 + 23.55, 1.3 - 1.0),
+  spires: [
+    [-29.1, -0.5, 3.0],
+    [-29.4, 2.8, 2.3],
+    [-27.4, 4.1, 1.6],
+    [-26.3, -1.75, 1.8],
+  ] as [number, number, number][],
+  gong: [-29.0, 1.6] as XZ,
+  post: [-24.0, 3.0] as XZ,
+  lanterns: [
+    [-23.2, 2.0],
+    [-23.2, 0.0],
+  ] as XZ[],
+  banners: [] as XZ[],
+  /** Posts carrying strings of paper lanterns around the ring. */
+  lanternPosts: Array.from({ length: 6 }, (_, i) => {
+    const a = (i / 6) * Math.PI * 2 + 0.3
+    return [-26.6 + Math.cos(a) * 2.25, 1.3 + Math.sin(a) * 2.25] as XZ
+  }),
+  sakura: [
+    [-28.0, -1.55, 0.95],
+    [-24.25, 3.85, 0.8],
+  ] as [number, number, number][],
+}
+/** Is (x, z) on the shrine islet (kept clear of the island's flowers and tufts)? */
+export const inShrine = (x: number, z: number) => onIslet(x, z) || onBridge(x, z)
 /** Floor height on the raised ring, easing up over its chamfered rim. */
 export function shrineFloor(x: number, z: number) {
   const r = Math.hypot(x - shrine.center[0], z - shrine.center[1])
@@ -254,6 +295,8 @@ export function propColliders() {
   for (const side of [-1, 1]) out.push([gx + Math.sin(across) * 0.78 * side, gz + Math.cos(across) * 0.78 * side, 0.18])
   for (const [x, z, h] of shrine.spires) out.push([x, z, 0.45 + h * 0.08])
   out.push([...shrine.gong, 0.42], [...shrine.post, 0.22])
+  for (const [x, z] of shrine.lanternPosts) out.push([x, z, 0.14])
+  for (const [x, z] of shrine.sakura) out.push([x, z, 0.36])
   for (const [x, z] of shrine.lanterns) out.push([x, z, 0.22])
   for (const [x, z] of shrine.banners) out.push([x, z, 0.12])
   // The pond is water: walk around it.
@@ -271,3 +314,24 @@ export function propColliders() {
       out.push([fx + dx + k * Math.cos(turn) * 0.3, fz + dz + k * Math.sin(turn) * 0.3, 0.24])
   return out
 }
+
+/** Every earth path on the island (the 3D scenery and the map share them). */
+export const pathways: { pts: XZ[]; width: number }[] = [
+  { pts: [[-13, 0.7], [-10, 1.04], [-8, 1.14], [-5, 1], [-3.8, 1]], width: 1.34 },
+  { pts: [[-1.25, 1], [1, 1.12], [3.6, 0.95], [6.3, 0.86], [9, 0.92], [11, 1.45]], width: 1.4 },
+  { pts: [[1.15, 1.06], [1.78, -0.92], [1.76, -2.79], [1.44, -4.78]], width: 1.26 },
+  { pts: [[8.67, 0.91], [8.97, -0.08], [9, -1.78]], width: 1.34 },
+  { pts: [[10, 1.13], [10.62, 2.35], [10.7, 4.84], [9.7, 5.75], [7.11, 5.72]], width: 1.2 },
+  { pts: [[-8.48, 1.05], [-8.9, 2.72], [-8.84, 5.76], [-7.88, 6.47], [-3.8, 6.5]], width: 1.22 },
+  { pts: [[-1.2, 6.5], [1.13, 6.52], [3.6, 6.4], [5.25, 5.72], [7.9, 5.72]], width: 1.34 },
+  { pts: [[1.38, 1.12], [2.42, 2.95], [2.79, 4.74], [2.83, 6.52], [2.62, 8.64], [2.5, 10.6], [2.5, 12.0], [2.5, 13.2]], width: 1.13 },
+  { pts: [[-8.48, 1.05], [-11.0, 0.4], [-11.1, -3.0], [-11.0, -5.9], [-9.6, -8.4]], width: 1.05 },
+  { pts: [[1.8, -2.6], [3.2, -4.6], [3.7, -7.0], [5.0, -8.9]], width: 1.0 },
+  { pts: [[9.7, 5.75], [10.6, 7.0], [11.0, 8.1]], width: 1.05 },
+  { pts: [[-13, 0.7], [-15.2, 0.85], [-17.9, 0.9]], width: 1.1 },
+  { pts: [[-22.4, 0.9], [-23.6, 1.0], [-24.6, 1.1]], width: 1.05 },
+]
+
+/** The stream's centre line and half-width along z. */
+export const riverAt = (z: number) => -2.5 + Math.sin(z * 0.64) * 0.14 + Math.sin(z * 0.28) * 0.12
+export const riverWidthAt = (z: number) => 0.66 + 0.09 * Math.cos(z * 0.72) + 0.035 * Math.cos(z * 1.8)
