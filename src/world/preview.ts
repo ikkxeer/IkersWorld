@@ -50,18 +50,27 @@ export function createOutfitStage(canvas: HTMLCanvasElement, reduced: boolean) {
 
   function mount(id: string) {
     if (visitor) {
-      table.remove(visitor.group)
-      visitor.group.traverse((o) => {
-        if (o instanceof T.Mesh) o.geometry.dispose()
-      })
+      visitor.wear?.(id, true)
+    } else {
+      visitor = createVisitor(id)
+      visitor.group.scale.setScalar(1.36)
+      table.add(visitor.group)
     }
-    visitor = createVisitor(id)
-    visitor.group.scale.setScalar(1.36)
     visitor.group.traverse((o) => {
       if (o instanceof T.Mesh) o.castShadow = true
     })
-    table.add(visitor.group)
     current = id
+  }
+
+  function release(root: T.Object3D) {
+    const materials = new Set<T.Material>()
+    root.traverse(o => {
+      if (o instanceof T.Mesh) o.geometry.dispose()
+      if (o instanceof T.Mesh || o instanceof T.Sprite) {
+        for (const material of [o.material].flat()) materials.add(material)
+      }
+    })
+    materials.forEach(material => material.dispose())
   }
 
   function resize() {
@@ -70,7 +79,8 @@ export function createOutfitStage(canvas: HTMLCanvasElement, reduced: boolean) {
     if (!w || !h) return
     renderer.setSize(w, h, false)
     camera.aspect = w / h
-    camera.position.z = w / h < 0.75 ? 7.8 : 6.9
+    camera.position.z = 6.9 * Math.max(1, 0.82 / camera.aspect)
+    camera.lookAt(0, 1.08, 0)
     camera.updateProjectionMatrix()
   }
   const observer = new ResizeObserver(resize)
@@ -84,7 +94,7 @@ export function createOutfitStage(canvas: HTMLCanvasElement, reduced: boolean) {
     last = stamp
     time += dt
     // A slow turn; a quick pop and twirl whenever the outfit changes.
-    angle += dt * (reduced ? 0.25 : 0.45)
+    angle += reduced ? 0 : dt * 0.45
     if (swap < 1) {
       swap = Math.min(1, swap + dt / 0.45)
       if (pending && swap >= 0.5) {
@@ -123,28 +133,32 @@ export function createOutfitStage(canvas: HTMLCanvasElement, reduced: boolean) {
       portrait.lookAt(0, 0.85, 0)
       const studio = new T.Scene()
       studio.add(new T.HemisphereLight('#fff6e4', '#b7a6d6', 2), key.clone(), rim.clone())
-      for (const outfit of outfits) {
-        if (dead) break
-        const model = createVisitor(outfit.id)
-        model.group.scale.setScalar(1.36)
-        model.group.rotation.y = 0.32
-        model.animate(1, true, { distance: 0, speed: 0, turn: 0 }, null)
-        studio.add(model.group)
-        shot.render(studio, portrait)
-        done(outfit.id, shot.domElement.toDataURL('image/png'))
-        studio.remove(model.group)
-        model.group.traverse((o) => {
-          if (o instanceof T.Mesh) o.geometry.dispose()
-        })
-        await new Promise((resolve) => setTimeout(resolve, 16))
+      const model = createVisitor(outfits[0].id)
+      model.group.scale.setScalar(1.36)
+      model.group.rotation.y = 0.32
+      studio.add(model.group)
+      try {
+        for (const outfit of outfits) {
+          if (dead) break
+          if (outfit !== outfits[0]) model.wear?.(outfit.id, true)
+          model.animate(1, true)
+          shot.render(studio, portrait)
+          done(outfit.id, shot.domElement.toDataURL('image/png'))
+          await new Promise((resolve) => setTimeout(resolve, 16))
+        }
+      } finally {
+        release(model.group)
+        if (model.effects) release(model.effects)
+        shot.dispose()
+        shot.forceContextLoss()
       }
-      shot.dispose()
-      shot.forceContextLoss()
     },
     dispose() {
       dead = true
       cancelAnimationFrame(frame)
       observer.disconnect()
+      release(table)
+      if (visitor?.effects) release(visitor.effects)
       renderer.dispose()
       renderer.forceContextLoss()
     },

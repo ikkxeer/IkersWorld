@@ -45,6 +45,7 @@ export interface VillageView {
   signs: (HTMLElement | null)[]
   exhibit: HTMLElement | null
   iris: HTMLElement | null
+  lookout?: HTMLCanvasElement | null
   /** Begin on the title screen: the camera circles the island and waits. */
   title?: boolean
   /** Outfit to start in. */

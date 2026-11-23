@@ -1,3 +1,4 @@
+import { createLookout } from './lookout'
 import { disposeRadio, positionRadio } from '../audio/beachRadio'
 import * as T from 'three'
 import { makeSky } from '../environment/sky'
@@ -53,6 +54,7 @@ export function startVillage(
   const scene = new T.Scene(),
     camera = new T.OrthographicCamera(-20, 20, 14, -14, 0.1, 160)
   const atmosphere = makeSky(scene, low)
+  const lookoutEvents = view.lookout ? createLookout(view.lookout, scene) : null
   const scenery = createScenery(low),
     visitor = createVisitor(view.outfit),
     guide = createGuide(),
@@ -1205,6 +1207,7 @@ export function startVillage(
     }
     camera.updateProjectionMatrix()
     camera.updateMatrixWorld()
+    lookoutEvents?.update(lookout, night, dt, camera, motion.matches, paused)
     positionRadio(p.x, p.y + 1.25, p.z, Math.atan2(cameraOffset.x, cameraOffset.z), !!inside)
     view.signs.forEach((sign, index) => {
       if (!sign) return

@@ -7,6 +7,19 @@ export const tracks = [
   { file: 'otra-noche-en-miami.mp3', title: 'Otra Noche en Miami', artist: 'Bad Bunny' },
 ]
 
+const volumeKey = 'ikers-world-radio-volume'
+let volume = 0.75
+try {
+  const saved = localStorage.getItem(volumeKey)
+  if (saved !== null && Number.isFinite(Number(saved))) volume = Math.max(0, Math.min(1, Number(saved)))
+} catch { /* Storage can be unavailable in private browsing. */ }
+export const radioVolume = () => volume
+export function setRadioVolume(value: number) {
+  volume = Math.max(0, Math.min(1, value))
+  if (volumeGain && context) volumeGain.gain.setTargetAtTime(volume, context.currentTime, .05)
+  try { localStorage.setItem(volumeKey, String(volume)) } catch { /* Keep the session value. */ }
+}
+
 let muted = false
 export function muteRadio(value: boolean) {
   muted = value
@@ -16,6 +29,7 @@ let context: AudioContext | undefined
 let player: HTMLAudioElement | undefined
 let panner: PannerNode | undefined
 let gain: GainNode | undefined
+let volumeGain: GainNode | undefined
 let playing = -1
 let revision = 0
 const listeners = new Set<() => void>()
@@ -45,7 +59,9 @@ export async function playRadio(index: number) {
     panner.refDistance = 2
     panner.rolloffFactor = 1.7
     gain = context.createGain()
-    context.createMediaElementSource(player).connect(panner).connect(gain).connect(context.destination)
+    volumeGain = context.createGain()
+    volumeGain.gain.value = volume
+    context.createMediaElementSource(player).connect(volumeGain).connect(panner).connect(gain).connect(context.destination)
     player.onended = stopRadio
     player.onerror = stopRadio
   }
@@ -73,5 +89,6 @@ export function disposeRadio() {
   player = undefined
   context = undefined
   gain = undefined
+  volumeGain = undefined
   panner = undefined
 }

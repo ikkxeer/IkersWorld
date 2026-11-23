@@ -35,7 +35,9 @@ export default function Wardrobe({
   const canvas = useRef<HTMLCanvasElement>(null)
   const stage = useRef<Stage | null>(null)
   const [selected, setSelected] = useState(current)
+  const [previewFailed, setPreviewFailed] = useState(false)
   const [thumbs, setThumbs] = useState<Record<string, string>>({})
+  const selectedRef = useRef(selected)
   const index = Math.max(0, outfits.findIndex((o) => o.id === selected))
   const outfit = outfits[index]
 
@@ -47,19 +49,20 @@ export default function Wardrobe({
       if (!alive || !canvas.current) return
       const s = createOutfitStage(canvas.current, reduced)
       stage.current = s
-      s.show(current)
+      s.show(selectedRef.current)
       void s.thumbnails(168, (id, url) => {
         if (alive) setThumbs((t) => ({ ...t, [id]: url }))
-      })
-    })
+      }).catch(() => { if (alive) setPreviewFailed(true) })
+    }).catch(() => { if (alive) setPreviewFailed(true) })
     return () => {
       alive = false
       stage.current?.dispose()
       stage.current = null
     }
-  }, [current])
+  }, [])
 
   useEffect(() => {
+    selectedRef.current = selected
     stage.current?.show(selected)
   }, [selected])
 
@@ -102,7 +105,10 @@ export default function Wardrobe({
         </header>
         <div className="wardrobe-main">
           <section className="dressing-stage" aria-live="polite">
-            <canvas ref={canvas} aria-hidden="true" />
+            <div className="stage-viewport">
+              <canvas ref={canvas} aria-hidden="true" />
+              {previewFailed && <Shirt className="stage-fallback" size={65} aria-hidden="true" />}
+            </div>
             <button className="stage-arrow prev" onClick={() => step(-1)} aria-label="←">
               <ChevronLeft size={22} />
             </button>
@@ -138,7 +144,7 @@ export default function Wardrobe({
                 aria-label={o.name[lang]}
               >
                 <span className="outfit-thumb" style={{ background: `radial-gradient(circle at 50% 70%, ${o.top}55, ${o.accent}22 70%)` }}>
-                  {thumbs[o.id] ? <img src={thumbs[o.id]} alt="" /> : <i className="thumb-spinner" />}
+                  {thumbs[o.id] ? <img src={thumbs[o.id]} alt="" /> : previewFailed ? <Shirt size={30} /> : <i className="thumb-spinner" />}
                 </span>
                 <b>{o.name[lang]}</b>
                 {o.id === current && (

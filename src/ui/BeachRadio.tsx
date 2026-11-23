@@ -1,6 +1,6 @@
 import { useState, useSyncExternalStore } from 'react'
 import { Music2, Play, Square } from 'lucide-react'
-import { playRadio, radioSnapshot, stopRadio, subscribeRadio, tracks } from '../audio/beachRadio'
+import { playRadio, radioSnapshot, radioVolume, setRadioVolume, stopRadio, subscribeRadio, tracks } from '../audio/beachRadio'
 import type { Lang } from '../data/village'
 
 const labels = {
@@ -11,6 +11,7 @@ const labels = {
 
 export default function BeachRadio({lang, enableSound}: {lang: Lang; enableSound: () => void}) {
   const current = useSyncExternalStore(subscribeRadio, radioSnapshot)
+  const [volume, setVolume] = useState(radioVolume)
   const [error, setError] = useState(false)
   const [stop, failed] = labels[lang]
   return <div className="cove-radio">
@@ -25,6 +26,15 @@ export default function BeachRadio({lang, enableSound}: {lang: Lang; enableSound
       </button>)}
       {current >= 0 && <button onClick={stopRadio}><Square size={16}/>{stop}</button>}
     </div>
+    <label className="radio-volume">
+      <span>{lang === 'es' ? 'Volumen del altavoz' : lang === 'ca' ? 'Volum de l’altaveu' : 'Speaker volume'}</span>
+      <output>{Math.round(volume * 100)}%</output>
+      <input type="range" min="0" max="100" value={Math.round(volume * 100)} onChange={e => {
+        const value = Number(e.target.value) / 100
+        setRadioVolume(value)
+        setVolume(value)
+      }} />
+    </label>
     {error && <p role="alert">{failed}</p>}
   </div>
 }

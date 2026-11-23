@@ -1,3 +1,4 @@
+import { outfitDetails } from '../data/outfitDetails'
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { cartoon } from './modelKit'
@@ -472,6 +473,9 @@ export function createVisitor(initialOutfit?: string): IslandCharacter {
       return m
     }
     const { hair, hairLight, top, stripe, accent, bottom, bottomLight } = o
+    const detailing = outfitDetails(o.id)
+    const seam = new THREE.Color(top).lerp(new THREE.Color(detailing.cloth), 0.55).getStyle()
+    const cuff = new THREE.Color(accent).lerp(new THREE.Color('#fff1d7'), 0.28).getStyle()
 
     // Lower body: shorts, dungarees, trousers, hakama or skirt.
     const hips = sculpt(material)
@@ -620,6 +624,53 @@ export function createVisitor(initialOutfit?: string): IslandCharacter {
     if ((o.extra ?? 'none') === 'belt') {
       torso.ring(o.extraColor ?? '#5a3a2a', [0, 0.02, 0.004], 0.172, 0.022, 0.86)
       torso.oval('#e8b85a', [0, 0.02, 0.155], [0.035, 0.03, 0.012])
+    }
+    // Raised patches and stitched emblems use the clothing mesh and share its rig.
+    const badgeX = o.bib ? 0 : 0.085
+    const badgeY = o.bib ? 0.075 : 0.113
+    const badgeZ = o.bib ? 0.168 : 0.158
+    torso.oval(detailing.ink, [badgeX, badgeY, badgeZ], [0.046, 0.049, 0.009])
+    torso.oval(detailing.cloth, [badgeX, badgeY, badgeZ + .009], [0.040, 0.043, 0.008])
+    detailing.motif.slice(1).forEach(([x,y], i) => {
+      const [px,py] = detailing.motif[i]
+      torso.oval(detailing.ink,
+        [badgeX + (x + px) * .005, badgeY + (y + py) * .0048, badgeZ + .018],
+        [.0036, Math.hypot(x - px, y - py) * .0054 + .003, .003],
+        [0,0,-Math.atan2(x - px, y - py)])
+    })
+    for (const side of [-1, 1]) {
+      for (let i = 0; i < 4; i++) {
+        const x = side * (0.106 + i * .010)
+        const depth = Math.sqrt(.171 ** 2 - x ** 2) * .86
+        torso.oval(seam, [x, .053 + i * .004, depth + .009], [.004, .008, .007], [0, side * .75, side * .28])
+      }
+      if (o.back === 'backpack' || o.back === 'jetpack') {
+        torso.oval(detailing.cloth, [side * .111, .171, .109], [.021,.069,.025], [.21,0,side * .18])
+        torso.oval(cuff, [side * .108, .144, .133], [.020,.012,.007])
+      }
+    }
+    if (hem === 'coat' || o.id === 'chef' || o.id === 'knight') {
+      for (const y of [.083, .121, .159])
+        torso.oval(cuff, [-.047, y, .148], [.009,.009,.009])
+    }
+    if (o.id === 'winter' || o.id === 'fisher' || o.id === 'gamer' || o.id === 'rocker') {
+      // The puffed coat, slicker, hoodie and jacket each get a shaped front.
+      const quilted = o.id === 'winter'
+      torso.oval(top, [0, .132, -.116], [.143, .108, .065])
+      for (const side of [-1, 1]) {
+        torso.oval(seam, [side * .084, .075, .153], [.043, .022, .012], [0, side * .32, side * .23])
+        torso.oval(top, [side * .087, .069, .161], [.034, .014, .008], [0, side * .32, side * .23])
+        if (quilted) for (const y of [.105, .142, .179])
+          torso.oval(top, [side * .078, y, -.139], [.063, .017, .027])
+      }
+      torso.oval(cuff, [0, .18, .158], [.009, .018, .008])
+    }
+    if (o.hat === 'helmet' || o.back === 'jetpack') {
+      // Exposed plating over padded fabric, with little painted rivets.
+      for (const side of [-1, 1]) {
+        torso.oval(bottomLight, [side * .124, .177, .074], [.047,.055,.061], [.05,side * .28,side * .15])
+        torso.oval(cuff, [side * .151, .16, .109], [.009,.009,.009])
+      }
     }
     wear(torso, chest)
     if (o.back === 'tail') {
@@ -907,6 +958,10 @@ export function createVisitor(initialOutfit?: string): IslandCharacter {
       upper.limb(top, 0.05, UPPER_ARM - 0.02)
       if (stripe) upper.oval(stripe, [0, -0.05, 0], [0.053, 0.016, 0.053])
       upper.oval(stripe ?? accent, [0, -UPPER_ARM + 0.01, 0], [0.052, 0.024, 0.052])
+      upper.oval(detailing.cloth, [0, -UPPER_ARM + 0.023, 0], [.054, .010, .054])
+      upper.oval(cuff, [side * .026, -UPPER_ARM + .005, .046], [.008,.008,.006])
+      if (hem === 'coat' || o.hat === 'helmet' || o.back === 'jetpack')
+        upper.oval(stripe ?? seam, [side * .011,-.04, .033], [.064,.046,.036])
       wear(upper, shoulder)
       const lower = sculpt(material)
       lower.limb(skin, 0.04, FOREARM - 0.035)
@@ -928,6 +983,13 @@ export function createVisitor(initialOutfit?: string): IslandCharacter {
       shoe.oval(o.boot, [0, -0.01, 0.035], [0.094, 0.07, 0.138])
       shoe.oval(o.bootLight, [0, 0.012, 0.11], [0.06, 0.04, 0.05])
       shoe.oval(o.sole, [0, -0.058, 0.033], [0.099, 0.026, 0.143])
+      shoe.oval(detailing.cloth, [0, -.013, .157], [.061,.036,.025])
+      for (const offset of [0, .025, .05]) {
+        const z = .071 + offset
+        shoe.oval(cuff, [0, .055 - offset * .31, z], [.046,.006,.008], [.35,0,offset * 3])
+      }
+      for (const side of [-1,1])
+        shoe.oval(o.bootLight, [side * .092, -.036, .05], [.008,.008,.054])
       const keep = (mesh: THREE.Mesh, old: THREE.Mesh) => {
         mesh.position.copy(old.position)
         mesh.quaternion.copy(old.quaternion)
