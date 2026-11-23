@@ -105,7 +105,7 @@ function terrain(b: Batch) {
     }
     b.horizontal(outline, -0.28, 0.39, '#d4a36a', undefined, 0.155, 4)
     b.horizontal(outline, -0.12, 0.19, '#dbb87d', undefined, 0.105, 4)
-    b.horizontal(outline, 0.005, 0.14, '#9fca72', b.kit.grass, 0.095, 5, true)
+    b.horizontal(outline, 0.005, 0.14, '#8fbf66', b.kit.grass, 0.095, 5, true)
   }
   // Boulders frame both river mouths where the stream spills to the beach.
   for (const s of [-1, 1])
@@ -825,6 +825,26 @@ function telescope(b: Batch, x: number, z: number) {
   b.cylinder([x + 0.37, 1.19, z + 0.1], 0.075, 0.075, 0.03, '#b8862e', 10, [0, 0, Math.PI / 2 - 0.3])
 }
 
+/** Rounded, slightly irregular flagstones set into the lawn along a line. */
+function steppingStones(b: Batch, pts: XZ[]) {
+  let k = 0
+  for (let i = 0; i < pts.length - 1; i++) {
+    const [ax, az] = pts[i],
+      [bx, bz] = pts[i + 1]
+    const span = Math.hypot(bx - ax, bz - az)
+    const nx = -(bz - az) / span,
+      nz = (bx - ax) / span
+    for (let d = 0; d < span; d += 0.5, k++) {
+      const side = (k % 2 ? 1 : -1) * 0.16
+      const x = ax + ((bx - ax) * d) / span + nx * side,
+        z = az + ((bz - az) * d) / span + nz * side
+      const s = 0.28 + ((k * 0.37) % 1) * 0.09
+      b.ball([x, 0.1, z], [s, 0.05, s * 0.82], k % 3 ? '#c6b2a4' : '#b9a497', 1, [0, k * 1.3, 0])
+      b.ball([x - 0.02, 0.125, z - 0.02], [s * 0.82, 0.03, s * 0.66], k % 3 ? '#d9c8ba' : '#cdbaab', 1, [0, k * 1.3, 0])
+    }
+  }
+}
+
 /** Plant little clumps of flowers along the verges of every path. */
 function verges(b: Batch, rand: () => number, low: boolean) {
   const palette = ['#fcf2c7', '#f09aa4', '#f6c768', '#b9a2d9', '#f6a77d', '#9ccbf0', '#ffffff']
@@ -889,15 +909,12 @@ export function createScenery(low: boolean) {
     ],
     1.4,
   )
-  path(
-    staticParts,
-    [
-      [-7, 1.12],
-      [-7.4, 0.25],
-      [-7.48, -1.84],
-    ],
-    1.21,
-  )
+  // Flagstones lead up to Iker's front door.
+  steppingStones(staticParts, [
+    [-7, 1.0],
+    [-7.4, 0.25],
+    [-7.55, -1.5],
+  ])
   path(
     staticParts,
     [

@@ -1,6 +1,8 @@
 import * as T from 'three'
 import { makeSky } from '../environment/sky'
 import { makeIris } from './iris'
+import { createPostFX } from './postfx'
+import { daylight } from '../environment/daylight'
 import { bendScene, projectCurved, unbendRay, worldCurve, worldCurveFocus } from './curve'
 import { anchors, destinations } from '../data/village'
 import { campfire, fishingSpot, shape } from '../data/island'
@@ -334,8 +336,18 @@ export function startVillage(
     dead = false
   let hovered: T.Object3D | null = null,
     nearObject: T.Object3D | null = null
+  // Bloom, tilt-shift and grading on capable devices; modest ones render
+  // straight to the screen.
+  const post = low ? null : createPostFX(renderer, scene, camera)
+  /** 1 around sunrise and sunset: warms the grade and the bloom. */
+  const goldenHour = () => {
+    const { hour } = daylight(new Date())
+    return Math.max(0, 1 - Math.abs(hour - 7) / 1.6, 1 - Math.abs(hour - 18.7) / 1.7)
+  }
+  let golden = goldenHour()
   const resize = () => {
     renderer.setSize(canvas.clientWidth, canvas.clientHeight, false)
+    post?.setSize(canvas.clientWidth, canvas.clientHeight, pixelRatio)
     camera.updateProjectionMatrix()
   }
   const observer = new ResizeObserver(resize)
@@ -650,6 +662,7 @@ export function startVillage(
     elapsed += dt
     if (stamp - lastLight > 8000) {
       night = atmosphere.update(new Date())
+      golden = goldenHour()
       lastLight = stamp
     }
     const p = visitor.group.position
@@ -1002,7 +1015,9 @@ export function startVillage(
       renderer.shadowMap.needsUpdate = true
       lastShadow = stamp
     }
-    renderer.render(inside ? rooms[inside].scene : scene, camera)
+    const current = inside ? rooms[inside].scene : scene
+    if (post) post.render(current, { night: inside ? 0.35 : night, golden: inside ? 0 : golden, inside: !!inside, time: elapsed }, dt)
+    else renderer.render(current, camera)
   }
   document.addEventListener(
     'visibilitychange',
@@ -1113,6 +1128,7 @@ export function startVillage(
       textures.forEach((t) => t.dispose())
       geometries.forEach((g) => g.dispose())
       materials.forEach((m) => m.dispose())
+      post?.dispose()
       renderer.dispose()
     },
   }

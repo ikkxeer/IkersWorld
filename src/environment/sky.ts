@@ -149,6 +149,12 @@ export function makeSky(scene: T.Scene, low: boolean) {
     )
     hemi.intensity = 1.65 - s.night * 0.94
     hemi.color.set('#fff3d8').lerp(tmp.set('#b6cfff'), s.night)
+    // Golden hour: rosy sky light, violet bounce from the ground and a
+    // peachy sun, like a storybook sunset.
+    const golden = Math.max(0, 1 - Math.abs(s.hour - 7) / 1.6, 1 - Math.abs(s.hour - 18.7) / 1.7)
+    hemi.color.lerp(tmp.set('#ffc0c8'), golden * 0.7)
+    hemi.groundColor.set('#b7d08c').lerp(tmp.set('#9d86bd'), golden * 0.75 + s.night * 0.3)
+    sun.color.lerp(tmp.set('#ffa98a'), golden * 0.5)
     flies.visible = s.night > 0.18
     flyMaterial.opacity = s.night
     starMat.opacity = s.night

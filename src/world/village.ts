@@ -348,7 +348,50 @@ export function building(
     b.stick([0.23, 2.75, face + 0.14], [0.41, 2.72, face + 0.14], 0.05, trim)
     b.stick([0.41, 2.72, face + 0.14], [0.25, 2.55, face + 0.14], 0.05, trim)
   }
+  // A welcoming porch: wall lanterns that glow at dusk, potted plants and a
+  // doormat; Iker's own door wears a wreath.
+  const doorX = home ? -0.59 : isLab ? 1.02 : station ? 0 : -0.83
+  const lanterns = isCafe ? [doorX - 0.6] : [doorX - 0.6, doorX + 0.6]
+  for (const x of lanterns) wallLantern(b, x, 1.32, face)
+  b.block([doorX, 0.105, face + 0.78], [0.7, 0.02, 0.36], '#c6774f', [0, 0, 0], true)
+  b.block([doorX, 0.11, face + 0.78], [0.56, 0.02, 0.24], '#e9a66a', [0, 0, 0], true)
+  const pots = isCafe ? [1.62] : [doorX - 0.78, doorX + 0.78]
+  pots.forEach((x, i) => pottedPlant(b, x, face + 0.48, i + (home ? 0 : isLab ? 2 : 4)))
+  if (home) wreath(b, doorX, 1.0, face + 0.25)
   return b.finish()
+}
+
+function wallLantern(b: Batch, x: number, y: number, face: number) {
+  b.stick([x, y + 0.1, face + 0.02], [x, y + 0.1, face + 0.17], 0.018, '#4b3b31', 5)
+  b.cylinder([x, y + 0.13, face + 0.17], 0.02, 0.09, 0.07, '#4b3b31', 6)
+  b.cylinder([x, y, face + 0.17], 0.07, 0.065, 0.18, '#ffd28a', 6, [0, 0, 0], b.kit.glass)
+  b.cylinder([x, y - 0.1, face + 0.17], 0.075, 0.05, 0.03, '#4b3b31', 6)
+}
+
+function pottedPlant(b: Batch, x: number, z: number, kind: number) {
+  b.cylinder([x, 0.26, z], 0.2, 0.15, 0.32, kind % 2 ? '#c8724e' : '#d48a5c', 12)
+  b.cylinder([x, 0.42, z], 0.215, 0.215, 0.05, kind % 2 ? '#b5633f' : '#c27a4f', 12)
+  const bloom = ['#ef6c6c', '#f6c24d', '#f39ac4', '#b49ae6', '#fffaf0', '#ff9a5c'][kind % 6]
+  for (let i = 0; i < 5; i++) {
+    const a = (i / 5) * Math.PI * 2
+    b.ball([x + Math.cos(a) * 0.1, 0.55, z + Math.sin(a) * 0.1], [0.11, 0.09, 0.11], '#6fa65a', 1, [0, a, 0], b.kit.leaf)
+  }
+  for (let i = 0; i < 4; i++) {
+    const a = (i / 4) * Math.PI * 2 + 0.4
+    b.ball([x + Math.cos(a) * 0.08, 0.67 + (i % 2) * 0.05, z + Math.sin(a) * 0.08], [0.055, 0.045, 0.055], bloom, 1, [0, 0, 0], b.kit.petals)
+  }
+}
+
+function wreath(b: Batch, x: number, y: number, z: number) {
+  for (let i = 0; i < 14; i++) {
+    const a = (i / 14) * Math.PI * 2
+    b.ball([x + Math.cos(a) * 0.17, y + Math.sin(a) * 0.17, z], [0.06, 0.06, 0.035], i % 2 ? '#5f9a58' : '#78b064', 1)
+  }
+  for (let i = 0; i < 5; i++) {
+    const a = (i / 5) * Math.PI * 2 + 0.5
+    b.ball([x + Math.cos(a) * 0.17, y + Math.sin(a) * 0.17, z + 0.03], [0.022, 0.022, 0.022], i % 2 ? '#e2574c' : '#f6c24d', 1)
+  }
+  for (const s of [-1, 1]) b.ball([x + s * 0.05, y - 0.18, z + 0.03], [0.05, 0.035, 0.02], '#e2574c', 1, [0, 0, s * 0.5])
 }
 export function lighthouse(b: Batch, x: number, z: number) {
   const y = 0.6

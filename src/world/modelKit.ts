@@ -80,13 +80,14 @@ export class ModelKit {
           shake: this.shake,
         })
         shader.vertexShader =
-          'uniform float islandTime; uniform float motion; uniform vec2 walker; uniform vec3 shake;\nvarying float leafUp;\n' +
+          'uniform float islandTime; uniform float motion; uniform vec2 walker; uniform vec3 shake;\nvarying float leafUp;\nvarying vec3 leafWorld;\n' +
           (flower ? '' : 'varying vec3 leafViewPosition;\n') +
           shader.vertexShader
         shader.vertexShader = shader.vertexShader.replace(
           '#include <begin_vertex>',
           `#include <begin_vertex>
           leafUp = normalize(mat3(modelMatrix) * objectNormal).y;
+          leafWorld = (modelMatrix * vec4(position, 1.)).xyz;
           vec2 here = (modelMatrix * vec4(position, 1.)).xz;
           // Gusts roll across the island: the breeze swells and settles.
           float gust = .7 + .5 * sin(islandTime * .27 + here.x * .08 - here.y * .05);
@@ -100,12 +101,29 @@ export class ModelKit {
           ${flower ? 'vec2 away = here - walker; transformed.xz += motion * away / max(length(away), .1) * (1. - smoothstep(.2, 1.8, length(away))) * .18;' : 'leafViewPosition = (modelViewMatrix * vec4(transformed, 1.)).xyz;'}`,
         )
         // Sunlit crowns, cool undersides: soft painted volume on foliage.
+        // Leaf clusters: a soft cellular pattern of brighter clumps with
+        // darker hollows between them, like hand-painted foliage.
+        const clumps = flower
+          ? ''
+          : `
+            vec2 lp = vec2(leafWorld.x + leafWorld.y * .6, leafWorld.z - leafWorld.y * .45) * 3.1;
+            vec2 li = floor(lp), lf = fract(lp);
+            float nearest = 1.5;
+            for (int y = -1; y <= 1; y++)
+              for (int x = -1; x <= 1; x++) {
+                vec2 o = vec2(float(x), float(y));
+                vec2 centre = o + vec2(islandHash(li + o), islandHash(li + o + 7.)) - lf;
+                nearest = min(nearest, length(centre));
+              }
+            float leafFade = 1. - smoothstep(.35, .9, length(fwidth(lp)));
+            diffuseColor.rgb *= mix(1., mix(1.06, .88, smoothstep(.3, .85, nearest)), leafFade);`
         shader.fragmentShader =
-          'varying float leafUp;\n' +
+          'varying float leafUp;\nvarying vec3 leafWorld;\n' +
+          noiseGLSL +
           shader.fragmentShader.replace(
             '#include <color_fragment>',
             `#include <color_fragment>
-            diffuseColor.rgb *= mix(vec3(.8, .87, .94), vec3(1.13, 1.11, .9), leafUp * .5 + .5);`,
+            diffuseColor.rgb *= mix(vec3(.8, .87, .94), vec3(1.13, 1.11, .9), leafUp * .5 + .5);` + clumps,
           )
         if (!flower) {
           // Reveal the player's silhouette through greenery between them and the camera.
@@ -169,12 +187,32 @@ function paintGround(
         ? `vec2 p = vGroundWorld.xz;
           vec3 g = diffuseColor.rgb * mix(.9, 1.09, islandFbm(p * .42));
           g = mix(g, g * vec3(1.07, 1.1, .84) + vec3(.02, .02, 0.), smoothstep(.56, .82, islandNoise(p * .17 + 3.)) * .7);
-          vec2 cell = floor(p * 6.5);
-          vec2 local = fract(p * 6.5) - .5;
-          float fleck = step(.86, islandHash(cell)) * smoothstep(.34, .08, length(local * vec2(1.6, .7)));
-          g = mix(g, g * vec3(.78, .9, .68), fleck * .6);
-          float clover = step(.955, islandHash(cell + 7.)) * smoothstep(.3, .1, length(local));
-          g = mix(g, g * 1.18 + .035, clover * .7);
+          // Leafy confetti: two layers of tiny rotated triangles in a few
+          // tones (deep green, yellow-green, pale and the odd warm orange).
+          vec3 base = g;
+          for (int layer = 0; layer < 3; layer++) {
+            vec2 uv = p * 2.1 + float(layer) * vec2(.5, .37);
+            vec2 cell = floor(uv) + float(layer) * 17.;
+            vec2 f = fract(uv) - .5 - (vec2(islandHash(cell + 1.), islandHash(cell + 2.)) - .5) * .42;
+            float h = islandHash(cell);
+            float a = h * 6.2832;
+            vec2 q = mat2(cos(a), -sin(a), sin(a), cos(a)) * f;
+            float r = .13 + .07 * islandHash(cell + 5.);
+            // Equilateral triangle distance.
+            q.x = abs(q.x) - r;
+            q.y = q.y + r / 1.7320508;
+            if (q.x + 1.7320508 * q.y > 0.) q = vec2(q.x - 1.7320508 * q.y, -1.7320508 * q.x - q.y) / 2.;
+            q.x -= clamp(q.x, -2. * r, 0.);
+            float d = -length(q) * sign(q.y);
+            float fade = 1. - smoothstep(.12, .4, length(fwidth(uv)));
+            float mask = (1. - smoothstep(0., .018, d)) * step(.3, h) * fade;
+            float tone = islandHash(cell + 9.);
+            vec3 col = tone < .45 ? base * vec3(.68, .82, .6)
+              : tone < .8 ? base * vec3(1.2, 1.17, .82)
+              : tone < .94 ? base * vec3(1.06, 1.2, .98) + .03
+              : vec3(.98, .62, .32) * base.g * 1.35;
+            g = mix(g, col, mask * .85);
+          }
           diffuseColor.rgb = g;`
         : `vec2 p = vGroundWorld.xz;
           vec3 c = diffuseColor.rgb * mix(.93, 1.06, islandFbm(p * 1.4));
