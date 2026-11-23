@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { cartoon } from './modelKit'
+import { outfitById, type Outfit } from '../data/outfits'
 
 /** What the engine measured this frame, in world units. */
 export interface Locomotion {
@@ -28,7 +29,9 @@ export interface IslandCharacter {
   /** Drop any in-flight gait state, e.g. after a teleport or a scene swap. */
   settle: () => void
   /** Sit down on (or get up from) a seat right behind the character. */
-  sit?: (seated: boolean) => void
+  sit?: (seated: boolean, seat?: Seat) => void
+  /** Change into an outfit from the wardrobe (with a twirl unless instant). */
+  wear?: (outfit: string, instant?: boolean) => void
   /** Float a little emote bubble above the head. */
   emote?: (kind: Emote) => void
   /** Rod handling for the fishing activity. */
@@ -54,6 +57,13 @@ export interface Angler {
   show: (colors: [string, string] | null, scale?: number) => void
   /** World position of the rod tip, for the line. */
   tip: (out: THREE.Vector3) => THREE.Vector3
+}
+
+/** Where and how to sit: seat-top height above the floor (world units). */
+export interface Seat {
+  height: number
+  /** 'fire' warms hands and hums; 'bench' relaxes and may doze off. */
+  mode: 'fire' | 'bench'
 }
 
 export type Emote = 'note' | 'heart' | 'alert' | 'sparkle' | 'sleep'
@@ -329,20 +339,10 @@ function blinker(random: () => number) {
 }
 
 /* ------------------------------------------------------------------------ */
-/* Palette: a mint striped jumper, denim dungarees, a coral scarf and yellow */
-/* rain boots make the visitor readable at a glance, even from far away.    */
+/* Skin tones shared by every outfit (see src/data/outfits.ts for clothes). */
 const skin = '#f7cba4'
 const skinShade = '#f0b28c'
 const blush = '#f59a88'
-const hair = '#7a4630'
-const hairLight = '#99603f'
-const jumper = '#83cdb0'
-const stripe = '#fdf3dc'
-const denim = '#5479b0'
-const denimLight = '#6e93c6'
-const scarf = '#ef6c5c'
-const boot = '#f3b840'
-const sole = '#8a5440'
 const ink = '#2f2624'
 
 /* ------------------------------------------------------------------------ */
@@ -369,14 +369,12 @@ interface FootPose {
   pitch: number
 }
 
-type IdleAction = 'sway' | 'stretch' | 'tap'
+type IdleAction = 'sway' | 'stretch' | 'tap' | 'hop' | 'twirl'
 
 /** Seated pose: the seat is ~0.2 behind the feet, at log height. */
-const SIT_PELVIS = 0.285
-const SIT_BACK = 0.2
 const SIT_FOOT = 0.07
 
-export function createVisitor(): IslandCharacter {
+export function createVisitor(initialOutfit?: string): IslandCharacter {
   const group = new THREE.Group()
   const material = clay()
   const random = chance(11)
@@ -389,98 +387,16 @@ export function createVisitor(): IslandCharacter {
   const cowlick = joint(head, 0.03, HEAD + 0.27, -0.02)
   const scarfTail = joint(chest, -0.085, 0.235, -0.1)
 
-  /* ------------------------- Dungaree shorts --------------------------- */
-  const hips = sculpt(material)
-  hips.oval(denim, [0, 0.03, 0], [0.158, 0.11, 0.135])
-  hips.oval(denimLight, [0, -0.01, -0.118], [0.06, 0.045, 0.02])
-  hips.mesh(pelvis)
+  /* ------------------------------ Arms --------------------------------- */
+  const arms = [-1, 1].map((side) => {
+    const shoulder = joint(chest, side * 0.148, 0.2, 0.004)
+    const elbow = joint(shoulder, 0, -UPPER_ARM, 0)
+    return { side, shoulder, elbow }
+  })
 
-  /* ----------------------------- Torso --------------------------------- */
-  const torso = sculpt(material)
-  torso.turned(
-    jumper,
-    [0, 0, 0],
-    [
-      [0, 0],
-      [0.168, 0.01],
-      [0.176, 0.06],
-      [0.172, 0.16],
-      [0.148, 0.222],
-      [0.08, 0.248],
-      [0, 0.248],
-    ],
-    0.86,
-  )
-  // Cream stripes wrap the jumper.
-  for (const [y, r] of [
-    [0.115, 0.177],
-    [0.175, 0.166],
-  ])
-    torso.turned(
-      stripe,
-      [0, 0, 0],
-      [
-        [r, y - 0.018],
-        [r + 0.004, y],
-        [r, y + 0.018],
-      ],
-      0.86,
-    )
-  // Dungaree bib, straps, brass buttons and a sunny star patch.
-  torso.oval(denim, [0, 0.07, 0.112], [0.115, 0.1, 0.048])
-  torso.oval(denim, [0, 0.03, 0], [0.172, 0.07, 0.15])
-  for (const side of [-1, 1]) {
-    torso.oval(denim, [side * 0.078, 0.165, 0.12], [0.022, 0.07, 0.014], [0.2, 0, side * 0.12])
-    torso.oval(denim, [side * 0.078, 0.15, -0.122], [0.022, 0.085, 0.014], [-0.2, 0, side * 0.12])
-    torso.oval('#f6cf63', [side * 0.07, 0.122, 0.152], [0.017, 0.017, 0.01])
-  }
-  torso.oval(denimLight, [0, 0.06, 0.155], [0.05, 0.04, 0.008])
-  torso.oval('#ffd56a', [0, 0.065, 0.161], [0.026, 0.026, 0.008])
-  torso.oval('#ff9f7a', [0, 0.065, 0.166], [0.011, 0.011, 0.005])
-  // A chunky knitted scarf.
-  torso.ring(scarf, [0, 0.243, 0.004], 0.105, 0.045, 0.92)
-  torso.oval('#f58676', [0.07, 0.225, 0.1], [0.05, 0.045, 0.04], [0, 0.4, 0])
-  torso.mesh(chest)
-
-  const tail = sculpt(material)
-  tail.oval(scarf, [0, -0.065, 0], [0.048, 0.08, 0.022])
-  tail.oval(stripe, [0, -0.125, 0], [0.047, 0.018, 0.024])
-  tail.oval(scarf, [0, -0.16, 0], [0.045, 0.03, 0.021])
-  for (const dx of [-0.028, 0, 0.028])
-    tail.oval(scarf, [dx, -0.195, 0], [0.011, 0.016, 0.011])
-  tail.mesh(scarfTail)
-
-  /* ------------------------------ Head --------------------------------- */
+  /* --------------------------- Expressions ----------------------------- */
+  // Separate meshes so the face can switch moods.
   const H = HEAD
-  const face = sculpt(material)
-  face.oval(skin, [0, 0, 0], [0.31, 0.29, 0.28])
-  face.oval(skin, [0, -0.06, 0.07], [0.27, 0.21, 0.22])
-  face.oval(skinShade, [0, -0.045, 0.285], [0.03, 0.022, 0.02])
-  for (const side of [-1, 1]) {
-    face.oval(skin, [side * 0.298, -0.02, 0.01], [0.05, 0.068, 0.045])
-    face.oval('#f2a18c', [side * 0.31, -0.022, 0.03], [0.022, 0.035, 0.012])
-    face.oval(blush, [side * 0.172, -0.085, 0.232], [0.058, 0.032, 0.012], [0, side * 0.58, 0])
-    face.oval(hair, [side * 0.272, 0.005, 0.06], [0.05, 0.11, 0.075])
-  }
-  // Hair: a rounded cap, a swoopy four-lock fringe and a nape tuft.
-  face.oval(hair, [0, 0.075, -0.045], [0.326, 0.272, 0.3])
-  face.oval(hair, [0, -0.09, -0.2], [0.24, 0.16, 0.12])
-  for (const [x, y, z, angle, w] of [
-    [-0.19, 0.11, 0.19, 0.7, 0.085],
-    [-0.085, 0.155, 0.22, 0.35, 0.1],
-    [0.04, 0.16, 0.225, -0.15, 0.1],
-    [0.165, 0.125, 0.2, -0.55, 0.09],
-  ])
-    face.oval(hair, [x, y, z], [w, 0.115, 0.055], [0.25, 0, angle])
-  face.oval(hairLight, [-0.08, 0.235, 0.12], [0.11, 0.035, 0.05], [0.5, 0.2, 0.25])
-  face.mesh(head, [0, H, 0])
-
-  const cowlickMesh = sculpt(material)
-  cowlickMesh.oval(hair, [0, 0.045, 0], [0.032, 0.07, 0.026], [0, 0, -0.35])
-  cowlickMesh.oval(hair, [0.035, 0.105, 0.004], [0.026, 0.045, 0.022], [0, 0, 0.9])
-  cowlickMesh.mesh(cowlick)
-
-  // Expressions are separate meshes so the face can switch moods.
   const eyeShapes = sculpt(material)
   for (const side of [-1, 1]) {
     eyeShapes.oval(ink, [side * 0.11, 0, 0.255], [0.042, 0.058, 0.02], [0, side * 0.38, 0])
@@ -499,12 +415,6 @@ export function createVisitor(): IslandCharacter {
       )
   const happyEyes = happyShapes.mesh(head, [0, H, 0])
   happyEyes.visible = false
-
-  const browShapes = sculpt(material)
-  for (const side of [-1, 1])
-    browShapes.oval(hair, [side * 0.115, 0.098, 0.258], [0.038, 0.011, 0.01], [0, side * 0.35, -side * 0.16])
-  const brows = browShapes.mesh(head, [0, H, 0])
-
   const smileShapes = sculpt(material)
   for (const side of [-1, 1])
     smileShapes.oval('#a3574b', [side * 0.017, -0.112, 0.268], [0.022, 0.008, 0.008], [0, side * 0.1, side * 0.36])
@@ -515,23 +425,270 @@ export function createVisitor(): IslandCharacter {
   const mouthOpen = openShapes.mesh(head, [0, H, 0])
   mouthOpen.visible = false
 
-  /* ------------------------------ Arms --------------------------------- */
-  const arms = [-1, 1].map((side) => {
-    const shoulder = joint(chest, side * 0.148, 0.2, 0.004)
-    const upper = sculpt(material)
-    upper.oval(jumper, [0, -0.004, 0], [0.06, 0.062, 0.062])
-    upper.limb(jumper, 0.05, UPPER_ARM - 0.02)
-    upper.oval(stripe, [0, -0.05, 0], [0.053, 0.016, 0.053])
-    upper.oval(stripe, [0, -UPPER_ARM + 0.01, 0], [0.052, 0.024, 0.052])
-    upper.mesh(shoulder)
-    const elbow = joint(shoulder, 0, -UPPER_ARM, 0)
-    const lower = sculpt(material)
-    lower.limb(skin, 0.04, FOREARM - 0.035)
-    lower.oval(skin, [0, -FOREARM, 0.006], [0.055, 0.058, 0.05])
-    lower.oval(skin, [-side * 0.02, -FOREARM + 0.014, 0.04], [0.02, 0.028, 0.02], [0.4, 0, 0])
-    lower.mesh(elbow)
-    return { side, shoulder, elbow }
-  })
+  /* ------------------------------ Legs --------------------------------- */
+  const legs = [-1, 1].map((side) => ({
+    side,
+    thigh: new THREE.Mesh(),
+    calf: new THREE.Mesh(),
+    shoe: new THREE.Mesh(),
+    pose: { z: 0, y: 0, pitch: 0 } as FootPose,
+    from: { z: 0, y: 0, pitch: 0 } as FootPose,
+    planted: true,
+  }))
+
+  /* ------------------------------ Outfit ------------------------------- */
+  // Everything the wardrobe can change is rebuilt here on the same rig.
+  let worn: THREE.Mesh[] = []
+  let brows = new THREE.Mesh()
+  function dress(o: Outfit) {
+    for (const m of worn) {
+      m.parent?.remove(m)
+      m.geometry.dispose()
+    }
+    worn = []
+    const wear = (shape: ReturnType<typeof sculpt>, parent: THREE.Object3D, at?: Vec3) => {
+      const m = shape.mesh(parent, at)
+      worn.push(m)
+      return m
+    }
+    const { hair, hairLight, top, stripe, accent, bottom, bottomLight } = o
+
+    // Lower body: shorts, dungarees, trousers, hakama or skirt.
+    const hips = sculpt(material)
+    hips.oval(bottom, [0, 0.03, 0], [0.158, 0.11, 0.135])
+    hips.oval(bottomLight, [0, -0.01, -0.118], [0.06, 0.045, 0.02])
+    wear(hips, pelvis)
+
+    // Torso.
+    const torso = sculpt(material)
+    torso.turned(
+      top,
+      [0, 0, 0],
+      [
+        [0, 0],
+        [0.168, 0.01],
+        [0.176, 0.06],
+        [0.172, 0.16],
+        [0.148, 0.222],
+        [0.08, 0.248],
+        [0, 0.248],
+      ],
+      0.86,
+    )
+    if (stripe)
+      for (const [y, r] of [
+        [0.115, 0.177],
+        [0.175, 0.166],
+      ])
+        torso.turned(
+          stripe,
+          [0, 0, 0],
+          [
+            [r, y - 0.018],
+            [r + 0.004, y],
+            [r, y + 0.018],
+          ],
+          0.86,
+        )
+    if (o.bib) {
+      // Dungaree bib, straps, brass buttons and a sunny star patch.
+      torso.oval(bottom, [0, 0.07, 0.112], [0.115, 0.1, 0.048])
+      torso.oval(bottom, [0, 0.03, 0], [0.172, 0.07, 0.15])
+      for (const side of [-1, 1]) {
+        torso.oval(bottom, [side * 0.078, 0.165, 0.12], [0.022, 0.07, 0.014], [0.2, 0, side * 0.12])
+        torso.oval(bottom, [side * 0.078, 0.15, -0.122], [0.022, 0.085, 0.014], [-0.2, 0, side * 0.12])
+        torso.oval('#f6cf63', [side * 0.07, 0.122, 0.152], [0.017, 0.017, 0.01])
+      }
+      torso.oval(bottomLight, [0, 0.06, 0.155], [0.05, 0.04, 0.008])
+      torso.oval('#ffd56a', [0, 0.065, 0.161], [0.026, 0.026, 0.008])
+      torso.oval('#ff9f7a', [0, 0.065, 0.166], [0.011, 0.011, 0.005])
+    } else {
+      // A waistband so tops of any colour sit neatly on the trousers.
+      torso.ring(bottom, [0, 0.02, 0.004], 0.165, 0.03, 0.86)
+    }
+    if (o.collar === 'scarf') {
+      torso.ring(accent, [0, 0.243, 0.004], 0.105, 0.045, 0.92)
+      torso.oval(accent, [0.07, 0.225, 0.1], [0.05, 0.045, 0.04], [0, 0.4, 0])
+    } else if (o.collar === 'sailor') {
+      torso.oval('#27407a', [0, 0.235, -0.11], [0.15, 0.03, 0.11], [0.35, 0, 0])
+      torso.oval('#fbfaf6', [0, 0.25, -0.105], [0.13, 0.012, 0.09], [0.35, 0, 0])
+      for (const side of [-1, 1])
+        torso.oval('#27407a', [side * 0.07, 0.2, 0.135], [0.05, 0.075, 0.015], [0.15, 0, side * 0.55])
+      for (const side of [-1, 1]) torso.oval(accent, [side * 0.035, 0.17, 0.162], [0.04, 0.025, 0.012], [0, 0, side * 0.4])
+      torso.oval(accent, [0, 0.168, 0.166], [0.018, 0.018, 0.012])
+      torso.oval(skin, [0, 0.29, 0.005], [0.07, 0.045, 0.065])
+    } else if (o.collar === 'kimono') {
+      for (const side of [-1, 1])
+        torso.oval('#f4efe3', [side * 0.035, 0.17, 0.152], [0.03, 0.11, 0.014], [0.2, 0, side * 0.55])
+      torso.ring(accent, [0, 0.06, 0.004], 0.172, 0.035, 0.86)
+      torso.oval(skin, [0, 0.29, 0.005], [0.07, 0.045, 0.065])
+    } else {
+      torso.oval(skin, [0, 0.29, 0.005], [0.07, 0.045, 0.065])
+      if (stripe) torso.ring(stripe, [0, 0.24, 0.004], 0.1, 0.02, 0.9)
+    }
+    if (o.back === 'katana') {
+      torso.oval(o.backColor, [-0.02, 0.12, -0.17], [0.026, 0.3, 0.026], [0.15, 0, 0.75])
+      torso.oval('#d8b25a', [-0.17, 0.28, -0.19], [0.045, 0.012, 0.045], [0.15, 0, 0.75])
+      torso.oval('#5a3f30', [-0.23, 0.36, -0.2], [0.02, 0.08, 0.02], [0.15, 0, 0.75])
+    } else if (o.back === 'cape') {
+      torso.oval(o.backColor, [0, 0.02, -0.17], [0.19, 0.3, 0.045], [0.12, 0, 0])
+      torso.oval(o.backColor, [0, 0.24, -0.1], [0.17, 0.045, 0.08])
+    }
+    wear(torso, chest)
+
+    // Scarf tail only with a scarf.
+    if (o.collar === 'scarf') {
+      const tail = sculpt(material)
+      tail.oval(accent, [0, -0.065, 0], [0.048, 0.08, 0.022])
+      tail.oval('#fdf3dc', [0, -0.125, 0], [0.047, 0.018, 0.024])
+      tail.oval(accent, [0, -0.16, 0], [0.045, 0.03, 0.021])
+      for (const dx of [-0.028, 0, 0.028]) tail.oval(accent, [dx, -0.195, 0], [0.011, 0.016, 0.011])
+      wear(tail, scarfTail)
+    }
+
+    // Head and hair.
+    const face = sculpt(material)
+    face.oval(skin, [0, 0, 0], [0.31, 0.29, 0.28])
+    face.oval(skin, [0, -0.06, 0.07], [0.27, 0.21, 0.22])
+    face.oval(skinShade, [0, -0.045, 0.285], [0.03, 0.022, 0.02])
+    for (const side of [-1, 1]) {
+      face.oval(skin, [side * 0.298, -0.02, 0.01], [0.05, 0.068, 0.045])
+      face.oval('#f2a18c', [side * 0.31, -0.022, 0.03], [0.022, 0.035, 0.012])
+      face.oval(blush, [side * 0.172, -0.085, 0.232], [0.058, 0.032, 0.012], [0, side * 0.58, 0])
+    }
+    face.oval(hair, [0, 0.075, -0.045], [0.326, 0.272, 0.3])
+    face.oval(hair, [0, -0.09, -0.2], [0.24, 0.16, 0.12])
+    const style = o.hairStyle
+    if (style === 'swoop') {
+      for (const side of [-1, 1]) face.oval(hair, [side * 0.272, 0.005, 0.06], [0.05, 0.11, 0.075])
+      for (const [x, y, z, angle, w] of [
+        [-0.19, 0.11, 0.19, 0.7, 0.085],
+        [-0.085, 0.155, 0.22, 0.35, 0.1],
+        [0.04, 0.16, 0.225, -0.15, 0.1],
+        [0.165, 0.125, 0.2, -0.55, 0.09],
+      ])
+        face.oval(hair, [x, y, z], [w, 0.115, 0.055], [0.25, 0, angle])
+      face.oval(hairLight, [-0.08, 0.235, 0.12], [0.11, 0.035, 0.05], [0.5, 0.2, 0.25])
+    } else if (style === 'spiky') {
+      // Sharp bangs and a crown of spikes swept back.
+      for (let i = 0; i < 5; i++) {
+        const x = -0.2 + i * 0.1
+        face.oval(hair, [x, 0.12, 0.22], [0.05, 0.13, 0.04], [0.3, 0, -x * 1.6])
+      }
+      for (let i = 0; i < 9; i++) {
+        const a = (i / 9) * TAU
+        face.oval(
+          i % 3 ? hair : hairLight,
+          [Math.sin(a) * 0.18, 0.26 + Math.cos(a) * 0.03, Math.cos(a) * 0.14 - 0.06],
+          [0.07, 0.2, 0.07],
+          [-0.55 + Math.cos(a) * 0.4, 0, -Math.sin(a) * 0.6],
+        )
+      }
+      for (const side of [-1, 1]) face.oval(hair, [side * 0.28, 0.02, 0.05], [0.05, 0.12, 0.07], [0, 0, side * 0.3])
+    } else if (style === 'topknot') {
+      for (const side of [-1, 1]) face.oval(hair, [side * 0.27, 0.03, 0.05], [0.045, 0.09, 0.07])
+      face.oval(hair, [0, 0.16, 0.18], [0.24, 0.07, 0.08], [0.4, 0, 0])
+      face.oval(hair, [0, 0.36, -0.06], [0.09, 0.085, 0.09])
+      face.oval(accent, [0, 0.3, -0.05], [0.07, 0.025, 0.07])
+      face.oval(hairLight, [0, 0.27, 0.06], [0.12, 0.03, 0.08], [0.5, 0, 0])
+    } else {
+      // Long hair (and twin tails): straight bangs and locks down the back.
+      for (let i = 0; i < 5; i++) {
+        const x = -0.2 + i * 0.1
+        face.oval(hair, [x, 0.13, 0.21], [0.065, 0.12, 0.05], [0.25, 0, -x * 0.5])
+      }
+      for (const side of [-1, 1]) face.oval(hair, [side * 0.28, -0.1, 0.02], [0.07, 0.22, 0.09])
+      face.oval(hairLight, [0.05, 0.25, 0.1], [0.12, 0.035, 0.05], [0.5, 0.2, -0.25])
+      if (style === 'long') face.oval(hair, [0, -0.17, -0.16], [0.29, 0.3, 0.15])
+      else
+        for (const side of [-1, 1]) {
+          face.oval(hair, [side * 0.36, -0.1, -0.1], [0.1, 0.24, 0.1], [0, 0, side * 0.25])
+          face.oval(o.accent, [side * 0.31, 0.12, -0.08], [0.05, 0.05, 0.05])
+        }
+    }
+    // Hats and hair accessories.
+    if (o.hat === 'headband') {
+      face.ring(o.hatColor, [0, 0.14, 0.02], 0.3, 0.028, 0.93, [-0.15, 0, 0])
+      for (const side of [-1, 1]) face.oval(o.hatColor, [side * 0.07, 0.0, -0.37], [0.04, 0.15, 0.016], [0.75, 0, side * 0.4])
+    } else if (o.hat === 'wizard') {
+      face.turned(
+        o.hatColor,
+        [0, 0.22, -0.03],
+        [
+          [0, 0],
+          [0.44, 0],
+          [0.45, 0.025],
+          [0.22, 0.05],
+          [0.14, 0.3],
+          [0.04, 0.55],
+          [0, 0.58],
+        ],
+        1,
+        [-0.18, 0, 0.18],
+      )
+      face.ring('#f2c94c', [0, 0.3, -0.02], 0.2, 0.025, 1, [-0.18, 0, 0.18])
+      face.oval('#f2c94c', [0.03, 0.4, 0.17], [0.045, 0.045, 0.015], [0, 0, 0.6])
+    } else if (o.hat === 'bow') {
+      for (const side of [-1, 1]) face.oval(o.hatColor, [0.08 + side * 0.09, 0.29, 0.05], [0.1, 0.07, 0.04], [0, 0, side * 0.5])
+      face.oval(o.hatColor, [0.08, 0.29, 0.06], [0.04, 0.04, 0.04])
+    }
+    wear(face, head, [0, H, 0])
+    cowlick.visible = style === 'swoop'
+    if (style === 'swoop') {
+      const curl = sculpt(material)
+      curl.oval(hair, [0, 0.045, 0], [0.032, 0.07, 0.026], [0, 0, -0.35])
+      curl.oval(hair, [0.035, 0.105, 0.004], [0.026, 0.045, 0.022], [0, 0, 0.9])
+      wear(curl, cowlick)
+    }
+    const browShapes = sculpt(material)
+    for (const side of [-1, 1])
+      browShapes.oval(hair, [side * 0.115, 0.098, 0.258], [0.038, 0.011, 0.01], [0, side * 0.35, -side * 0.16])
+    const browY = brows.position.y || H
+    brows = wear(browShapes, head, [0, browY, 0])
+
+    // Arms: sleeves in the top colour, bare forearms and mitten hands.
+    for (const { side, shoulder, elbow } of arms) {
+      const upper = sculpt(material)
+      upper.oval(top, [0, -0.004, 0], [0.06, 0.062, 0.062])
+      upper.limb(top, 0.05, UPPER_ARM - 0.02)
+      if (stripe) upper.oval(stripe, [0, -0.05, 0], [0.053, 0.016, 0.053])
+      upper.oval(stripe ?? accent, [0, -UPPER_ARM + 0.01, 0], [0.052, 0.024, 0.052])
+      wear(upper, shoulder)
+      const lower = sculpt(material)
+      lower.limb(skin, 0.04, FOREARM - 0.035)
+      lower.oval(skin, [0, -FOREARM, 0.006], [0.055, 0.058, 0.05])
+      lower.oval(skin, [-side * 0.02, -FOREARM + 0.014, 0.04], [0.02, 0.028, 0.02], [0.4, 0, 0])
+      wear(lower, elbow)
+    }
+
+    // Legs and footwear (posed every frame by the IK, so no transforms here).
+    for (const leg of legs) {
+      const thigh = sculpt(material)
+      thigh.limb(bottom, 0.066, THIGH - 0.02)
+      thigh.oval(bottomLight, [0, -THIGH + 0.035, 0], [0.07, 0.02, 0.07])
+      const calf = sculpt(material)
+      calf.limb(o.sock, 0.05, SHIN - 0.035, [0, 0.005, 0])
+      const shoe = sculpt(material)
+      shoe.oval(o.boot, [0, 0.045, -0.005], [0.072, 0.06, 0.072])
+      shoe.oval(o.bootLight, [0, 0.092, -0.005], [0.074, 0.016, 0.074])
+      shoe.oval(o.boot, [0, -0.01, 0.035], [0.094, 0.07, 0.138])
+      shoe.oval(o.bootLight, [0, 0.012, 0.11], [0.06, 0.04, 0.05])
+      shoe.oval(o.sole, [0, -0.058, 0.033], [0.099, 0.026, 0.143])
+      const keep = (mesh: THREE.Mesh, old: THREE.Mesh) => {
+        mesh.position.copy(old.position)
+        mesh.quaternion.copy(old.quaternion)
+        mesh.rotation.copy(old.rotation)
+        return mesh
+      }
+      leg.thigh = keep(wear(thigh, group), leg.thigh)
+      leg.calf = keep(wear(calf, group), leg.calf)
+      leg.shoe = keep(wear(shoe, group), leg.shoe)
+      leg.shoe.name = 'visitor boot'
+      leg.calf.name = 'visitor calf'
+    }
+    scarfTail.visible = o.collar === 'scarf'
+  }
+  dress(outfitById(initialOutfit))
 
   /* ---------------------------- Fishing rod ---------------------------- */
   // Held in the right fist; tilted up so it rises out of the hand.
@@ -587,33 +744,6 @@ export function createVisitor(): IslandCharacter {
   brollyShape.oval('#f6c24d', [0, -0.93, 0], [0.04, 0.05, 0.04])
   brollyShape.mesh(brolly)
   brolly.visible = false
-
-  /* ------------------------------ Legs --------------------------------- */
-  const legs = [-1, 1].map((side) => {
-    const thigh = sculpt(material)
-    thigh.limb(denim, 0.066, THIGH - 0.02)
-    thigh.oval(denimLight, [0, -THIGH + 0.035, 0], [0.07, 0.02, 0.07])
-    const calf = sculpt(material)
-    calf.limb(stripe, 0.05, SHIN - 0.035, [0, 0.005, 0])
-    const shoe = sculpt(material)
-    shoe.oval(boot, [0, 0.045, -0.005], [0.072, 0.06, 0.072])
-    shoe.oval('#f8cf6d', [0, 0.092, -0.005], [0.074, 0.016, 0.074])
-    shoe.oval(boot, [0, -0.01, 0.035], [0.094, 0.07, 0.138])
-    shoe.oval('#f7c95e', [0, 0.012, 0.11], [0.06, 0.04, 0.05])
-    shoe.oval(sole, [0, -0.058, 0.033], [0.099, 0.026, 0.143])
-    const leg = {
-      side,
-      thigh: thigh.mesh(group),
-      calf: calf.mesh(group),
-      shoe: shoe.mesh(group),
-      pose: { z: 0, y: 0, pitch: 0 } as FootPose,
-      from: { z: 0, y: 0, pitch: 0 } as FootPose,
-      planted: true,
-    }
-    leg.shoe.name = 'visitor boot'
-    leg.calf.name = 'visitor calf'
-    return leg
-  })
 
   const shadow = blobShadow(0.3)
   shadow.scale.y = 0.85
@@ -767,6 +897,13 @@ export function createVisitor(): IslandCharacter {
   const bubbles = emotes(group, 1.32)
   let seated = false
   let sitW = 0
+  let seatMode: Seat['mode'] = 'fire'
+  let seatPelvis = 0.285
+  let seatBack = 0.2
+  let seatedSince = 0
+  let changeT = 1
+  let pendingOutfit: Outfit | null = null
+  let lastSpin = 0
   let holding = false
   let rodW = 0
   let castT = 1
@@ -868,11 +1005,15 @@ export function createVisitor(): IslandCharacter {
       nextAction = time + 6 + random() * 4
       action = null
     } else if (!action && time > nextAction) {
-      const options: IdleAction[] = (['sway', 'stretch', 'tap'] as IdleAction[]).filter(
+      const options: IdleAction[] = (['sway', 'stretch', 'tap', 'hop', 'twirl'] as IdleAction[]).filter(
         (kind) => kind !== lastAction,
       )
       const kind = options[Math.floor(random() * options.length)]
-      action = { kind, start: time, length: kind === 'stretch' ? 2.6 : kind === 'sway' ? 2.6 : 2.2 }
+      action = {
+        kind,
+        start: time,
+        length: kind === 'stretch' || kind === 'sway' ? 2.6 : kind === 'hop' ? 1.5 : kind === 'twirl' ? 1.7 : 2.2,
+      }
       lastAction = kind
     }
     let act = 0,
@@ -887,6 +1028,29 @@ export function createVisitor(): IslandCharacter {
     const swaying = action?.kind === 'sway' ? act : 0
     const stretching = action?.kind === 'stretch' ? act : 0
     const tapping = action?.kind === 'tap' ? act : 0
+    // Little hops of joy, and a twirl with arms out.
+    const hopping = action?.kind === 'hop' ? act : 0
+    const hopLift = hopping ? Math.abs(Math.sin(actT * TAU * 1.35)) * 0.075 * hopping : 0
+    const twirling = action?.kind === 'twirl' ? act : 0
+    const twirlAngle = action?.kind === 'twirl' ? ease(clamp((actT - 0.25) / 1.1, 0, 1)) * TAU : 0
+    // Outfit change: two quick spins with a pop of sparkles half way.
+    if (changeT < 1) {
+      changeT = Math.min(1, changeT + dt / 0.95)
+      if (pendingOutfit && changeT >= 0.5) {
+        dress(pendingOutfit)
+        pendingOutfit = null
+        bubbles.show('sparkle')
+        for (const leg of legs) {
+          kickDust(leg.shoe, 2.2)
+          kickDust(leg.shoe, 1.6)
+        }
+      }
+    }
+    const changing = changeT < 1 ? Math.sin(Math.PI * changeT) : 0
+    const spin = (changeT < 1 ? ease(changeT) * TAU * 2 : 0) + twirlAngle
+    // Only ever turn forwards: an interrupted twirl just stops where it is.
+    if (spin > lastSpin) group.rotation.y += spin - lastSpin
+    lastSpin = spin
 
     /* ---- Feet ---- */
     if (moving) {
@@ -940,7 +1104,7 @@ export function createVisitor(): IslandCharacter {
       const kick = reduced ? 0 : smoothstep01(Math.sin(time * 0.37) * 2 - 0.6)
       legs.forEach((leg, index) => {
         const swing = kick * Math.max(0, Math.sin(time * 4.2 + index * Math.PI))
-        leg.pose.z = lerp(leg.pose.z, SIT_FOOT + 0.05 * swing, sitting)
+        leg.pose.z = lerp(leg.pose.z, SIT_FOOT + (seatMode === 'bench' ? 0.03 : 0) + 0.05 * swing, sitting)
         leg.pose.y = lerp(leg.pose.y, 0.035 * swing, sitting)
         leg.pose.pitch = lerp(leg.pose.pitch, -0.25 * swing, sitting)
       })
@@ -1000,8 +1164,8 @@ export function createVisitor(): IslandCharacter {
       const allowed = Math.sqrt(Math.max(0, (LEG * 0.985) ** 2 - dx * dx - dz * dz))
       height = Math.min(height, ANKLE_Y + leg.pose.y + allowed + 0.02)
     })
-    pelvis.position.y = lerp(height, SIT_PELVIS + 0.006 * breathe, sitting)
-    pelvis.position.z = -SIT_BACK * sitting
+    pelvis.position.y = lerp(height, seatPelvis + 0.006 * breathe, sitting) + (hopLift + changing * 0.07) * (1 - sitting)
+    pelvis.position.z = -seatBack * sitting
     pelvis.updateMatrix()
 
     legs.forEach((leg) => {
@@ -1053,9 +1217,15 @@ export function createVisitor(): IslandCharacter {
         shoulder.rotation.z = lerp(shoulder.rotation.z, side * 0.22, showW)
         elbow.rotation.x = lerp(elbow.rotation.x, -0.25, showW)
       }
+      if (hopping > 0 || twirling > 0 || changing > 0) {
+        const out = Math.max(twirling, changing)
+        shoulder.rotation.x = lerp(shoulder.rotation.x, -0.5 - 1.2 * hopping, Math.max(hopping, out * 0.4))
+        shoulder.rotation.z = lerp(shoulder.rotation.z, side * (0.35 + 0.9 * out), Math.max(hopping, out))
+      }
       if (sitting > 0) {
-        // Warm both hands at the fire, then rest them on the knees for a while.
-        const warm = reduced ? 1 : smoothstep01(Math.sin(time * 0.21) * 3 + 0.5)
+        // Warm both hands at the fire (or rest them on the knees on a
+        // bench), switching every so often.
+        const warm = seatMode === 'bench' ? 0 : reduced ? 1 : smoothstep01(Math.sin(time * 0.21) * 3 + 0.5)
         const rub = reduced ? 0 : 0.07 * Math.sin(time * 6.5 + index * Math.PI) * warm
         shoulder.rotation.x = lerp(shoulder.rotation.x, lerp(-0.62, -1.12 + rub, warm), sitting)
         shoulder.rotation.z = lerp(shoulder.rotation.z, side * lerp(0.2, 0.12, warm), sitting)
@@ -1080,7 +1250,9 @@ export function createVisitor(): IslandCharacter {
             ]
       nextLook = time + 2.2 + random() * 3.2
     }
-    const busy = Math.max(swaying, stretching)
+    const busy = Math.max(swaying, stretching, hopping, twirling)
+    // On a bench, after a while, the visitor nods off.
+    const dozing = seated && seatMode === 'bench' && !reduced && time - seatedSince > 8 ? smoothstep01((time - seatedSince - 8) / 1.5) : 0
     const gazeAway = 1 - sitting
     lookYaw = damp(lookYaw, reduced ? 0 : (lookTarget[0] * idle * (1 - busy) + turnLook * 0.45) * gazeAway, 5, dt)
     lookPitch = damp(lookPitch, lookTarget[1] * idle * (1 - busy) * gazeAway - 0.32 * stretching + 0.14 * sitting, 5, dt)
@@ -1088,14 +1260,14 @@ export function createVisitor(): IslandCharacter {
     const nodding = reduced ? 0 : nod.step(clamp(-bobVelocity * 0.35, -0.3, 0.3), dt)
     const tapNod = tapping * 0.07 * Math.sin(actT * TAU * 2.4)
     head.rotation.set(
-      lookPitch - lean * 0.55 + nodding + tapNod,
+      lookPitch - lean * 0.55 + nodding + tapNod + dozing * (0.22 + 0.06 * Math.sin(time * 1.3)),
       lookYaw - chest.rotation.y - pelvis.rotation.y,
       lookTilt - pelvis.rotation.z * 0.6 + (reduced ? 0 : Math.sin(time * 1.7) * 0.015 * idle),
     )
 
     /* ---- Face ---- */
     const cosy = sitting > 0.9 && !reduced && Math.sin(time * 0.45) > 0.82
-    const happy = busy > 0.45 || cosy || showW > 0.5 || waving > 0.5 || (floatW > 0.5 && Math.sin(time * 0.9) > 0.3)
+    const happy = busy > 0.45 || changing > 0.2 || (cosy && seatMode === 'fire') || showW > 0.5 || waving > 0.5 || (floatW > 0.5 && Math.sin(time * 0.9) > 0.3)
     brolly.visible = brollyScale > 0.02
     brolly.scale.set(Math.max(0.001, brollyScale), 1, Math.max(0.001, brollyScale))
     rodPivot.visible = rodW > 0.05
@@ -1104,12 +1276,12 @@ export function createVisitor(): IslandCharacter {
     trophy.position.y = 1.56 + (reduced ? 0 : Math.sin(time * 6) * 0.02 * showW)
     trophy.rotation.z = reduced ? 0 : Math.sin(time * 9) * 0.12 * showW
     if (sitting > 0.95 && !reduced && time > nextNote) {
-      bubbles.show(random() < 0.2 ? 'heart' : 'note')
-      nextNote = time + 2.6 + random() * 2.4
+      bubbles.show(dozing > 0.5 ? 'sleep' : seatMode === 'bench' ? (random() < 0.5 ? 'heart' : 'note') : random() < 0.2 ? 'heart' : 'note')
+      nextNote = time + (dozing > 0.5 ? 2.4 : seatMode === 'bench' ? 4.5 : 2.6) + random() * 2.4
     }
     eyes.visible = !happy
     happyEyes.visible = happy
-    eyes.scale.y = reduced ? 1 : blink(time)
+    eyes.scale.y = reduced ? 1 : Math.min(blink(time), 1 - dozing * 0.9)
     mouthOpen.visible = happy || (stretching > 0.6 && actT > 0.6)
     smile.visible = !mouthOpen.visible
     brows.position.y = H + 0.012 * busy + Math.abs(lookTilt) * 0.02
@@ -1140,9 +1312,25 @@ export function createVisitor(): IslandCharacter {
     effects,
     animate,
     settle,
-    sit(value: boolean) {
+    sit(value: boolean, seat?: Seat) {
       seated = value
-      if (value) nextNote = previous + 1.5
+      if (value) {
+        nextNote = previous + 1.5
+        seatedSince = previous
+        seatMode = seat?.mode ?? 'fire'
+        const height = (seat?.height ?? 0.28) / (group.scale.x || 1)
+        seatPelvis = height + 0.075
+        seatBack = seatMode === 'bench' ? 0.12 : 0.2
+      }
+    },
+    wear(id: string, instant = false) {
+      const next = outfitById(id)
+      if (instant) {
+        dress(next)
+        return
+      }
+      pendingOutfit = next
+      changeT = 0
     },
     emote: (kind: Emote) => bubbles.show(kind),
     wave() {
@@ -1465,6 +1653,7 @@ export function createCat(): IslandCharacter {
   return {
     group,
     settle() {},
+    emote: (kind: Emote) => bubbles.show(kind),
     animate(time, reduced, _move, attention) {
       const dt = Math.min(0.1, Math.max(0, time - previous))
       previous = time

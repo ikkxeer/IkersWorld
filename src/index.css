@@ -1975,3 +1975,210 @@ kbd {
     opacity: 0;
   }
 }
+
+/* -------------------------------- Wardrobe -------------------------------- */
+.wardrobe-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 16;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: #18302a66;
+  animation: title-in 0.25s ease both;
+}
+.wardrobe {
+  width: min(760px, 100%);
+  max-height: 88svh;
+  overflow: auto;
+  padding: 18px;
+  color: #2f4a3c;
+  background: #fffaeef7;
+  border: 3px solid #647e60;
+  border-radius: 24px;
+  box-shadow: 0 6px 0 #2c483f67;
+  animation: catch-pop-center 0.45s cubic-bezier(0.2, 1.5, 0.4, 1) both;
+}
+@keyframes catch-pop-center {
+  from {
+    transform: translateY(18px) scale(0.92);
+    opacity: 0;
+  }
+}
+.wardrobe header {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 14px;
+}
+.wardrobe header > div {
+  flex: 1;
+}
+.wardrobe h2 {
+  margin: 0;
+  font-family: 'Lilita One', system-ui, sans-serif;
+  font-weight: 400;
+  font-size: 1.6rem;
+}
+.wardrobe header p {
+  margin: 2px 0 0;
+  font-size: 0.9rem;
+}
+.wardrobe-icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  color: #fff;
+  background: #ef6c5c;
+  border-radius: 14px;
+}
+.outfit-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
+}
+.outfit-card {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  padding: 12px 10px 14px;
+  font: inherit;
+  color: inherit;
+  text-align: center;
+  background: #fff;
+  border: 2px solid #d9d0b4;
+  border-radius: 18px;
+  cursor: pointer;
+  transition: transform 0.15s ease, border-color 0.15s ease;
+}
+.outfit-card:hover,
+.outfit-card:focus-visible {
+  transform: translateY(-3px);
+  border-color: #ef6c5c;
+  outline: none;
+}
+.outfit-card.on {
+  border-color: #3f8a73;
+  background: #f1fbf4;
+}
+.outfit-card b {
+  font-size: 0.98rem;
+}
+.outfit-card small {
+  font-size: 0.78rem;
+  line-height: 1.25;
+  color: #5d7457;
+}
+.outfit-card em {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  gap: 3px;
+  align-items: center;
+  padding: 2px 8px;
+  font-style: normal;
+  font-size: 0.72rem;
+  font-weight: 900;
+  color: #fff;
+  background: #3f8a73;
+  border-radius: 999px;
+}
+/* A tiny painted figure in the outfit's colours. */
+.outfit-doll {
+  position: relative;
+  width: 64px;
+  height: 92px;
+  margin-bottom: 4px;
+}
+.outfit-doll i {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+}
+.doll-face {
+  top: 12px;
+  width: 44px;
+  height: 40px;
+  background: radial-gradient(circle at 34% 58%, #2f2624 3px, transparent 3.5px),
+    radial-gradient(circle at 66% 58%, #2f2624 3px, transparent 3.5px), #f7cba4;
+  border-radius: 50%;
+  z-index: 2;
+}
+.doll-hair {
+  top: 6px;
+  width: 50px;
+  height: 30px;
+  background: var(--hair);
+  border-radius: 26px 26px 12px 12px;
+  z-index: 3;
+  clip-path: inset(0 0 40% 0);
+  height: 44px;
+}
+.hair-long .doll-hair,
+.hair-twintails .doll-hair {
+  clip-path: none;
+  height: 52px;
+  z-index: 1;
+  border-radius: 26px 26px 14px 14px;
+}
+.hair-spiky .doll-hair {
+  clip-path: polygon(0 60%, 8% 10%, 22% 38%, 34% 0, 48% 34%, 62% 0, 76% 36%, 90% 8%, 100% 60%, 100% 60%, 0 60%);
+}
+.hair-topknot .doll-hair::after {
+  content: '';
+  position: absolute;
+  top: -8px;
+  left: 50%;
+  width: 14px;
+  height: 14px;
+  background: var(--hair);
+  border-radius: 50%;
+  transform: translateX(-50%);
+}
+.hair-topknot .doll-hair {
+  clip-path: none;
+  height: 26px;
+  overflow: visible;
+}
+.doll-body {
+  top: 50px;
+  width: 36px;
+  height: 22px;
+  background: repeating-linear-gradient(180deg, var(--top) 0 6px, var(--stripe) 6px 9px);
+  border-radius: 12px 12px 6px 6px;
+  box-shadow: inset 0 3px 0 var(--accent);
+}
+.doll-legs {
+  top: 70px;
+  width: 28px;
+  height: 18px;
+  background: linear-gradient(180deg, var(--bottom) 0 55%, var(--boot) 55%);
+  border-radius: 4px 4px 8px 8px;
+}
+.doll-wizard {
+  top: -14px;
+  width: 54px;
+  height: 34px;
+  background: var(--hat);
+  clip-path: polygon(50% 0, 64% 70%, 100% 88%, 100% 100%, 0 100%, 0 88%, 36% 70%);
+  z-index: 4;
+}
+.doll-bow {
+  top: 0;
+  left: 70% !important;
+  width: 22px;
+  height: 12px;
+  background: var(--hat);
+  clip-path: polygon(0 0, 50% 40%, 100% 0, 100% 100%, 50% 60%, 0 100%);
+  z-index: 4;
+}
+.doll-band {
+  top: 20px;
+  width: 50px;
+  height: 6px;
+  background: var(--hat);
+  z-index: 4;
+}

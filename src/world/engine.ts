@@ -5,7 +5,7 @@ import { createPostFX } from './postfx'
 import { daylight } from '../environment/daylight'
 import { bendScene, projectCurved, unbendRay, worldCurve, worldCurveFocus } from './curve'
 import { anchors, destinations } from '../data/village'
-import { campfire, fishingSpot, shape } from '../data/island'
+import { benchSites, campfire, fishingSpot, shape } from '../data/island'
 import { createFishing } from './fishing'
 import { play } from '../audio/sfx'
 import { createVisitor, createGuide, createCat, angleDelta } from './character'
@@ -53,7 +53,7 @@ export function startVillage(
     camera = new T.OrthographicCamera(-20, 20, 14, -14, 0.1, 160)
   const atmosphere = makeSky(scene, low)
   const scenery = createScenery(low),
-    visitor = createVisitor(),
+    visitor = createVisitor(view.outfit),
     guide = createGuide(),
     cat = createCat()
   // Mochi naps on the bench by Iker's house.
@@ -118,7 +118,7 @@ export function startVillage(
     anglingWalk = true
     ring.visible = false
   }
-  const outdoorPickables = [...scenery.interactives, guide.group, fireSpot, fishSpot]
+  const outdoorPickables: T.Object3D[] = [...scenery.interactives, guide.group, fireSpot, fishSpot]
 
   /* ------------------------- Arrival from the sky ------------------------ */
   // The visitor drifts down through a cloud bank under an umbrella and lands
@@ -173,8 +173,9 @@ export function startVillage(
     cloudBank.visible = false
     landingShadow.visible = false
   }
-  /** Log seats: where to sit (fire side of the log) and where to step off. */
-  const seats = campfire.logs.map(([dx, dz]) => {
+  /** Seats: where to sit, which way to face and where to step off. Logs
+   * around the campfire face the fire; every bench faces out from its back. */
+  const fireSeats = campfire.logs.map(([dx, dz]) => {
     const lx = fireX + dx,
       lz = fireZ + dz
     const yaw = Math.atan2(fireX - lx, fireZ - lz)
@@ -185,9 +186,39 @@ export function startVillage(
       z: lz + uz * 0.27,
       yaw,
       out: [lx - ux * 0.66, lz - uz * 0.66] as [number, number],
+      height: 0.28,
+      mode: 'fire' as 'fire' | 'bench',
     }
   })
+  const benchSeats = benchSites.map(([bx, bz], i) => {
+    // Mochi naps on the left of the first bench: sit beside her.
+    const x = bx + (i === 0 ? 0.36 : 0)
+    return { x, z: bz + 0.17, yaw: 0, out: [x, bz + 0.88] as [number, number], height: 0.37, mode: 'bench' as const }
+  })
+  const seats = [...fireSeats, ...benchSeats]
   type Seat = (typeof seats)[number]
+  // Invisible hit areas make every bench clickable and reachable.
+  const benchSpots = benchSites.map(([bx, bz], i) => {
+    const spot = new T.Group()
+    spot.position.set(bx, 0, bz)
+    spot.userData.zone = 'bench'
+    spot.userData.project = fireSeats.length + i
+    const hit = new T.Mesh(new T.BoxGeometry(1.5, 1, 0.9), new T.MeshBasicMaterial({ visible: false }))
+    hit.position.y = 0.5
+    spot.add(hit)
+    scene.add(spot)
+    return spot
+  })
+  outdoorPickables.push(...benchSpots)
+  let catReplyAt = -1
+  /** Turn to face an interactive object (e.g. the wardrobe). */
+  function faceTowards(zone: string) {
+    const o = getPickables().find((item) => item.userData.zone === zone)
+    if (!o) return
+    o.getWorldPosition(nearestPoint)
+    const p = visitor.group.position
+    faceYaw = Math.atan2(nearestPoint.x - p.x, nearestPoint.z - p.z)
+  }
   /** Sitting by the fire: walk to the log, hop on, sit, and hop back off. */
   let rest: {
     seat: Seat
@@ -225,10 +256,10 @@ export function startVillage(
     }
     return hit
   }
-  function beginRest() {
+  function beginRest(index?: number) {
     if (rest || inside) return
     const p = visitor.group.position
-    const usable = seats.filter((s) => canWalk(...s.out))
+    const usable = index !== undefined && seats[index] ? [seats[index]] : fireSeats.filter((s) => canWalk(...s.out))
     if (!usable.length) return
     const seat = usable.reduce((best, s) =>
       Math.hypot(s.out[0] - p.x, s.out[1] - p.z) < Math.hypot(best.out[0] - p.x, best.out[1] - p.z) ? s : best,
@@ -256,7 +287,8 @@ export function startVillage(
     return !(x < -2.38 && z > -1.7 && z < 0.83) &&
       !(x > 1.72 && z < -1.65) &&
       Math.hypot(x - 0.12, z + 1.62) > 0.58 &&
-      Math.hypot(x - 3.35, z - 0.4) > 0.38
+      Math.hypot(x - 3.35, z - 0.4) > 0.38 &&
+      !(x > -2.55 && x < -1.05 && z < -2.15)
   }
   function setInside(value: Interior) {
     if (inside === value) return
@@ -509,7 +541,13 @@ export function startVillage(
     }, arrived)
   }
   function activate(target: Target, exhibit?: number) {
-    if (target === 'fishing') {
+    if (target === 'wardrobe') {
+      faceTowards(target)
+      events.wardrobe?.()
+    } else if (target === 'bench') {
+      if (rest) standUp()
+      else beginRest(exhibit)
+    } else if (target === 'fishing') {
       if (fishing.active()) fishing.press()
       else beginFishing()
     } else if (target === 'campfire') {
@@ -634,7 +672,9 @@ export function startVillage(
             ? 2.3
             : zone === 'fishing'
               ? 1.6
-              : 3.5
+              : zone === 'bench'
+                ? 1.8
+                : 3.5
       if (rest || fishing.active()) break
       // The campfire circle is wide: measure from its rim, not its centre.
       const effective = zone === 'campfire' ? dist - 0.75 : dist
@@ -644,6 +684,12 @@ export function startVillage(
         best = effective
         project = o.userData.project
       }
+    }
+    // Nothing to interact with mid-transition: hide the prompt during wipes.
+    if (iris.active()) {
+      reach = null
+      project = undefined
+      nearObject = null
     }
     if (force || previous !== nearObject)
       events.position(
@@ -785,7 +831,8 @@ export function startVillage(
         visitor.group.rotation.y += angleDelta(visitor.group.rotation.y, facing) * (1 - Math.exp(-dt * 12))
         if (rest.stage === 'hop' && t >= 1) {
           rest.stage = 'seated'
-          visitor.sit?.(true)
+          visitor.sit?.(true, { height: seat.height, mode: seat.mode })
+          if (seat === benchSeats[0]) catReplyAt = elapsed + 1.1
           play('sit')
         } else if (rest.stage === 'rise' && rest.timer > 0.4) {
           rest.stage = 'leave'
@@ -857,6 +904,10 @@ export function startVillage(
       turn,
       dust: !inside,
     })
+    if (catReplyAt > 0 && elapsed > catReplyAt) {
+      catReplyAt = -1
+      cat.emote?.('heart')
+    }
     if (pipReplyAt > 0 && elapsed > pipReplyAt) {
       pipReplyAt = -1
       guide.wave?.()
@@ -908,8 +959,9 @@ export function startVillage(
         desired.x += (p.x - desired.x) * 0.85 * cozy
         desired.z += (p.z + 1.3 - desired.z) * 0.85 * cozy
       } else {
-        desired.x += (fireX * follow - desired.x) * 0.45 * cozy
-        desired.z += (fireZ * 0.84 - desired.z) * 0.45 * cozy
+        const [sx, sz] = rest?.seat.mode === 'bench' ? [rest.seat.x, rest.seat.z] : [fireX, fireZ]
+        desired.x += (sx * follow - desired.x) * 0.45 * cozy
+        desired.z += (sz * 0.84 - desired.z) * 0.45 * cozy
       }
     }
     // Around the iris, glide the camera so the visitor sits in the middle of
@@ -1106,16 +1158,37 @@ export function startVillage(
         )
         updateReach()
       }
-      if (inside) crossDoor(false, move, arrived)
-      else {
+      // A quick hop and sparkle on arrival makes travelling feel magical.
+      const pop = () => {
+        visitor.land?.()
+        play('land')
+      }
+      if (inside) crossDoor(false, () => (move(), pop()), arrived)
+      else if (motion.matches) {
         move()
         arrived?.()
-      }
+      } else
+        iris.start(
+          () => {
+            move()
+            pop()
+          },
+          arrived,
+        )
     },
     touch(x, y) {
       if (!iris.active()) stick.set(x, y)
     },
     interact,
+    wear(id, instant = false) {
+      visitor.wear?.(id, instant)
+      if (instant) return
+      play('fanfare')
+      // Spin round, then face the camera to show the new look off.
+      setTimeout(() => {
+        faceYaw = Math.atan2(cameraOffset.x, cameraOffset.z)
+      }, 1000)
+    },
     start() {
       if (!attract || iris.active()) return
       if (landed) {
@@ -1129,7 +1202,7 @@ export function startVillage(
       iris.start(() => {
         attract = false
         snapCamera = true
-        cloudBank.visible = true
+        cloudBank.visible = !landed
       })
     },
     dispose() {

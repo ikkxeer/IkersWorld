@@ -46,6 +46,8 @@ import type {
 import Game from './ui/Game'
 import Arrival from './ui/Arrival'
 import Title from './ui/Title'
+import Wardrobe from './ui/Wardrobe'
+import { loadOutfit, saveOutfit } from './data/outfits'
 import Journal from './ui/Panel'
 import VillageMap, { ZoneIcon } from './ui/Map'
 const languageNames = { es: 'Español', ca: 'Català', en: 'English' }
@@ -78,6 +80,8 @@ function placeName(
   if (place === 'exit') return inside === 'tech' ? t.leaveLab : t.leaveHouse
   if (place === 'campfire') return t.campfire
   if (place === 'fishing') return t.fishing
+  if (place === 'wardrobe') return t.wardrobe
+  if (place === 'bench') return t.bench
   if (place === 'about' && inside) return t.album
   if (place === 'tech') return exhibit === undefined ? t.workshopSign : stations[exhibit][lang]
   return place === 'map'
@@ -195,7 +199,9 @@ function App() {
     [titleOn, setTitleOn] = useState(() => !deep && !titleSeen()),
     [titleLeaving, setTitleLeaving] = useState(false),
     [hud, setHud] = useState<'hidden' | 'enter' | 'shown'>(() => (!deep && !titleSeen() ? 'hidden' : 'shown')),
-    [welcome, setWelcome] = useState(false)
+    [welcome, setWelcome] = useState(false),
+    [outfit, setOutfit] = useState(loadOutfit),
+    [wardrobe, setWardrobe] = useState(false)
   const ctl = useRef<VillageController | null>(null),
     pending = useRef<Zone | null>(null),
     languageBox = useRef<HTMLDivElement>(null)
@@ -265,6 +271,9 @@ function App() {
         setHover(target ? { target, exhibit } : null)
       },
       inside: setInside,
+      wardrobe() {
+        setWardrobe(true)
+      },
       landed() {
         setHud((h) => (h === 'hidden' ? 'enter' : h))
         setWelcome(true)
@@ -310,6 +319,7 @@ function App() {
       arrival()
     }
   }
+  const closeWardrobe = useCallback(() => setWardrobe(false), [])
   const start = useCallback(() => {
     if (!titleOn || titleLeaving) return
     setTitleLeaving(true)
@@ -341,6 +351,7 @@ function App() {
     const action = (e: KeyboardEvent) => {
       if (
         titleOn ||
+        wardrobe ||
         ctl.current?.transitioning() ||
         e.repeat ||
         e.ctrlKey ||
@@ -375,7 +386,7 @@ function App() {
     }
     window.addEventListener('keydown', action)
     return () => window.removeEventListener('keydown', action)
-  }, [menu, panel, intro, open, inside, ready, titleOn])
+  }, [menu, panel, intro, open, inside, ready, titleOn, wardrobe])
   useEffect(() => {
     if (gift === null) return
     const id = setTimeout(() => setGift(null), 9000)
@@ -410,6 +421,24 @@ function App() {
           onSound={toggleSound}
         />
       )}
+      {wardrobe && (
+        <Wardrobe
+          lang={lang}
+          current={outfit}
+          title={t.wardrobe}
+          hint={t.wardrobeHint}
+          wearing={t.wearing}
+          closeLabel={t.close}
+          onClose={closeWardrobe}
+          onPick={(id) => {
+            setWardrobe(false)
+            if (id === outfit) return
+            setOutfit(id)
+            saveOutfit(id)
+            ctl.current?.wear(id)
+          }}
+        />
+      )}
       {welcome && !panel && (
         <div className="welcome-banner" role="status">
           <b>{t.welcome} Iker’s World</b>
@@ -429,9 +458,10 @@ function App() {
           controller={ctl}
           events={events}
           ready={loaded}
-          paused={!!panel || menu}
+          paused={!!panel || menu || wardrobe}
           workshop={t.workshopSign}
           title={titleOn}
+          outfit={outfit}
           guide={t.guideName}
           exhibit={exhibit}
           openLabel={t.open}

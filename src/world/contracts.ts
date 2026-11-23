@@ -3,7 +3,7 @@ import type { AnglerUpdate } from './fishing'
 export type { AnglerUpdate }
 export type Interior = 'about' | 'tech' | false
 /** 'campfire' is handled in-world (the visitor sits down), never as a panel. */
-export type Target = Place | 'exit' | 'campfire' | 'fishing'
+export type Target = Place | 'exit' | 'campfire' | 'fishing' | 'wardrobe' | 'bench'
 export interface VillageEvents {
   open: (place: Place, project?: number) => void
   position: (
@@ -21,6 +21,8 @@ export interface VillageEvents {
   gift?: (project: number) => void
   /** The visitor has touched down on the island (end of the arrival). */
   landed?: () => void
+  /** The visitor opened the wardrobe in Iker's house. */
+  wardrobe?: () => void
 }
 export interface VillageController {
   pause: (value: boolean) => void
@@ -32,6 +34,8 @@ export interface VillageController {
   interact: () => void
   /** Leave the title screen: wipe to the arrival through the clouds. */
   start: () => void
+  /** Change outfit (with a twirl, or instantly when restoring a saved look). */
+  wear: (outfit: string, instant?: boolean) => void
   dispose: () => void
 }
 
@@ -41,4 +45,6 @@ export interface VillageView {
   iris: HTMLElement | null
   /** Begin on the title screen: the camera circles the island and waits. */
   title?: boolean
+  /** Outfit to start in. */
+  outfit?: string
 }

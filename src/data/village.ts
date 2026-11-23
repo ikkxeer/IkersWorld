@@ -130,6 +130,10 @@ const es = {
   pressStart: 'Pulsa cualquier tecla para empezar',
   tapStart: 'Toca la pantalla para empezar',
   credits: 'Un portfolio jugable de Iker Aramburu Muñoz',
+  wardrobe: 'Vestidor',
+  wardrobeHint: 'Elige un traje y date una vuelta para estrenarlo.',
+  wearing: 'Puesto',
+  bench: 'Sentarse en el banco',
 }
 type Dictionary = typeof es
 const ca: Dictionary = {
@@ -231,6 +235,10 @@ const ca: Dictionary = {
   pressStart: 'Prem qualsevol tecla per començar',
   tapStart: 'Toca la pantalla per començar',
   credits: 'Un portafolis jugable de l’Iker Aramburu Muñoz',
+  wardrobe: 'Vestidor',
+  wardrobeHint: 'Tria un vestit i fes una volta per estrenar-lo.',
+  wearing: 'Posat',
+  bench: 'Seure al banc',
 }
 const en: Dictionary = {
   brand: 'Interactive portfolio',
@@ -332,6 +340,10 @@ const en: Dictionary = {
   pressStart: 'Press any key to start',
   tapStart: 'Tap the screen to start',
   credits: 'A playable portfolio by Iker Aramburu Muñoz',
+  wardrobe: 'Wardrobe',
+  wardrobeHint: 'Pick an outfit and twirl into it.',
+  wearing: 'Wearing',
+  bench: 'Sit on the bench',
 }
 export const copy = { es, ca, en }
 export const placeKeys: Record<Zone, keyof Dictionary> = {
