@@ -165,6 +165,13 @@ export function paintSea(material: T.MeshStandardMaterial, clock: Uniform) {
         float wav = islandNoise(w) * islandNoise(w * 1.9 + 4.);
         float wavelet = smoothstep(.5, .55, wav) * (1. - smoothstep(.57, .66, wav));
         col = mix(col, vec3(.94, 1., .97), clamp(foamBand * .65 + edge * .9 + wavelet * .28 * (1. - shore * .5), 0., 1.));
+        // Sun (or moon) glints winking on the open water.
+        vec2 glintUv = p * 1.4 + vec2(seaTime * .12, 0.);
+        vec2 glintCell = floor(glintUv);
+        float glint = step(.94, islandHash(glintCell)) *
+          smoothstep(.16, .02, length((fract(glintUv) - .5) * vec2(1., 2.2))) *
+          pow(max(0., sin(seaTime * 2.4 + islandHash(glintCell + 3.) * 6.28)), 10.);
+        col += glint * .55 * smoothstep(.5, 3., dist);
         diffuseColor.rgb = col;`,
       )
   }

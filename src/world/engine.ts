@@ -5,6 +5,7 @@ import { bendScene, projectCurved, unbendRay, worldCurve, worldCurveFocus } from
 import { anchors, destinations } from '../data/village'
 import { campfire, fishingSpot, shape } from '../data/island'
 import { createFishing } from './fishing'
+import { play } from '../audio/sfx'
 import { createVisitor, createGuide, createCat, angleDelta } from './character'
 import { makeGallery, makeInterior } from './interior'
 import { createScenery, islandFloorHeight } from './scenery'
@@ -36,6 +37,10 @@ export function startVillage(
   let pixelRatio = maxRatio
   renderer.setPixelRatio(pixelRatio)
   renderer.shadowMap.enabled = true
+  // Almost everything that casts a shadow is static, so the shadow map is
+  // refreshed a couple of dozen times a second instead of every frame.
+  renderer.shadowMap.autoUpdate = false
+  let lastShadow = 0
   renderer.shadowMap.type = T.PCFShadowMap
   renderer.outputColorSpace = T.SRGBColorSpace
   // Neutral tone mapping keeps pastel colours bright and clean instead of
@@ -90,6 +95,12 @@ export function startVillage(
     waterY: -0.86,
   })
   scene.add(fishing.group)
+  // Footsteps sound woody on the pier, bridges and indoor floors.
+  visitor.onStep?.((strength) => {
+    const p = visitor.group.position
+    const wood = !!inside || p.y > 0.14 || p.y < 0
+    play(wood ? 'stepWood' : 'step', strength)
+  })
   /** Walking out to the end of the pier before casting. */
   let anglingWalk = false
   function beginFishing() {
@@ -187,6 +198,7 @@ export function startVillage(
   function shakeTree(x: number, z: number) {
     const tree = scenery.shake(x, z)
     if (!tree) return false
+    play('rustle')
     const p = visitor.group.position
     faceYaw = Math.atan2(tree[0] - p.x, tree[1] - p.z)
     return true
@@ -388,6 +400,7 @@ export function startVillage(
         const sx = ((projected.x + 1) * box.width) / 2,
           sy = ((1 - projected.y) * box.height) / 2
         if (Math.hypot(e.clientX - box.left - sx, e.clientY - box.top - sy) < 70 && scenery.popBalloon()) {
+          play('pop')
           visitor.emote?.('heart')
           events.gift?.(Math.floor(Math.random() * 6))
           return
@@ -491,6 +504,15 @@ export function startVillage(
     else if ((target === 'about' || target === 'tech') && !inside) crossDoor(target)
     else events.open(target, exhibit)
   }
+  /** Wave hello; Pip waves back when he can see you. */
+  let pipReplyAt = -1
+  function greet() {
+    if (paused || iris.active() || !landed || fishing.active() || (rest && rest.stage !== 'seated')) return
+    visitor.wave?.()
+    play('wave')
+    const p = visitor.group.position
+    if (!inside && Math.hypot(p.x - guide.group.position.x, p.z - guide.group.position.z) < 5.5) pipReplyAt = elapsed + 0.6
+  }
   function interact() {
     if (paused || iris.active() || !landed) return
     if (fishing.active()) fishing.press()
@@ -518,6 +540,7 @@ export function startVillage(
         fishing.cancel()
       }
       if (e.code === 'KeyE' && !e.repeat) interact()
+      if (e.code === 'KeyQ' && !e.repeat) greet()
       if (e.code === 'Equal') changeZoom(0.1)
       if (e.code === 'Minus') changeZoom(-0.1)
     },
@@ -633,6 +656,11 @@ export function startVillage(
     let distance = 0,
       turn = 0
     const pace = (inside ? 2.6 : 3.1) * (running && !inside ? 1.75 : 1)
+    // Touch controls can get up from the fire or reel in, like the keys do.
+    if (stick.lengthSq() > 0.09 && !paused) {
+      if (rest?.stage === 'seated') standUp()
+      fishing.cancel()
+    }
     const free = (!rest || rest.stage === 'approach') && !fishing.active() && landed
     wish.set(0, 0)
     if (!paused && !iris.active() && free) {
@@ -711,7 +739,7 @@ export function startVillage(
     }
     // Campfire: arrive at the log, hop on, sit; on any input, hop back off.
     let hopLift = 0
-    if (rest) {
+    if (rest && !paused) {
       const seat = rest.seat
       rest.timer += dt
       if (rest.stage === 'approach' && !goal.length) {
@@ -742,6 +770,7 @@ export function startVillage(
         if (rest.stage === 'hop' && t >= 1) {
           rest.stage = 'seated'
           visitor.sit?.(true)
+          play('sit')
         } else if (rest.stage === 'rise' && rest.timer > 0.4) {
           rest.stage = 'leave'
           rest.timer = 0
@@ -758,7 +787,14 @@ export function startVillage(
         fishing.begin(p, 0)
       }
     }
-    fishing.update(dt, elapsed)
+    // The campfire crackles when you're close.
+    if (!inside && !paused) {
+      const nearFire = Math.hypot(p.x - fireX, p.z - fireZ)
+      if (nearFire < 5 && Math.random() < dt * 2.2) play('crackle', 1 - nearFire / 5)
+    }
+    // A panel open over the game pauses the fish too, so it never escapes
+    // while someone is reading.
+    if (!paused) fishing.update(dt, elapsed)
     if (pendingShake && !goal.length) {
       const [sx, sz] = pendingShake
       pendingShake = null
@@ -791,6 +827,7 @@ export function startVillage(
         p.copy(landingSpot)
         visitor.group.rotation.z = 0
         visitor.land?.()
+        play('land')
         cloudBank.visible = false
         landingShadow.visible = false
       }
@@ -801,6 +838,10 @@ export function startVillage(
       turn,
       dust: !inside,
     })
+    if (pipReplyAt > 0 && elapsed > pipReplyAt) {
+      pipReplyAt = -1
+      guide.wave?.()
+    }
     guide.animate(elapsed, motion.matches, undefined, inside ? null : p)
     if (!inside) cat.animate(elapsed, motion.matches, undefined, p)
     if (!motion.matches) {
@@ -956,6 +997,10 @@ export function startVillage(
           T.MathUtils.clamp(((1 - projected.y) * height) / 2, 0, height),
         )
       } else iris.draw(width, height)
+    }
+    if (stamp - lastShadow > (low ? 66 : 40)) {
+      renderer.shadowMap.needsUpdate = true
+      lastShadow = stamp
     }
     renderer.render(inside ? rooms[inside].scene : scene, camera)
   }

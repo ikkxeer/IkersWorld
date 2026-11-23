@@ -1215,6 +1215,7 @@ export function createScenery(low: boolean) {
       kit.motion.value = reduced ? 0 : 1
       kit.glass.emissiveIntensity = 0.04 + night * 1.6
       daylightGlow.value = 1 - night * 0.7
+      kit.daylight.value = reduced ? 0 : 1 - night
       ambience.update(time, night, px, pz, reduced)
       if (reduced) return
       seabirds.forEach((g, i) => {

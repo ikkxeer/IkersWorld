@@ -15,6 +15,7 @@ import {
   type Lang,
   type Zone,
 } from '../data/village'
+import { beach, campfire, fishingSpot, pond, telescopeSite, tulipField } from '../data/island'
 const icons = {
   about: House,
   tech: FlaskConical,
@@ -160,6 +161,25 @@ function cartography(canvas: HTMLCanvasElement) {
     c.beginPath()
     c.arc(x - 0.5, y - 1, 1.7, 0, 7)
     c.fill()
+  }
+  // Points of interest: little stickers for the activities and corners.
+  c.textAlign = 'center'
+  c.textBaseline = 'middle'
+  c.font = '8px system-ui, "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif'
+  for (const [icon, [lx, lz]] of [
+    ['🎣', [fishingSpot[0], fishingSpot[1] - 0.6]],
+    ['🔥', campfire.fire],
+    ['🐸', pond.center],
+    ['🌷', tulipField.center],
+    ['🏖️', beach.center],
+    ['🔭', telescopeSite],
+  ] as const) {
+    const [x, y] = xy(lx, lz)
+    c.fillStyle = '#fffaf0d9'
+    c.beginPath()
+    c.arc(x, y, 5.2, 0, 7)
+    c.fill()
+    c.fillText(icon, x, y + 0.4)
   }
   for (const id of zones) {
     const [x, y] = xy(...anchors[id])

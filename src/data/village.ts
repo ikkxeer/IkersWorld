@@ -78,7 +78,7 @@ const es = {
   plaza: 'Plaza del pueblo',
   guideName: 'Pip, el guía',
   npcLine:
-    '¡Bienvenido al muelle! Cruza el puente para visitar los proyectos. La puerta de la casa de Iker está abierta y el taller se reconoce por su cartel de código. Pulsa M si quieres ver el mapa.',
+    '¡Bienvenido al muelle! Cruza el puente para visitar los proyectos. La puerta de la casa de Iker está abierta y el taller se reconoce por su cartel de código. Pulsa M si quieres ver el mapa. Y un consejo de capitán: al final del muelle pican peces muy curiosos, junto al puente hay una fogata para descansar y, si ves un globo con un regalo, ¡reviéntalo!',
   subjects: 'Asignaturas de DAM',
   visit: 'Ir a este lugar',
   coast: 'Costa de Iker',
@@ -124,6 +124,9 @@ const es = {
   pull: 'Tirar',
   giftTitle: '¡Un regalo caído del cielo!',
   giftBody: 'Dentro había un proyecto:',
+  wave: 'Saludar',
+  photo: 'Modo foto',
+  photoExit: 'P para volver',
 }
 type Dictionary = typeof es
 const ca: Dictionary = {
@@ -174,7 +177,7 @@ const ca: Dictionary = {
   plaza: 'Plaça del poble',
   guideName: 'Pip, el guia',
   npcLine:
-    'Benvingut al moll! Travessa el pont per visitar els projectes. La porta de casa de l’Iker és oberta i el taller es reconeix pel cartell de codi. Prem M per veure el mapa.',
+    'Benvingut al moll! Travessa el pont per visitar els projectes. La porta de casa de l’Iker és oberta i el taller es reconeix pel cartell de codi. Prem M per veure el mapa. I un consell de capità: al final del moll hi piquen peixos molt curiosos, vora el pont hi ha una foguera per descansar i, si veus un globus amb un regal, rebenta’l!',
   subjects: 'Assignatures de DAM',
   visit: 'Anar a aquest lloc',
   coast: 'Costa de l’Iker',
@@ -219,6 +222,9 @@ const ca: Dictionary = {
   pull: 'Estirar',
   giftTitle: 'Un regal caigut del cel!',
   giftBody: 'A dins hi havia un projecte:',
+  wave: 'Saludar',
+  photo: 'Mode foto',
+  photoExit: 'P per tornar',
 }
 const en: Dictionary = {
   brand: 'Interactive portfolio',
@@ -269,7 +275,7 @@ const en: Dictionary = {
   plaza: 'Village square',
   guideName: 'Pip, your guide',
   npcLine:
-    'Welcome to the pier! Cross the bridge to see the projects. Iker’s front door is open, and the coding sign marks the workshop. Press M to see the map.',
+    'Welcome to the pier! Cross the bridge to see the projects. Iker’s front door is open, and the coding sign marks the workshop. Press M to see the map. A captain’s tip: curious fish bite at the end of the pier, there’s a campfire by the bridge for a rest, and if you spot a balloon carrying a gift, pop it!',
   subjects: 'DAM coursework',
   visit: 'Travel here',
   coast: 'Iker’s coast',
@@ -314,6 +320,9 @@ const en: Dictionary = {
   pull: 'Pull',
   giftTitle: 'A gift from the sky!',
   giftBody: 'Inside was a project:',
+  wave: 'Wave',
+  photo: 'Photo mode',
+  photoExit: 'P to go back',
 }
 export const copy = { es, ca, en }
 export const placeKeys: Record<Zone, keyof Dictionary> = {

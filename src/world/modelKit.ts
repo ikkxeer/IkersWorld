@@ -62,6 +62,8 @@ export class ModelKit {
   readonly walker = { value: new T.Vector2(100, 100) }
   readonly motion = { value: 1 }
   readonly walkerFloor = { value: 0 }
+  /** 1 by day, 0 at night: drives the drifting cloud shadows. */
+  readonly daylight = { value: 1 }
   /** (x, z, strength) of the tree currently being shaken. */
   readonly shake = { value: new T.Vector3(0, 0, 0) }
   constructor() {
@@ -126,8 +128,8 @@ export class ModelKit {
       }
       material.customProgramCacheKey = () => (flower ? 'flowers' : 'leaves')
     }
-    paintGround(this.grass, 'grass')
-    paintGround(this.soil, 'soil')
+    paintGround(this.grass, 'grass', this.clock, this.daylight)
+    paintGround(this.soil, 'soil', this.clock, this.daylight)
     cartoon(this.matte, 0.14, 0.05)
     cartoon(this.leaf, 0.2, 0.06)
     cartoon(this.petals, 0.16, 0.06)
@@ -146,8 +148,15 @@ export class ModelKit {
   }
 }
 
-function paintGround(material: T.MeshStandardMaterial, kind: 'grass' | 'soil') {
+function paintGround(
+  material: T.MeshStandardMaterial,
+  kind: 'grass' | 'soil',
+  clock: { value: number },
+  daylight: { value: number },
+) {
   material.onBeforeCompile = (shader) => {
+    shader.uniforms.groundTime = clock
+    shader.uniforms.groundDay = daylight
     shader.vertexShader =
       'varying vec3 vGroundWorld;\n' +
       shader.vertexShader.replace(
@@ -174,12 +183,16 @@ function paintGround(material: T.MeshStandardMaterial, kind: 'grass' | 'soil') {
           float pebble = step(.62, islandHash(cell)) * smoothstep(.13, .08, length(local * vec2(1., 1.4)));
           c = mix(c, c * (islandHash(cell + 9.) > .5 ? 1.12 : .86), pebble);
           diffuseColor.rgb = c;`
+    // Soft cloud shadows drift slowly across the island by day.
+    const clouds = `
+      float cloudShade = smoothstep(.5, .72, islandFbm(vGroundWorld.xz * .055 + vec2(groundTime * .035, groundTime * .012)));
+      diffuseColor.rgb *= 1. - cloudShade * .17 * groundDay;`
     shader.fragmentShader =
-      'varying vec3 vGroundWorld;\n' +
+      'varying vec3 vGroundWorld;\nuniform float groundTime;\nuniform float groundDay;\n' +
       noiseGLSL +
       shader.fragmentShader.replace(
         '#include <color_fragment>',
-        '#include <color_fragment>\n' + paint,
+        '#include <color_fragment>\n' + paint + clouds,
       )
   }
   material.customProgramCacheKey = () => 'island-' + kind

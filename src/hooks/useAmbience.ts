@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
+import { setSoundEnabled } from '../audio/sfx'
 
 /** Original surf and two-tone bird calls, synthesized locally after a gesture. */
 export function useAmbience() {
   const [on, setOn] = useState(false)
   useEffect(() => {
+    setSoundEnabled(on)
     if (!on) return
     const ctx = new AudioContext(),
       gain = ctx.createGain(),

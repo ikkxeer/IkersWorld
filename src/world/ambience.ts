@@ -1,6 +1,7 @@
 import * as T from 'three'
 import { Batch, ModelKit, type XZ } from './modelKit'
 import { pond } from '../data/island'
+import { play } from '../audio/sfx'
 
 /** A soft round sprite texture, drawn once and shared by every glow. */
 export function softDot(inner: string, outer: string) {
@@ -400,6 +401,7 @@ export function createAmbience({ kit, crowns, perches, low, lamps, campfire, lan
       frogs.forEach((f) => {
         const near = Math.hypot(px - f.home.x, pz - f.home.z) < 2.3
         if (near && f.away <= 0 && f.hop >= 1 && !reduced) {
+          play('ribbit')
           f.hop = 0
           f.away = 5 + Math.random() * 3
         }
@@ -413,6 +415,7 @@ export function createAmbience({ kit, crowns, perches, low, lamps, campfire, lan
             r.ring.position.set(f.frog.position.x, 0.13, f.frog.position.z)
             r.age = 0
             r.ring.visible = true
+            play('plop', 0.7)
           }
         } else if (f.away > 0) {
           f.away -= dt
@@ -432,6 +435,10 @@ export function createAmbience({ kit, crowns, perches, low, lamps, campfire, lan
         r.ring.material.opacity = 0.8 * (1 - r.age)
         if (r.age >= 1) r.ring.visible = false
       }
+
+      // The occasional croak when you're wandering near the pond.
+      if (!reduced && night < 0.2 && Math.hypot(px - pondX, pz - pondZ) < 7 && Math.random() < dt * 0.18)
+        play('ribbit')
 
       // The gift balloon crosses the island on a gentle breeze.
       const flight = time - balloonStart

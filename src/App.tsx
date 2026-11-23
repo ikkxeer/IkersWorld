@@ -177,7 +177,8 @@ function App() {
     ),
     [inside, setInside] = useState<Interior>(false),
     [angler, setAngler] = useState<AnglerUpdate | null>(null),
-    [gift, setGift] = useState<number | null>(null)
+    [gift, setGift] = useState<number | null>(null),
+    [photo, setPhoto] = useState(false)
   const [ready, setReady] = useState(false),
     [arrivalGone, setArrivalGone] = useState(false),
     [intro, setIntro] = useState(!deep)
@@ -308,6 +309,7 @@ function App() {
         e.preventDefault()
         open('map')
       }
+      if (e.code === 'KeyP' && ready) setPhoto((v) => !v)
       if (inside && e.code === 'Escape') ctl.current?.leave()
       if (
         intro &&
@@ -327,7 +329,7 @@ function App() {
     }
     window.addEventListener('keydown', action)
     return () => window.removeEventListener('keydown', action)
-  }, [menu, panel, intro, open, inside])
+  }, [menu, panel, intro, open, inside, ready])
   useEffect(() => {
     if (gift === null) return
     const id = setTimeout(() => setGift(null), 9000)
@@ -341,7 +343,12 @@ function App() {
   }, [ready])
   const hasCover = light || !ready
   return (
-    <main className={'screen ' + 'playing' + (light ? ' light-mode' : '')}>
+    <main className={'screen ' + 'playing' + (light ? ' light-mode' : '') + (photo && !panel ? ' photo-mode' : '')}>
+      {photo && !panel && (
+        <button className="photo-badge" onClick={() => setPhoto(false)}>
+          {t.photo} · {t.photoExit}
+        </button>
+      )}
       {hasCover && <div className="cover" aria-hidden="true" />}
       {mode === 'game' && (
         <Game

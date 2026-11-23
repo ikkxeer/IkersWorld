@@ -37,6 +37,10 @@ export interface IslandCharacter {
   umbrella?: (open: boolean) => void
   /** A big, happy landing: squash, dust and a sparkle. */
   land?: () => void
+  /** A friendly wave (the visitor) or a hello back (NPCs). */
+  wave?: () => void
+  /** Called on every footfall with the current pace (for footstep sounds). */
+  onStep?: (listener: (strength: number) => void) => void
 }
 
 export interface Angler {
@@ -771,6 +775,8 @@ export function createVisitor(): IslandCharacter {
   let showW = 0
   let floating = false
   let floatW = 0
+  let footstep: ((strength: number) => void) | null = null
+  let waveT = 1
   let brollyScale = 0
   let nextNote = 0
   const nod = spring(120, 10)
@@ -842,6 +848,8 @@ export function createVisitor(): IslandCharacter {
     floatW = damp(floatW, floating ? 1 : 0, floating ? 20 : 6, dt)
     brollyScale = damp(brollyScale, floating ? 1 : 0, floating ? 12 : 9, dt)
     castT = Math.min(1, castT + dt / 0.75)
+    waveT = Math.min(1, waveT + dt / 1.8)
+    const waving = waveT < 1 ? ease(clamp(waveT / 0.15, 0, 1)) * ease(clamp((1 - waveT) / 0.2, 0, 1)) : 0
     tugT = Math.min(1, tugT + dt / 0.35)
     const sitting = ease(clamp(sitW, 0, 1))
     // Running: longer strides, pumping arms and a keener lean.
@@ -898,6 +906,7 @@ export function createVisitor(): IslandCharacter {
         if (landed && leg.planted === false) {
           if (move?.dust && !reduced && pace > 0.45) kickDust(leg.shoe, 0.7 + 0.5 * pace)
           if (!reduced) landing.kick(-0.09 * pace)
+          footstep?.(Math.min(1.4, 0.5 + pace * 0.6))
         }
         leg.planted = footPhase < STANCE
       })
@@ -1027,6 +1036,11 @@ export function createVisitor(): IslandCharacter {
         shoulder.rotation.z = lerp(shoulder.rotation.z, rodArm ? side * 0.12 : -side * 0.1, rodW)
         elbow.rotation.x = lerp(elbow.rotation.x, rodArm ? -0.6 : -1.05, rodW)
       }
+      if (waving > 0.001 && index === 1) {
+        shoulder.rotation.x = lerp(shoulder.rotation.x, -2.55, waving)
+        shoulder.rotation.z = lerp(shoulder.rotation.z, side * (0.45 + 0.35 * Math.sin(time * 13)), waving)
+        elbow.rotation.x = lerp(elbow.rotation.x, -0.45, waving)
+      }
       if (floatW > 0.001) {
         // One hand grips the umbrella overhead, the other waves at the island.
         const wave = Math.sin(time * 5) * 0.35
@@ -1081,7 +1095,7 @@ export function createVisitor(): IslandCharacter {
 
     /* ---- Face ---- */
     const cosy = sitting > 0.9 && !reduced && Math.sin(time * 0.45) > 0.82
-    const happy = busy > 0.45 || cosy || showW > 0.5 || (floatW > 0.5 && Math.sin(time * 0.9) > 0.3)
+    const happy = busy > 0.45 || cosy || showW > 0.5 || waving > 0.5 || (floatW > 0.5 && Math.sin(time * 0.9) > 0.3)
     brolly.visible = brollyScale > 0.02
     brolly.scale.set(Math.max(0.001, brollyScale), 1, Math.max(0.001, brollyScale))
     rodPivot.visible = rodW > 0.05
@@ -1131,6 +1145,14 @@ export function createVisitor(): IslandCharacter {
       if (value) nextNote = previous + 1.5
     },
     emote: (kind: Emote) => bubbles.show(kind),
+    wave() {
+      if (waveT < 0.7) return
+      waveT = 0
+      bubbles.show('heart')
+    },
+    onStep(listener) {
+      footstep = listener
+    },
     umbrella(open: boolean) {
       floating = open
       if (open) brollyScale = 1
@@ -1293,6 +1315,10 @@ export function createGuide(): IslandCharacter {
     group,
     settle() {},
     emote: (kind: Emote) => bubbles.show(kind),
+    wave() {
+      greet = 0
+      bubbles.show('heart')
+    },
     animate(time, reduced, _move, attention) {
       const dt = Math.min(0.1, Math.max(0, time - previous))
       previous = time

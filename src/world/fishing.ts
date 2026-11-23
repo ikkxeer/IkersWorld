@@ -1,6 +1,7 @@
 import * as T from 'three'
 import { fishKinds, loadCaught, pickFish, saveCaught, type FishKind } from '../data/fish'
 import type { Angler, Emote } from './character'
+import { play } from '../audio/sfx'
 
 export type AnglerUpdate =
   | { stage: 'waiting' }
@@ -135,6 +136,7 @@ export function createFishing(options: {
           // Too eager: the fish darts away.
           stage = 'lost'
           timer = 0
+          play('miss')
           report({ stage: 'lost', reason: 'early' })
         } else finish()
         return true
@@ -145,6 +147,8 @@ export function createFishing(options: {
         caught.add(fish.id)
         saveCaught(caught)
         splash(bobber.position.x, bobber.position.z)
+        play('splash')
+        play(isNew ? 'fanfare' : 'catch')
         angler.tug()
         angler.show(fish.colors, 0.85 + 0.5 * ((size - fish.size[0]) / (fish.size[1] - fish.size[0] || 1)))
         stage = 'show'
@@ -185,6 +189,7 @@ export function createFishing(options: {
       angler.tip(tip)
 
       if (stage === 'cast' && timer > 0.42) {
+        play('cast')
         stage = 'flight'
         timer = 0
         from.copy(tip)
@@ -199,6 +204,7 @@ export function createFishing(options: {
           stage = 'wait'
           timer = 0
           ripple(target.x, target.z, 0.6)
+          play('plop')
           fish = pickFish(random)
           fishAngle = random() * Math.PI * 2
           fishDistance = 2.6
@@ -224,11 +230,14 @@ export function createFishing(options: {
               nibbles--
               dip = 0.06
               ripple(target.x, target.z, 0.35)
+              play('plop', 0.45)
               nextNibble = timer + 0.75 + random() * 0.9
             } else {
               stage = 'bite'
               timer = 0
               splash(target.x, target.z)
+              play('bite')
+              play('splash', 0.6)
               emote('alert')
               report({ stage: 'bite' })
             }
@@ -238,6 +247,7 @@ export function createFishing(options: {
       } else if (stage === 'bite' && timer > 0.95) {
         stage = 'lost'
         timer = 0
+        play('miss')
         report({ stage: 'lost', reason: 'late' })
       }
       if (stage === 'lost') {
