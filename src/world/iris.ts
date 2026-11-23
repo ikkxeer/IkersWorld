@@ -1,11 +1,12 @@
 /** A scene swap runs only while the screen is fully covered by the iris. */
 export function makeIris(element: HTMLElement | null, motion: MediaQueryList) {
-  const closeDuration = 310
+  const closeDuration = 420
   const holdDuration = 85
-  const openDuration = 400
+  const openDuration = 520
   let action: (() => void) | undefined
   let finish: (() => void) | undefined
-  let started: number | undefined
+  let previous = 0
+  let elapsed = 0
   let swapped = false
   let progress = 0
 
@@ -21,20 +22,24 @@ export function makeIris(element: HTMLElement | null, motion: MediaQueryList) {
     active: () => action !== undefined,
     start(swap: () => void, complete?: () => void) {
       if (action) return
-      if (!element || motion.matches) {
+      if (!element) {
         swap()
         complete?.()
         return
       }
       action = swap
       finish = complete
-      started = undefined
+      previous = 0
+      elapsed = 0
       swapped = false
     },
     advance(now: number) {
       if (!action) return
-      started ??= now
-      const time = now - started
+      // Preserve the closed frame even when loading a room stalls rendering.
+      elapsed += previous ? Math.min(now - previous, 45) * (motion.matches ? 3 : 1) : 0
+      previous = now
+      if (!swapped && elapsed >= closeDuration) elapsed = closeDuration
+      const time = elapsed
       if (time >= closeDuration && !swapped) {
         swapped = true
         action()
@@ -58,7 +63,8 @@ export function makeIris(element: HTMLElement | null, motion: MediaQueryList) {
       element.style.setProperty('--iris-x', x + 'px')
       element.style.setProperty('--iris-y', y + 'px')
       element.style.setProperty('--iris-radius', radius * progress + 'px')
-      element.classList.toggle('sealed', progress <= 0.001)
+      element.classList.toggle('sealed', motion.matches || progress <= 0.001)
+      element.style.opacity = motion.matches ? String(1 - progress) : '1'
       element.hidden = false
     },
   }

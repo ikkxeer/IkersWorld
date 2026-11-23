@@ -1,4 +1,5 @@
 import type { Place, Zone } from '../data/village'
+export type Interior = 'about' | 'tech' | false
 export type Target = Place | 'exit'
 export interface VillageEvents {
   open: (place: Place, project?: number) => void
@@ -9,7 +10,7 @@ export interface VillageEvents {
     project?: number,
   ) => void
   hover: (place: Target | null, project?: number) => void
-  inside: (value: boolean) => void
+  inside: (value: Interior) => void
   fail: () => void
 }
 export interface VillageController {

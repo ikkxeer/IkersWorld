@@ -3,10 +3,11 @@ import { makeSky } from '../environment/sky'
 import { makeIris } from './iris'
 import { anchors, destinations } from '../data/village'
 import { createVisitor, createGuide } from './character'
-import { makeInterior } from './interior'
+import { makeGallery, makeInterior } from './interior'
 import { createScenery, islandFloorHeight } from './scenery'
 import { walkable, route, type Point } from './navigation'
 import type {
+  Interior,
   Target,
   VillageEvents,
   VillageController,
@@ -45,25 +46,25 @@ export function startVillage(
   visitor.group.position.set(2.5, -0.06, 11.6)
   visitor.group.scale.setScalar(1.33)
   const outdoorPickables = [...scenery.interactives, guide.group]
-  const room = makeInterior()
-  let inside = false
+  const rooms = { about: makeInterior(), tech: makeGallery() }
+  let inside: Interior = false
   let snapCamera = false
   const doorstep = new T.Vector3()
-  const getPickables = () => (inside ? room.interactives : outdoorPickables)
-  const canWalk = (x: number, z: number) =>
-    inside
-      ? Math.abs(x) < 3.6 &&
-        Math.abs(z) < 2.62 &&
-        !(x < -2.38 && z > -1.7 && z < 0.83) &&
-        !(x > 1.72 && z < -1.65) &&
-        Math.hypot(x - 0.12, z + 1.62) > 0.58
-      : walkable(x, z)
-  function setInside(value: boolean) {
+  const getPickables = () => (inside ? rooms[inside].interactives : outdoorPickables)
+  function canWalk(x: number, z: number) {
+    if (!inside) return walkable(x, z)
+    if (Math.abs(x) >= 3.6 || Math.abs(z) >= 2.62) return false
+    if (inside === 'tech') return z > -1.1
+    return !(x < -2.38 && z > -1.7 && z < 0.83) &&
+      !(x > 1.72 && z < -1.65) &&
+      Math.hypot(x - 0.12, z + 1.62) > 0.58
+  }
+  function setInside(value: Interior) {
     if (inside === value) return
     if (value) doorstep.copy(visitor.group.position)
     inside = value
     snapCamera = true
-    const destination = value ? room.scene : scene
+    const destination = value ? rooms[value].scene : scene
     destination.add(visitor.group)
     if (value) visitor.group.position.set(0, 0, 1.16)
     else visitor.group.position.copy(doorstep)
@@ -234,7 +235,7 @@ export function startVillage(
     'ArrowRight',
   ]
   function crossDoor(
-    enter: boolean,
+    enter: Interior,
     afterSwap?: () => void,
     arrived?: () => void,
   ) {
@@ -246,7 +247,7 @@ export function startVillage(
     setHover(null)
     iris.start(() => {
       if (enter) {
-        const [x, z] = destinations.about
+        const [x, z] = destinations[enter]
         visitor.group.position.set(x, 0, z)
       }
       setInside(enter)
@@ -256,7 +257,7 @@ export function startVillage(
   function activate(target: Target, exhibit?: number) {
     arrivalTime = 3.5
     if (target === 'exit') crossDoor(false)
-    else if (target === 'about' && !inside) crossDoor(true)
+    else if ((target === 'about' || target === 'tech') && !inside) crossDoor(target)
     else events.open(target, exhibit)
   }
   function interact() {
@@ -406,7 +407,7 @@ export function startVillage(
       }
     }
     const onRug = Math.abs(p.x) < 1.73 && Math.abs(p.z - 0.1) < 1.27
-    p.y = inside ? (onRug ? 0.09 : 0.01) : islandFloorHeight(p.x, p.z)
+    p.y = inside ? (inside === 'about' && onRug ? 0.09 : 0.01) : islandFloorHeight(p.x, p.z)
     visitor.animate(elapsed, distance > 0.0002, motion.matches, distance)
     guide.animate(elapsed, false, motion.matches)
     scenery.animate(elapsed, night, p.x, p.z, motion.matches, p.y)
@@ -446,7 +447,7 @@ export function startVillage(
     const streetSpan =
       aspect < 0.9 ? 10.15 - closeToPlaza * 1.3 : 8.25 - closeToPlaza * 1.15
     const span = inside
-      ? (aspect < 0.9 ? 6 : 4.2) / zoom
+      ? Math.max(4.2, 4.8 / aspect) / zoom
       : streetSpan / zoom + (1 - intro) * (aspect < 0.9 ? 14 : 8)
     const orbit = (1 - intro) * 1.05
     cameraOffset.set(
@@ -527,7 +528,7 @@ export function startVillage(
         height,
       )
     }
-    renderer.render(inside ? room.scene : scene, camera)
+    renderer.render(inside ? rooms[inside].scene : scene, camera)
   }
   document.addEventListener(
     'visibilitychange',
@@ -562,8 +563,9 @@ export function startVillage(
     travel(id, arrived) {
       if (iris.active()) return
       arrivalTime = 3.5
-      if (id === 'about') {
-        if (!inside) crossDoor(true, undefined, arrived)
+      if (id === 'about' || id === 'tech') {
+        if (inside !== id) crossDoor(id, undefined, arrived)
+        else arrived?.()
         return
       }
       const move = () => {
@@ -611,7 +613,7 @@ export function startVillage(
           }
         })
       collect(scene)
-      collect(room.scene)
+      Object.values(rooms).forEach(room => collect(room.scene))
       textures.forEach((t) => t.dispose())
       geometries.forEach((g) => g.dispose())
       materials.forEach((m) => m.dispose())

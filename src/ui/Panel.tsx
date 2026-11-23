@@ -1,3 +1,4 @@
+import { stations } from '../data/gallery'
 import { useEffect, useRef, type CSSProperties } from 'react'
 import {
   X,
@@ -76,7 +77,8 @@ export default function Journal({
         previous.focus()
     }
   }, [])
-  const title = isZone
+  const station = page === 'tech' && project !== null ? stations[project] : undefined
+  const title = station ? station[lang] : isZone
     ? t[placeKeys[page as Zone]]
     : page === 'map'
       ? t.map
@@ -211,7 +213,7 @@ export default function Journal({
           )}
           {page === 'tech' && (
             <div className="books">
-              {data.tech.map((tech) => (
+              {data.tech.filter(tech => !station || station.tools.includes(tech.name)).map((tech) => (
                 <section key={tech.name}>
                   <span className="book-symbol">{tech.symbol}</span>
                   <div>

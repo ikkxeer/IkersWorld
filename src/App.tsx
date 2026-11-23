@@ -1,3 +1,5 @@
+import { stations } from './data/gallery'
+import type { Interior } from './world/contracts'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import {
@@ -52,14 +54,14 @@ function placeName(
   place: Target | null,
   lang: Lang,
   exhibit?: number,
-  inside = false,
+  inside: Interior = false,
 ) {
   const t = copy[lang]
   if (place === 'projects' && exhibit !== undefined)
     return portfolio(lang).projects[exhibit].name
-  if (place === 'exit') return t.leaveHouse
+  if (place === 'exit') return inside === 'tech' ? t.leaveLab : t.leaveHouse
   if (place === 'about' && inside) return t.album
-  if (place === 'tech') return t.workshopSign
+  if (place === 'tech') return exhibit === undefined ? t.workshopSign : stations[exhibit][lang]
   return place === 'map'
     ? t.map
     : place === 'npc'
@@ -113,7 +115,7 @@ function App() {
     [hover, setHover] = useState<{ target: Target; exhibit?: number } | null>(
       null,
     ),
-    [inside, setInside] = useState(false)
+    [inside, setInside] = useState<Interior>(false)
   const [ready, setReady] = useState(false),
     [intro, setIntro] = useState(!deep)
   const ctl = useRef<VillageController | null>(null),
@@ -212,7 +214,7 @@ function App() {
     if (ctl.current?.transitioning()) return
     setPanel(null)
     const arrival = () => {
-      if (id !== 'about' && id !== 'projects') open(id)
+      if (id !== 'about' && id !== 'projects' && id !== 'tech') open(id)
     }
     if (ctl.current) ctl.current.travel(id, arrival)
     else {
@@ -349,8 +351,8 @@ function App() {
               <button
                 className="round"
                 onClick={() => ctl.current?.leave()}
-                aria-label={t.leaveHouse}
-                title={t.leaveHouse}
+                aria-label={inside === 'tech' ? t.leaveLab : t.leaveHouse}
+                title={inside === 'tech' ? t.leaveLab : t.leaveHouse}
               >
                 <LogOut size={18} />
               </button>
@@ -441,7 +443,7 @@ function App() {
             <MapPin size={20} />
           </span>
           <div>
-            <small>{inside ? t.about : t.coast}</small>
+            <small>{inside === 'tech' ? t.techPlace : inside ? t.about : t.coast}</small>
             <b>
               {inside
                 ? t.interior

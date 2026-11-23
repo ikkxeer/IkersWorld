@@ -320,16 +320,16 @@ export function createVisitor(): IslandCharacter {
     const dt = Math.min(0.1, Math.max(0, time - previous))
     previous = time
     // Reduce secondary motion while keeping the footsteps tied to locomotion.
-    const target = moving ? (reduced ? 0.78 : 1) : 0
+    const target = moving ? 1 : 0
     effort = THREE.MathUtils.damp(effort, target, moving ? 26 : 16, dt)
     if (moving)
-      gait = (gait + (distance ?? dt * 3.1) / (reduced ? 1.42 : 1.78)) % 1
+      gait = (gait + (distance ?? dt * 3.1) / (reduced ? 1.48 : 1.65)) % 1
     const sway = reduced ? 0 : Math.sin(gait * Math.PI * 2) * effort
     const bounce = reduced
       ? 0
-      : (0.5 - 0.5 * Math.cos(gait * Math.PI * 4)) * 0.058 * effort
+      : (0.5 - 0.5 * Math.cos(gait * Math.PI * 4)) * 0.026 * effort
     body.position.set(sway * 0.032, 0.172 + bounce, 0)
-    body.rotation.set(reduced ? 0 : 0.075 * effort, -0.095 * sway, -0.08 * sway)
+    body.rotation.set(reduced ? 0 : 0.035 * effort, -0.07 * sway, -0.04 * sway)
     head.rotation.z = reduced
       ? 0
       : 0.065 * sway + Math.sin(time * 1.7) * 0.015 * (1 - effort)
@@ -341,19 +341,28 @@ export function createVisitor(): IslandCharacter {
       const phase = (gait + index * 0.5) % 1
       const onGround = phase < 0.56
       const swing = THREE.MathUtils.clamp((phase - 0.56) / 0.44, 0, 1)
+      // During stance the boot travels back exactly as fast as the ground.
+      const stride = (reduced ? 1.48 : 1.65) / group.scale.z
+      const halfStep = 0.28 * stride
       const reach = onGround
-        ? 0.39 - (0.78 * phase) / 0.56
-        : -0.39 + 0.78 * THREE.MathUtils.smoothstep(swing, 0, 1)
-      const lift = Math.sin(Math.PI * swing) * effort
+        ? halfStep - stride * phase
+        : -halfStep + stride * (swing - Math.sin(2 * Math.PI * swing) / (2 * Math.PI) - 0.44 * swing)
+      const lift = Math.sin(Math.PI * swing) ** 2 * effort
       hip.set(side * 0.136 + body.position.x, 0.517 + bounce, 0)
-      ankle.set(side * 0.164, 0.096 + 0.252 * lift, reach * effort)
-      knee.lerpVectors(hip, ankle, 0.53)
-      knee.z += 0.052 + 0.174 * lift
+      ankle.set(side * 0.15, 0.096 + (reduced ? 0.12 : 0.17) * lift, reach * effort)
+      // Bend the knee in the sagittal plane as the ankle approaches the hip.
+      const dy = hip.y - ankle.y
+      const dz = ankle.z - hip.z
+      const span = Math.hypot(dy, dz)
+      const bend = Math.sqrt(Math.max(0.001, 0.27 ** 2 - (span / 2) ** 2))
+      knee.lerpVectors(hip, ankle, 0.5)
+      knee.y += bend * dz / span
+      knee.z += bend * dy / span
       poseSegment(thigh, hip, knee, 0.22)
       poseSegment(calf, knee, ankle, 0.21)
       shoe.position.copy(ankle)
-      shoe.rotation.set(0.42 * lift * Math.cos(swing * Math.PI), side * 0.12, 0)
-      arms[index].rotation.x = reach * effort * (reduced ? 0.85 : 1.85)
+      shoe.rotation.set(0.32 * lift * Math.cos(swing * Math.PI), side * 0.07, 0)
+      arms[index].rotation.x = reach * effort * (reduced ? 0.72 : 1.15)
     })
   }
   animate(0, false, false)
