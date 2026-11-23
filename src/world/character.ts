@@ -42,6 +42,8 @@ export interface IslandCharacter {
   land?: () => void
   /** A friendly wave (the visitor) or a hello back (NPCs). */
   wave?: () => void
+  /** Gather energy, burst into a golden aura (shōnen power-up). */
+  powerUp?: () => void
   /** Called on every footfall with the current pace (for footstep sounds). */
   onStep?: (listener: (strength: number) => void) => void
 }
@@ -440,6 +442,8 @@ export function createVisitor(initialOutfit?: string): IslandCharacter {
   // Everything the wardrobe can change is rebuilt here on the same rig.
   let worn: THREE.Mesh[] = []
   let brows = new THREE.Mesh()
+  /** The outfit chosen in the wardrobe (a power-up only borrows the hair). */
+  let base: Outfit = outfitById(initialOutfit)
   function dress(o: Outfit) {
     for (const m of worn) {
       m.parent?.remove(m)
@@ -533,6 +537,20 @@ export function createVisitor(initialOutfit?: string): IslandCharacter {
     } else if (o.back === 'cape') {
       torso.oval(o.backColor, [0, 0.02, -0.17], [0.19, 0.3, 0.045], [0.12, 0, 0])
       torso.oval(o.backColor, [0, 0.24, -0.1], [0.17, 0.045, 0.08])
+    } else if (o.back === 'wings') {
+      for (const side of [-1, 1]) {
+        torso.oval(o.backColor, [side * 0.17, 0.2, -0.2], [0.2, 0.13, 0.025], [0.2, side * -0.5, side * 0.55])
+        torso.oval(o.backColor, [side * 0.13, 0.04, -0.19], [0.13, 0.09, 0.022], [0.2, side * -0.5, side * -0.35])
+      }
+    } else if (o.back === 'backpack') {
+      torso.oval(o.backColor, [0, 0.14, -0.19], [0.14, 0.15, 0.08])
+      torso.oval(o.accent, [0, 0.08, -0.25], [0.09, 0.06, 0.03])
+    } else if (o.back === 'jetpack') {
+      for (const side of [-1, 1]) {
+        torso.oval(o.backColor, [side * 0.065, 0.15, -0.2], [0.06, 0.15, 0.06])
+        torso.oval('#f08a3c', [side * 0.065, -0.02, -0.2], [0.04, 0.03, 0.04])
+      }
+      torso.oval('#8a90a0', [0, 0.18, -0.17], [0.1, 0.1, 0.04])
     }
     wear(torso, chest)
 
@@ -631,6 +649,99 @@ export function createVisitor(initialOutfit?: string): IslandCharacter {
     } else if (o.hat === 'bow') {
       for (const side of [-1, 1]) face.oval(o.hatColor, [0.08 + side * 0.09, 0.29, 0.05], [0.1, 0.07, 0.04], [0, 0, side * 0.5])
       face.oval(o.hatColor, [0.08, 0.29, 0.06], [0.04, 0.04, 0.04])
+    } else if (o.hat === 'cap') {
+      // A rounded cap with a peak.
+      face.oval(o.hatColor, [0, 0.13, -0.01], [0.32, 0.2, 0.31])
+      face.oval(o.hatColor, [0, 0.07, 0.26], [0.2, 0.025, 0.16], [0.12, 0, 0])
+      face.oval(o.accent, [0, 0.33, -0.01], [0.04, 0.025, 0.04])
+    } else if (o.hat === 'crown') {
+      face.turned(
+        o.hatColor,
+        [0, 0.24, -0.02],
+        [
+          [0.15, 0],
+          [0.17, 0.09],
+          [0.15, 0.09],
+          [0.13, 0.02],
+          [0, 0.02],
+        ],
+        1,
+        [-0.1, 0, 0],
+      )
+      for (let k = 0; k < 5; k++) {
+        const a = (k / 5) * TAU
+        face.oval(o.hatColor, [Math.sin(a) * 0.16, 0.37, -0.02 + Math.cos(a) * 0.16], [0.03, 0.05, 0.03])
+        face.oval(k % 2 ? '#e0473b' : '#4fb0d6', [Math.sin(a) * 0.17, 0.29, -0.02 + Math.cos(a) * 0.17], [0.022, 0.022, 0.012], [0, a, 0])
+      }
+    } else if (o.hat === 'ears') {
+      for (const side of [-1, 1]) {
+        face.oval(o.hatColor, [side * 0.17, 0.29, -0.02], [0.08, 0.11, 0.05], [0, 0, side * -0.35])
+        face.oval('#f6b0a0', [side * 0.17, 0.28, 0.02], [0.045, 0.07, 0.02], [0, 0, side * -0.35])
+      }
+    } else if (o.hat === 'beanie') {
+      face.oval(o.hatColor, [0, 0.13, -0.02], [0.325, 0.24, 0.315])
+      face.ring(o.hatColor, [0, 0.05, -0.01], 0.3, 0.04, 0.97, [-0.1, 0, 0])
+      face.oval('#fffaf0', [0, 0.38, -0.04], [0.07, 0.07, 0.07])
+    } else if (o.hat === 'tricorn') {
+      face.oval(o.hatColor, [0, 0.2, -0.02], [0.26, 0.14, 0.25])
+      for (let k = 0; k < 3; k++) {
+        const a = (k / 3) * TAU
+        face.oval(o.hatColor, [Math.sin(a) * 0.24, 0.2, -0.02 + Math.cos(a) * 0.24], [0.24, 0.08, 0.06], [0.3, a, 0])
+      }
+      face.ring('#d9b44a', [0, 0.13, -0.02], 0.26, 0.012, 1, [-0.1, 0, 0])
+      face.oval('#f6f1e4', [0, 0.25, 0.24], [0.04, 0.04, 0.01])
+    } else if (o.hat === 'helmet') {
+      // A rounded helmet; a clear bubble visor for the astronaut look.
+      if (o.hatColor === '#cfe7ff') {
+        face.ring('#dfe2ea', [0, -0.22, 0.01], 0.26, 0.05, 1)
+        face.oval('#e6f3ff', [0, 0.12, -0.08], [0.36, 0.34, 0.3])
+        face.oval('#9fd0ff', [0, 0.06, 0.28], [0.22, 0.17, 0.04])
+      } else {
+        face.oval(o.hatColor, [0, 0.12, -0.02], [0.335, 0.26, 0.325])
+        face.oval('#7a8494', [0, 0.06, 0.29], [0.2, 0.03, 0.03])
+        face.oval(o.accent, [0, 0.33, -0.12], [0.04, 0.14, 0.18], [0.4, 0, 0])
+      }
+    } else if (o.hat === 'chef') {
+      face.turned(
+        o.hatColor,
+        [0, 0.22, -0.03],
+        [
+          [0.2, 0],
+          [0.2, 0.18],
+          [0, 0.18],
+        ],
+        1,
+        [-0.08, 0, 0],
+      )
+      for (let k = 0; k < 5; k++) {
+        const a = (k / 5) * TAU
+        face.oval(o.hatColor, [Math.sin(a) * 0.14, 0.46, -0.04 + Math.cos(a) * 0.14], [0.13, 0.12, 0.13])
+      }
+      face.oval(o.hatColor, [0, 0.5, -0.04], [0.15, 0.12, 0.15])
+    } else if (o.hat === 'straw') {
+      face.turned(
+        o.hatColor,
+        [0, 0.18, -0.02],
+        [
+          [0, 0.16],
+          [0.18, 0.15],
+          [0.22, 0.04],
+          [0.48, 0],
+          [0.5, -0.02],
+          [0, -0.02],
+        ],
+        1,
+        [-0.08, 0, 0.06],
+      )
+      face.ring('#c8423a', [0, 0.23, -0.02], 0.215, 0.025, 1, [-0.08, 0, 0.06])
+    } else if (o.hat === 'goggles') {
+      face.ring(o.hatColor, [0, 0.12, 0.01], 0.31, 0.022, 0.95, [-0.2, 0, 0])
+      for (const side of [-1, 1]) {
+        face.oval(o.hatColor, [side * 0.1, 0.2, 0.25], [0.085, 0.07, 0.05])
+        face.oval(o.accent === '#2a2d3a' ? '#ff9a52' : '#bfe8ff', [side * 0.1, 0.2, 0.29], [0.065, 0.05, 0.02])
+      }
+    } else if (o.hat === 'halo') {
+      face.ring(o.hatColor, [0, 0.47, -0.02], 0.17, 0.025, 1)
     }
     wear(face, head, [0, H, 0])
     cowlick.visible = style === 'swoop'
@@ -744,6 +855,45 @@ export function createVisitor(initialOutfit?: string): IslandCharacter {
   brollyShape.oval('#f6c24d', [0, -0.93, 0], [0.04, 0.05, 0.04])
   brollyShape.mesh(brolly)
   brolly.visible = false
+
+  /* --------------------------- Energy aura ----------------------------- */
+  const aura = new THREE.Group()
+  aura.visible = false
+  group.add(aura)
+  const glow = (color: string, opacity: number) =>
+    new THREE.MeshBasicMaterial({
+      color,
+      transparent: true,
+      opacity,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    })
+  const flame = (scale: number) =>
+    new THREE.LatheGeometry(
+      [
+        [0.0, -0.02],
+        [0.3, 0.02],
+        [0.44, 0.35],
+        [0.42, 0.8],
+        [0.3, 1.25],
+        [0.12, 1.65],
+        [0.0, 1.85],
+      ].map(([r, y]) => new THREE.Vector2(r * scale, y * scale)),
+      22,
+    )
+  const auraOuter = new THREE.Mesh(flame(1), glow('#ffc93c', 0.3))
+  const auraInner = new THREE.Mesh(flame(0.74), glow('#fff3b8', 0.35))
+  aura.add(auraOuter, auraInner)
+  const sparkGeometry = new THREE.OctahedronGeometry(0.03, 0)
+  const sparks = Array.from({ length: 12 }, (_, i) => {
+    const spark = new THREE.Mesh(sparkGeometry, glow('#fff6c8', 0.9))
+    aura.add(spark)
+    return { spark, a: i * 2.4, r: 0.2 + (i % 4) * 0.08, speed: 0.8 + (i % 3) * 0.35 }
+  })
+  let powerT = 99
+  let golden = 0
+  let auraW = 0
 
   const shadow = blobShadow(0.3)
   shadow.scale.y = 0.85
@@ -1133,6 +1283,11 @@ export function createVisitor(initialOutfit?: string): IslandCharacter {
     turnLook = damp(turnLook, moving ? turn : 0, 8, dt)
     const dance = Math.sin(actT * TAU * 1.15) * swaying
 
+    // Power-up timeline: stance (0–0.4), charge (0.4–2.8), burst (2.8–3.6), relax.
+    powerT += dt
+    const stance = powerT < 4.4 ? smoothstep01(powerT / 0.35) * smoothstep01((4.4 - powerT) / 0.6) : 0
+    const charge = powerT < 2.8 ? smoothstep01((powerT - 0.3) / 2.3) : 0
+    const burst = powerT >= 2.8 && powerT < 4.4 ? Math.sin(Math.PI * Math.min(1, (powerT - 2.8) / 1.4)) : 0
     pelvis.position.x = reduced ? 0 : -0.02 * s * w * weightSide + 0.012 * shift + 0.03 * dance
     pelvis.rotation.set(
       0.03 * s * w + 0.06 * run - 0.08 * sitting,
@@ -1164,7 +1319,9 @@ export function createVisitor(initialOutfit?: string): IslandCharacter {
       const allowed = Math.sqrt(Math.max(0, (LEG * 0.985) ** 2 - dx * dx - dz * dz))
       height = Math.min(height, ANKLE_Y + leg.pose.y + allowed + 0.02)
     })
-    pelvis.position.y = lerp(height, seatPelvis + 0.006 * breathe, sitting) + (hopLift + changing * 0.07) * (1 - sitting)
+    pelvis.position.y =
+      lerp(height, seatPelvis + 0.006 * breathe, sitting) + (hopLift + changing * 0.07) * (1 - sitting) - 0.045 * stance * (1 - burst)
+    if (!reduced && charge > 0) pelvis.position.x += Math.sin(time * 70) * 0.008 * charge
     pelvis.position.z = -seatBack * sitting
     pelvis.updateMatrix()
 
@@ -1217,6 +1374,12 @@ export function createVisitor(initialOutfit?: string): IslandCharacter {
         shoulder.rotation.z = lerp(shoulder.rotation.z, side * 0.22, showW)
         elbow.rotation.x = lerp(elbow.rotation.x, -0.25, showW)
       }
+      if (stance > 0) {
+        // Fists clenched at the hips while charging, thrown wide on the burst.
+        shoulder.rotation.x = lerp(lerp(shoulder.rotation.x, 0.35, stance), -0.35, burst)
+        shoulder.rotation.z = lerp(lerp(shoulder.rotation.z, side * 0.5, stance), side * 1.35, burst)
+        elbow.rotation.x = lerp(lerp(elbow.rotation.x, -1.85, stance), -0.15, burst)
+      }
       if (hopping > 0 || twirling > 0 || changing > 0) {
         const out = Math.max(twirling, changing)
         shoulder.rotation.x = lerp(shoulder.rotation.x, -0.5 - 1.2 * hopping, Math.max(hopping, out * 0.4))
@@ -1260,7 +1423,7 @@ export function createVisitor(initialOutfit?: string): IslandCharacter {
     const nodding = reduced ? 0 : nod.step(clamp(-bobVelocity * 0.35, -0.3, 0.3), dt)
     const tapNod = tapping * 0.07 * Math.sin(actT * TAU * 2.4)
     head.rotation.set(
-      lookPitch - lean * 0.55 + nodding + tapNod + dozing * (0.22 + 0.06 * Math.sin(time * 1.3)),
+      lookPitch - lean * 0.55 + nodding + tapNod + dozing * (0.22 + 0.06 * Math.sin(time * 1.3)) + 0.18 * charge * stance - 0.35 * burst,
       lookYaw - chest.rotation.y - pelvis.rotation.y,
       lookTilt - pelvis.rotation.z * 0.6 + (reduced ? 0 : Math.sin(time * 1.7) * 0.015 * idle),
     )
@@ -1282,7 +1445,12 @@ export function createVisitor(initialOutfit?: string): IslandCharacter {
     eyes.visible = !happy
     happyEyes.visible = happy
     eyes.scale.y = reduced ? 1 : Math.min(blink(time), 1 - dozing * 0.9)
-    mouthOpen.visible = happy || (stretching > 0.6 && actT > 0.6)
+    mouthOpen.visible = happy || (stretching > 0.6 && actT > 0.6) || charge > 0.55 || burst > 0.2
+    if (stance > 0.2) {
+      // A determined face while powering up.
+      eyes.visible = true
+      happyEyes.visible = false
+    }
     smile.visible = !mouthOpen.visible
     brows.position.y = H + 0.012 * busy + Math.abs(lookTilt) * 0.02
 
@@ -1305,6 +1473,41 @@ export function createVisitor(initialOutfit?: string): IslandCharacter {
 
     updateDust(dt)
     bubbles.update(dt)
+
+    /* ---- Aura: grows while charging, flares on the burst, lingers gold ---- */
+    if (powerT >= 2.8 && powerT - dt < 2.8) {
+      dress({ ...base, hair: '#f6c63c', hairLight: '#fff09a', hairStyle: 'spiky' })
+      golden = 14
+      for (const leg of legs) {
+        kickDust(leg.shoe, 2.6)
+        kickDust(leg.shoe, 2.2)
+      }
+    }
+    if (golden > 0) {
+      golden -= dt
+      if (golden <= 0) {
+        dress(base)
+        bubbles.show('sparkle')
+      }
+    }
+    const auraTarget = Math.max(charge * 0.9, burst * 1.35, golden > 0 ? 0.42 : 0)
+    auraW = damp(auraW, auraTarget, 10, dt)
+    aura.visible = auraW > 0.02 && !reduced
+    if (aura.visible) {
+      const flick = 1 + Math.sin(time * 31) * 0.06 + Math.sin(time * 17.3) * 0.05
+      aura.position.y = 0.02
+      auraOuter.scale.set(auraW * 1.05 * flick, auraW * (1.1 + 0.15 * Math.sin(time * 23)), auraW * 1.05 * flick)
+      auraInner.scale.set(auraW * flick, auraW * (1 + 0.12 * Math.sin(time * 29 + 1)), auraW * flick)
+      auraOuter.rotation.y = time * 2.2
+      ;(auraOuter.material as THREE.MeshBasicMaterial).opacity = 0.18 + 0.16 * Math.min(1, auraW)
+      ;(auraInner.material as THREE.MeshBasicMaterial).opacity = 0.2 + 0.2 * Math.min(1, auraW)
+      for (const { spark, a, r, speed } of sparks) {
+        const t = (time * speed + a) % 1
+        spark.position.set(Math.cos(a + time) * r * (1 + auraW * 0.4), t * 1.6 * Math.max(0.6, auraW), Math.sin(a + time) * r * (1 + auraW * 0.4))
+        spark.scale.setScalar((1 - t) * Math.min(1.4, auraW + 0.3))
+        spark.rotation.set(time * 3 + a, time * 2, 0)
+      }
+    }
   }
   animate(0, false)
   return {
@@ -1323,8 +1526,14 @@ export function createVisitor(initialOutfit?: string): IslandCharacter {
         seatBack = seatMode === 'bench' ? 0.12 : 0.2
       }
     },
+    powerUp() {
+      if (powerT < 4.4) return
+      powerT = 0
+    },
     wear(id: string, instant = false) {
       const next = outfitById(id)
+      base = next
+      golden = 0
       if (instant) {
         dress(next)
         return

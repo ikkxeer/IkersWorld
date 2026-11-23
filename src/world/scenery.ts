@@ -31,6 +31,9 @@ import {
   beach,
   palmSites,
   telescopeSite,
+  shrine,
+  inShrine,
+  shrineFloor,
   wellSite,
 } from '../data/island'
 import { walkable } from './navigation'
@@ -212,6 +215,7 @@ export function islandFloorHeight(x: number, z: number) {
     if (across >= 0 && across <= 1) return bridgeTop(across)
   }
   if (z > shape.pierFrom + 0.15 && Math.abs(x - 2.5) < 0.9) return -0.06
+  if (inShrine(x, z)) return shrineFloor(x, z)
   // The bevel rises above the nominal top of the grass extrusion.
   return 0.1
 }
@@ -875,6 +879,117 @@ function steppingStones(b: Batch, pts: XZ[]) {
   }
 }
 
+/**
+ * The mountain shrine: an octagonal stone tournament ring on a chamfered
+ * dais, a vermilion torii gate, rock spires crowned with little pines, a
+ * bronze gong, a straw-wrapped training post, stone lanterns and banners.
+ */
+function mountainShrine(b: Batch) {
+  const [cx, cz] = shrine.center
+  const r = shrine.radius
+  const octagon = (radius: number): XZ[] =>
+    Array.from({ length: 8 }, (_, i) => {
+      const a = (i / 8) * Math.PI * 2 + Math.PI / 8
+      return [cx + Math.cos(a) * radius, cz + Math.sin(a) * radius]
+    })
+  b.horizontal(octagon(r + 0.12), 0.16, 0.16, '#b9ad9c', undefined, 0.06, 2)
+  b.horizontal(octagon(r), 0.215, 0.06, '#e6dccb', undefined, 0.025, 1)
+  // Stone tiles: a grid of slightly varied slabs.
+  for (let i = -3; i <= 3; i++)
+    for (let j = -3; j <= 3; j++) {
+      const x = cx + i * 0.38,
+        z = cz + j * 0.38
+      if (Math.hypot(x - cx, z - cz) > r - 0.18) continue
+      b.block([x, 0.22, z], [0.35, 0.02, 0.35], (i + j) % 2 ? '#ddd2bf' : '#d2c6b2', [0, 0, 0], true)
+    }
+  // A painted emblem in the middle: a sun ring with an original flame mark.
+  b.cylinder([cx, 0.235, cz], 0.5, 0.5, 0.012, '#d9534a', 32)
+  b.cylinder([cx, 0.242, cz], 0.42, 0.42, 0.012, '#f3e7cf', 32)
+  b.prism(
+    [
+      [0, -0.3],
+      [0.17, -0.05],
+      [0.07, 0.02],
+      [0.12, 0.3],
+      [-0.05, 0.08],
+      [-0.15, 0.1],
+      [-0.06, -0.1],
+    ],
+    0.012,
+    '#e08a2c',
+    [cx, 0.25, cz],
+    [-Math.PI / 2, 0, 0],
+  )
+  // Corner posts with gold caps on the octagon's points.
+  for (const [x, z] of octagon(r + 0.06)) {
+    b.cylinder([x, 0.34, z], 0.06, 0.07, 0.3, '#8a3a32', 8)
+    b.ball([x, 0.5, z], [0.07, 0.06, 0.07], '#e8b85a', 1)
+  }
+  // Steps up from the gate.
+  const [gx, gz] = shrine.gate
+  const toRing = shrine.gateYaw
+  for (let k = 0; k < 2; k++) {
+    const d = r + 0.25 + k * 0.22
+    b.block([cx - Math.sin(toRing) * d, 0.13 - k * 0.03, cz - Math.cos(toRing) * d], [0.9, 0.06, 0.24], '#cfc3ae', [0, toRing, 0], true)
+  }
+  // Torii gate.
+  const across = toRing + Math.PI / 2
+  const post = (side: number): [number, number] => [gx + Math.sin(across) * 0.78 * side, gz + Math.cos(across) * 0.78 * side]
+  for (const side of [-1, 1]) {
+    const [px, pz] = post(side)
+    b.cylinder([px, 0.95, pz], 0.08, 0.1, 1.75, '#d8432f', 10)
+    b.cylinder([px, 0.12, pz], 0.14, 0.15, 0.14, '#3a2a26', 10)
+  }
+  b.block([gx, 1.88, gz], [2.1, 0.11, 0.16], '#2a2422', [0, across - Math.PI / 2, 0], true)
+  b.block([gx, 1.74, gz], [1.95, 0.1, 0.14], '#d8432f', [0, across - Math.PI / 2, 0], true)
+  b.block([gx, 1.5, gz], [1.7, 0.08, 0.11], '#d8432f', [0, across - Math.PI / 2, 0], true)
+  b.block([gx, 1.62, gz], [0.1, 0.2, 0.12], '#d8432f', [0, across - Math.PI / 2, 0], true)
+  // Rock spires topped with tiny pines.
+  shrine.spires.forEach(([x, z, h], i) => {
+    const rocks = ['#a69886', '#b8aa96', '#9a8c7a']
+    const layers = Math.round(h / 0.45)
+    for (let k = 0; k < layers; k++) {
+      const t = k / layers
+      const w = (0.55 + 0.08 * h) * (1 - t * 0.45)
+      b.ball([x + Math.sin(k * 1.7 + i) * 0.06, 0.2 + t * h, z + Math.cos(k * 1.3 + i) * 0.06], [w, 0.34, w * 0.9], rocks[(k + i) % 3], 1, [0, k, 0])
+    }
+    b.ball([x, h + 0.25, z], [0.4, 0.14, 0.36], '#7fae63', 1, [0, i, 0], b.kit.leaf)
+    b.stick([x + 0.05, h + 0.25, z], [x + 0.1, h + 0.75, z], 0.04, bark, 6)
+    for (let k = 0; k < 3; k++)
+      b.cylinder([x + 0.1, h + 0.55 + k * 0.17, z], 0.03, 0.26 - k * 0.07, 0.24, ['#447f62', '#528f6a', '#66a374'][k], 9, [0, k, 0], b.kit.leaf)
+  })
+  // Bronze gong in a wooden frame, facing the ring.
+  const [ox, oz] = shrine.gong
+  for (const side of [-1, 1]) b.stick([ox, 0.1, oz + side * 0.45], [ox, 1.45, oz + side * 0.45], 0.05, timber, 7)
+  b.stick([ox, 1.42, oz - 0.55], [ox, 1.42, oz + 0.55], 0.055, timber, 7)
+  b.cylinder([ox, 0.85, oz], 0.36, 0.36, 0.05, '#c9963a', 24, [0, 0, Math.PI / 2])
+  b.cylinder([ox + 0.03, 0.85, oz], 0.15, 0.15, 0.02, '#e8b85a', 18, [0, 0, Math.PI / 2])
+  for (const side of [-1, 1]) b.stick([ox, 1.4, oz + side * 0.2], [ox, 1.18, oz + side * 0.12], 0.008, '#5a4030', 3)
+  b.stick([ox + 0.35, 0.1, oz + 0.3], [ox + 0.35, 0.7, oz + 0.3], 0.025, '#8a5a3a', 5)
+  b.ball([ox + 0.35, 0.72, oz + 0.3], [0.08, 0.08, 0.08], '#e6dccb', 1)
+  // Training post wrapped in straw.
+  const [tx, tz] = shrine.post
+  b.cylinder([tx, 0.65, tz], 0.12, 0.14, 1.2, '#9a6a45', 10)
+  for (const y of [0.85, 1.05]) b.cylinder([tx, y, tz], 0.16, 0.16, 0.14, '#e2c27a', 10)
+  b.stick([tx - 0.3, 0.75, tz], [tx + 0.3, 0.75, tz], 0.04, '#9a6a45', 6)
+  // Stone lanterns.
+  for (const [lx, lz] of shrine.lanterns) {
+    b.cylinder([lx, 0.18, lz], 0.18, 0.22, 0.16, '#b9ad9c', 8)
+    b.cylinder([lx, 0.45, lz], 0.07, 0.08, 0.4, '#c6baa8', 8)
+    b.block([lx, 0.72, lz], [0.3, 0.2, 0.3], '#cfc3ae', [0, 0.3, 0], true)
+    b.block([lx, 0.72, lz], [0.18, 0.12, 0.31], '#ffd28a', [0, 0.3, 0], false, b.kit.glass)
+    b.cylinder([lx, 0.88, lz], 0.03, 0.3, 0.14, '#b9ad9c', 8, [0, 0.3, 0])
+    b.ball([lx, 0.98, lz], [0.06, 0.06, 0.06], '#b9ad9c', 1)
+  }
+  // Tall banners in red and gold.
+  shrine.banners.forEach(([fx, fz], i) => {
+    b.stick([fx, 0.1, fz], [fx, 2.2, fz], 0.03, '#3a2a26', 6)
+    b.ball([fx, 2.22, fz], [0.05, 0.05, 0.05], '#e8b85a', 1)
+    b.block([fx + 0.16, 1.55, fz], [0.3, 0.95, 0.02], i % 2 ? '#e8b85a' : '#c8323a', [0, 0.4, 0])
+    b.block([fx + 0.16, 1.55, fz + 0.012], [0.12, 0.12, 0.01], i % 2 ? '#c8323a' : '#e8b85a', [0, 0.4, 0])
+  })
+}
+
 /** Plant little clumps of flowers along the verges of every path. */
 function verges(b: Batch, rand: () => number, low: boolean) {
   const palette = ['#fcf2c7', '#f09aa4', '#f6c768', '#b9a2d9', '#f6a77d', '#9ccbf0', '#ffffff']
@@ -891,7 +1006,7 @@ function verges(b: Batch, rand: () => number, low: boolean) {
           const off = width / 2 + 0.28 + rand() * 0.35
           const x = ax + ((bx - ax) * d) / span + nx * off * side,
             z = az + ((bz - az) * d) / span + nz * off * side
-          if (Math.abs(x - river(z)) < 1.35 || !walkable(x, z)) continue
+          if (Math.abs(x - river(z)) < 1.35 || !walkable(x, z) || inShrine(x, z)) continue
           if (x > -8.9 && x < -3.3 && z > 2.0 && z < 6.6) continue
           const c = palette[Math.floor(rand() * palette.length)],
             tall = rand() < 0.35
@@ -1055,6 +1170,8 @@ export function createScenery(low: boolean) {
   beachDressing(staticParts)
   palmSites.forEach(([x, z], i) => palm(staticParts, x, z, 0.6 + i * 2.1))
   telescope(staticParts, ...telescopeSite)
+  mountainShrine(staticParts)
+  path(staticParts, [[-8.6, 5.6], [-9.16, 6.38], [-9.75, 6.85]], 1.05)
   group.add(createPond(...pond.center, pond.radius, kit.clock))
   // Wildflowers scattered across the wide outer meadow.
   for (let i = 0; i < (low ? 26 : 60); i++) {
@@ -1062,7 +1179,7 @@ export function createScenery(low: boolean) {
       r = 0.72 + rand() * 0.24
     const x = Math.cos(a) * shape.walkX * r,
       z = Math.sin(a) * shape.walkZ * r
-    if (Math.abs(x - river(z)) < 1.4 || !walkable(x, z)) continue
+    if (Math.abs(x - river(z)) < 1.4 || !walkable(x, z) || inShrine(x, z)) continue
     const colour = ['#fcf2c7', '#f09aa4', '#f6c768', '#b9a2d9', '#ffffff', '#9ccbf0'][i % 6]
     for (let k = 0; k < 3; k++) flower(staticParts, x + (rand() - 0.5) * 0.4, z + (rand() - 0.5) * 0.3, colour, rand())
   }
@@ -1131,7 +1248,7 @@ export function createScenery(low: boolean) {
       r = 0.77 + rand() * 0.18,
       x = Math.cos(a) * shape.walkX * r,
       z = Math.sin(a) * shape.walkZ * r
-    if (Math.abs(x - river(z)) < 1.13) continue
+    if (Math.abs(x - river(z)) < 1.13 || inShrine(x, z)) continue
     for (let j = 0; j < 2; j++)
       staticParts.ball(
         [x + j * 0.06, 0.12, z],
@@ -1188,7 +1305,7 @@ export function createScenery(low: boolean) {
   group.add(ambience.group)
   const seabirds = [
     [3.3, shape.pierFrom + 1.7],
-    [-10.9, 6.15],
+    [-15.2, -2.6],
   ].map(([x, z], i) => {
     const g = bird(kit)
     g.position.set(x, i === 0 ? -0.05 : 0, z)

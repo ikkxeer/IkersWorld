@@ -72,12 +72,15 @@ export default function Wardrobe({
                     '--boot': o.boot,
                     '--accent': o.accent,
                     '--hat': o.hatColor,
+                    '--back': o.backColor,
                   } as CSSProperties
                 }
               >
                 {o.hat === 'wizard' && <i className="doll-wizard" />}
                 {o.hat === 'bow' && <i className="doll-bow" />}
                 {o.hat === 'headband' && <i className="doll-band" />}
+                {!['none', 'wizard', 'bow', 'headband'].includes(o.hat) && <i className={'doll-hat hat-' + o.hat} />}
+                {o.back !== 'none' && o.back !== 'katana' && <i className={'doll-back back-' + o.back} />}
                 <i className="doll-hair" />
                 <i className="doll-face" />
                 <i className="doll-body" />

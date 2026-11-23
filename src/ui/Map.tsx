@@ -15,7 +15,7 @@ import {
   type Lang,
   type Zone,
 } from '../data/village'
-import { beach, campfire, fishingSpot, pond, telescopeSite, tulipField } from '../data/island'
+import { beach, campfire, fishingSpot, pond, shrine, telescopeSite, tulipField } from '../data/island'
 const icons = {
   about: House,
   tech: FlaskConical,
@@ -173,6 +173,7 @@ function cartography(canvas: HTMLCanvasElement) {
     ['🌷', tulipField.center],
     ['🏖️', beach.center],
     ['🔭', telescopeSite],
+    ['⛩️', shrine.center],
   ] as const) {
     const [x, y] = xy(lx, lz)
     c.fillStyle = '#fffaf0d9'

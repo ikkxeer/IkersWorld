@@ -2182,3 +2182,113 @@ kbd {
   background: var(--hat);
   z-index: 4;
 }
+
+.doll-hat {
+  z-index: 5;
+  background: var(--hat);
+}
+.hat-cap {
+  top: 2px;
+  width: 50px;
+  height: 18px;
+  border-radius: 24px 24px 4px 4px;
+  box-shadow: 10px 12px 0 -6px var(--hat);
+}
+.hat-crown {
+  top: -6px;
+  width: 30px;
+  height: 14px;
+  clip-path: polygon(0 100%, 0 20%, 20% 60%, 35% 0, 50% 55%, 65% 0, 80% 60%, 100% 20%, 100% 100%);
+}
+.hat-ears {
+  top: -2px;
+  width: 46px;
+  height: 16px;
+  background: linear-gradient(90deg, var(--hat) 0 30%, transparent 30% 70%, var(--hat) 70%);
+  clip-path: polygon(0 100%, 12% 0, 30% 100%, 70% 100%, 88% 0, 100% 100%);
+}
+.hat-beanie {
+  top: 0;
+  width: 50px;
+  height: 22px;
+  border-radius: 25px 25px 4px 4px;
+}
+.hat-beanie::after {
+  content: '';
+  position: absolute;
+  top: -7px;
+  left: 50%;
+  width: 11px;
+  height: 11px;
+  background: #fffaf0;
+  border-radius: 50%;
+  transform: translateX(-50%);
+}
+.hat-tricorn {
+  top: -2px;
+  width: 58px;
+  height: 18px;
+  clip-path: polygon(0 100%, 12% 20%, 50% 0, 88% 20%, 100% 100%, 50% 75%);
+}
+.hat-helmet {
+  top: 2px;
+  width: 54px;
+  height: 52px;
+  border-radius: 50%;
+  opacity: 0.85;
+  box-shadow: inset 0 -6px 0 #0002;
+}
+.hat-chef {
+  top: -16px;
+  width: 34px;
+  height: 26px;
+  border-radius: 14px 14px 4px 4px;
+  box-shadow: inset 0 -5px 0 #0001;
+}
+.hat-straw {
+  top: 6px;
+  width: 66px;
+  height: 14px;
+  border-radius: 50% 50% 40% 40%;
+  box-shadow: inset 0 -4px 0 #c8423a;
+}
+.hat-goggles {
+  top: 18px;
+  width: 40px;
+  height: 11px;
+  border-radius: 6px;
+  background: radial-gradient(circle at 28% 50%, #bfe8ff 4px, transparent 5px),
+    radial-gradient(circle at 72% 50%, #bfe8ff 4px, transparent 5px), var(--hat);
+}
+.hat-halo {
+  top: -10px;
+  width: 30px;
+  height: 8px;
+  background: none;
+  border: 3px solid var(--hat);
+  border-radius: 50%;
+}
+.doll-back {
+  z-index: 0;
+  background: var(--back);
+}
+.back-cape {
+  top: 48px;
+  width: 46px;
+  height: 36px;
+  border-radius: 6px 6px 16px 16px;
+}
+.back-wings {
+  top: 44px;
+  width: 64px;
+  height: 22px;
+  border-radius: 50%;
+  opacity: 0.8;
+}
+.back-backpack,
+.back-jetpack {
+  top: 50px;
+  width: 44px;
+  height: 22px;
+  border-radius: 8px;
+}

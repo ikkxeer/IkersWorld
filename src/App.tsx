@@ -82,6 +82,8 @@ function placeName(
   if (place === 'fishing') return t.fishing
   if (place === 'wardrobe') return t.wardrobe
   if (place === 'bench') return t.bench
+  if (place === 'dojo') return t.dojo
+  if (place === 'gong') return t.gong
   if (place === 'about' && inside) return t.album
   if (place === 'tech') return exhibit === undefined ? t.workshopSign : stations[exhibit][lang]
   return place === 'map'

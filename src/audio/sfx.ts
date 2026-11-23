@@ -20,6 +20,9 @@ export type Sound =
   | 'ribbit'
   | 'sit'
   | 'wave'
+  | 'charge'
+  | 'burst'
+  | 'gong'
 
 let ctx: AudioContext | null = null
 let master: GainNode | null = null
@@ -141,6 +144,43 @@ export function play(sound: Sound, strength = 1) {
       break
     case 'sit':
       tone(c, t, { type: 'sine', from: 330, to: 440, peak: 0.07, attack: 0.02, release: 0.18 })
+      break
+    case 'charge': {
+      // A rising, trembling hum while energy gathers.
+      const osc = c.createOscillator()
+      osc.type = 'sawtooth'
+      osc.frequency.setValueAtTime(70, t)
+      osc.frequency.exponentialRampToValueAtTime(420, t + 2.5)
+      const tremolo = c.createOscillator()
+      tremolo.frequency.value = 18
+      const depth = c.createGain()
+      depth.gain.value = 20
+      tremolo.connect(depth).connect(osc.frequency)
+      const filter = c.createBiquadFilter()
+      filter.type = 'lowpass'
+      filter.frequency.setValueAtTime(400, t)
+      filter.frequency.exponentialRampToValueAtTime(2400, t + 2.5)
+      osc.connect(filter).connect(envelope(c, t, 0.08, 2.3, 0.3))
+      osc.start(t)
+      tremolo.start(t)
+      osc.stop(t + 2.7)
+      tremolo.stop(t + 2.7)
+      burst(c, t, { type: 'bandpass', from: 300, to: 2400, q: 0.8, peak: 0.05, attack: 2.3, release: 0.3 })
+      break
+    }
+    case 'burst':
+      burst(c, t, { type: 'lowpass', from: 6000, to: 200, peak: 0.35, attack: 0.005, release: 1.1 })
+      tone(c, t, { type: 'sine', from: 140, to: 40, peak: 0.3, attack: 0.005, release: 0.7 })
+      ;[523, 784, 1047].forEach((f, i) => tone(c, t + 0.05 + i * 0.06, { type: 'triangle', from: f, peak: 0.08, attack: 0.01, release: 0.5 }))
+      break
+    case 'gong':
+      for (const [f, peak] of [
+        [110, 0.18],
+        [221, 0.1],
+        [347, 0.06],
+        [521, 0.04],
+      ] as const)
+        tone(c, t, { type: 'sine', from: f, to: f * 0.985, peak, attack: 0.008, release: 2.6 })
       break
     case 'wave':
       ;[659, 784].forEach((f, i) => tone(c, t + i * 0.1, { type: 'sine', from: f, peak: 0.07, attack: 0.01, release: 0.16 }))

@@ -40,7 +40,6 @@ export const treeSites: XZ[] = [
   [10.5, 6.49],
   [-11.42, 2.7],
   [-11.13, 5.42],
-  [-9.27, 7.25],
   [-6.91, 8.01],
   [0.04, -3.17],
   [4.24, -4.02],
@@ -49,7 +48,6 @@ export const treeSites: XZ[] = [
   // The outer ring of the enlarged island.
   [-16.1, -3.9],
   [-15.2, 5.1],
-  [-12.6, 8.9],
   [-6.1, 10.9],
   [-0.4, 11.7],
   [9.2, -10.9],
@@ -163,6 +161,44 @@ export const palmSites: XZ[] = [
 ]
 export const telescopeSite: XZ = [-16.6, 0.2]
 
+/**
+ * The mountain shrine (south-west): a raised octagonal tournament ring
+ * reached through a torii gate, ringed by rock spires, a gong, a training
+ * post, stone lanterns and banners.
+ */
+export const shrine = {
+  center: [-11.2, 8.0] as XZ,
+  radius: 1.45,
+  gate: [-9.16, 6.38] as XZ,
+  /** Gate posts sit either side of the path into the ring. */
+  gateYaw: Math.atan2(-11.2 + 9.16, 8.0 - 6.38),
+  spires: [
+    [-13.7, 6.4, 3.0],
+    [-13.9, 9.3, 2.2],
+    [-9.0, 9.9, 1.7],
+    [-12.4, 10.6, 1.4],
+  ] as [number, number, number][],
+  gong: [-13.05, 7.75] as XZ,
+  post: [-9.35, 8.95] as XZ,
+  lanterns: [
+    [-8.93, 7.47],
+    [-10.17, 5.91],
+  ] as XZ[],
+  banners: [
+    [-12.25, 6.7],
+    [-12.45, 9.25],
+    [-11.75, 6.25],
+  ] as XZ[],
+}
+/** Is (x, z) inside the shrine grounds (kept clear of flowers and tufts)? */
+export const inShrine = (x: number, z: number) => Math.hypot(x - shrine.center[0], z - shrine.center[1]) < 3.1
+/** Floor height on the raised ring, easing up over its chamfered rim. */
+export function shrineFloor(x: number, z: number) {
+  const r = Math.hypot(x - shrine.center[0], z - shrine.center[1])
+  const t = Math.min(1, Math.max(0, (shrine.radius + 0.15 - r) / 0.3))
+  return 0.1 + 0.11 * t * t * (3 - 2 * t)
+}
+
 
 /** The campfire circle: the fire pit and the three log seats around it. */
 export const campfire = {
@@ -212,6 +248,14 @@ export function propColliders() {
   out.push([...wellSite, 0.62], [...parasolSite, 0.25], [parasolSite[0] + 0.73, parasolSite[1] + 0.2, 0.42])
   for (const [x, z] of palmSites) out.push([x, z, 0.3])
   out.push([...telescopeSite, 0.3])
+  // Shrine: gate posts, spires, gong, training post, lanterns, banners.
+  const [gx, gz] = shrine.gate
+  const across = shrine.gateYaw + Math.PI / 2
+  for (const side of [-1, 1]) out.push([gx + Math.sin(across) * 0.78 * side, gz + Math.cos(across) * 0.78 * side, 0.18])
+  for (const [x, z, h] of shrine.spires) out.push([x, z, 0.45 + h * 0.08])
+  out.push([...shrine.gong, 0.42], [...shrine.post, 0.22])
+  for (const [x, z] of shrine.lanterns) out.push([x, z, 0.22])
+  for (const [x, z] of shrine.banners) out.push([x, z, 0.12])
   // The pond is water: walk around it.
   const [px, pz] = pond.center
   for (let i = 0; i < 10; i++) {

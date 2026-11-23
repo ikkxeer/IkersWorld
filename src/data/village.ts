@@ -134,6 +134,8 @@ const es = {
   wardrobeHint: 'Elige un traje y date una vuelta para estrenarlo.',
   wearing: 'Puesto',
   bench: 'Sentarse en el banco',
+  dojo: 'Santuario · entrenar',
+  gong: 'Tocar el gong',
 }
 type Dictionary = typeof es
 const ca: Dictionary = {
@@ -239,6 +241,8 @@ const ca: Dictionary = {
   wardrobeHint: 'Tria un vestit i fes una volta per estrenar-lo.',
   wearing: 'Posat',
   bench: 'Seure al banc',
+  dojo: 'Santuari · entrenar',
+  gong: 'Tocar el gong',
 }
 const en: Dictionary = {
   brand: 'Interactive portfolio',
@@ -344,6 +348,8 @@ const en: Dictionary = {
   wardrobeHint: 'Pick an outfit and twirl into it.',
   wearing: 'Wearing',
   bench: 'Sit on the bench',
+  dojo: 'Shrine · train',
+  gong: 'Strike the gong',
 }
 export const copy = { es, ca, en }
 export const placeKeys: Record<Zone, keyof Dictionary> = {

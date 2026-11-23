@@ -5,7 +5,7 @@ import { createPostFX } from './postfx'
 import { daylight } from '../environment/daylight'
 import { bendScene, projectCurved, unbendRay, worldCurve, worldCurveFocus } from './curve'
 import { anchors, destinations } from '../data/village'
-import { benchSites, campfire, fishingSpot, shape } from '../data/island'
+import { benchSites, campfire, fishingSpot, shape, shrine } from '../data/island'
 import { createFishing } from './fishing'
 import { play } from '../audio/sfx'
 import { createVisitor, createGuide, createCat, angleDelta } from './character'
@@ -210,6 +210,70 @@ export function startVillage(
     return spot
   })
   outdoorPickables.push(...benchSpots)
+
+  /* ------------------------ Mountain shrine: training ------------------- */
+  const [ringX, ringZ] = shrine.center
+  const ringSpot = new T.Group()
+  ringSpot.position.set(ringX, 0, ringZ)
+  ringSpot.userData.zone = 'dojo'
+  const ringHit = new T.Mesh(new T.CylinderGeometry(shrine.radius, shrine.radius, 0.6, 8), new T.MeshBasicMaterial({ visible: false }))
+  ringHit.position.y = 0.3
+  ringSpot.add(ringHit)
+  const gongSpot = new T.Group()
+  gongSpot.position.set(shrine.gong[0], 0, shrine.gong[1])
+  gongSpot.userData.zone = 'gong'
+  const gongHit = new T.Mesh(new T.BoxGeometry(0.5, 1.5, 1.1), new T.MeshBasicMaterial({ visible: false }))
+  gongHit.position.y = 0.75
+  gongSpot.add(gongHit)
+  scene.add(ringSpot, gongSpot)
+  outdoorPickables.push(ringSpot, gongSpot)
+  // Pebbles that lift off the ring while energy gathers.
+  const pebbles = new T.InstancedMesh(new T.IcosahedronGeometry(1, 0), new T.MeshStandardMaterial({ color: '#b9ad9c', roughness: 0.9 }), 12)
+  pebbles.castShadow = true
+  pebbles.frustumCulled = false
+  const pebbleSeeds = Array.from({ length: pebbles.count }, (_, i) => ({
+    a: (i / pebbles.count) * Math.PI * 2 + (i % 3) * 0.3,
+    r: 0.75 + (i % 4) * 0.15,
+    s: 0.05 + (i % 3) * 0.025,
+    h: 0.5 + (i % 5) * 0.18,
+  }))
+  const pebbleProxy = new T.Object3D()
+  const shockwave = new T.Mesh(
+    new T.RingGeometry(0.85, 1, 48),
+    new T.MeshBasicMaterial({ color: '#ffe08a', transparent: true, opacity: 0, blending: T.AdditiveBlending, depthWrite: false, side: T.DoubleSide }),
+  )
+  shockwave.rotation.x = -Math.PI / 2
+  shockwave.position.set(ringX, 0.26, ringZ)
+  const ringLight = new T.PointLight('#ffcf5a', 0, 7, 1.6)
+  ringLight.position.set(ringX, 1.2, ringZ)
+  scene.add(pebbles, shockwave, ringLight)
+  /** Training: walk to the centre of the ring, then the power-up. */
+  let training: { stage: 'walk' | 'power'; t: number } | null = null
+  function beginTraining() {
+    if (training || inside || rest) return
+    const p = visitor.group.position
+    training = { stage: 'walk', t: 0 }
+    goal = route([p.x, p.z], [ringX, ringZ])
+    if (!goal.length) goal = [[ringX, ringZ]]
+    ring.visible = false
+  }
+  function placePebbles(lift: number, time: number) {
+    pebbleSeeds.forEach(({ a, r, s, h }, i) => {
+      const up = lift * h
+      pebbleProxy.position.set(
+        ringX + Math.cos(a + up * 0.6) * r,
+        0.25 + up + Math.sin(time * 3 + i) * 0.04 * lift,
+        ringZ + Math.sin(a + up * 0.6) * r,
+      )
+      pebbleProxy.rotation.set(time * lift + i, time * 0.7 * lift + i, 0)
+      pebbleProxy.scale.setScalar(s)
+      pebbleProxy.updateMatrix()
+      pebbles.setMatrixAt(i, pebbleProxy.matrix)
+    })
+    pebbles.instanceMatrix.needsUpdate = true
+  }
+  placePebbles(0, 0)
+  let shake = 0
   let catReplyAt = -1
   /** Turn to face an interactive object (e.g. the wardrobe). */
   function faceTowards(zone: string) {
@@ -547,6 +611,13 @@ export function startVillage(
     } else if (target === 'bench') {
       if (rest) standUp()
       else beginRest(exhibit)
+    } else if (target === 'dojo') {
+      beginTraining()
+    } else if (target === 'gong') {
+      faceTowards('gong')
+      play('gong')
+      visitor.emote?.('note')
+      shake = Math.max(shake, 0.25)
     } else if (target === 'fishing') {
       if (fishing.active()) fishing.press()
       else beginFishing()
@@ -674,8 +745,12 @@ export function startVillage(
               ? 1.6
               : zone === 'bench'
                 ? 1.8
-                : 3.5
-      if (rest || fishing.active()) break
+                : zone === 'dojo'
+                  ? 2.2
+                  : zone === 'gong'
+                    ? 1.4
+                    : 3.5
+      if (rest || fishing.active() || training?.stage === 'power') break
       // The campfire circle is wide: measure from its rim, not its centre.
       const effective = zone === 'campfire' ? dist - 0.75 : dist
       if (dist <= limit && effective < best) {
@@ -723,7 +798,7 @@ export function startVillage(
       if (rest?.stage === 'seated') standUp()
       fishing.cancel()
     }
-    const free = (!rest || rest.stage === 'approach') && !fishing.active() && landed
+    const free = (!rest || rest.stage === 'approach') && !fishing.active() && landed && training?.stage !== 'power'
     wish.set(0, 0)
     if (!paused && !iris.active() && free) {
       const dx =
@@ -742,6 +817,7 @@ export function startVillage(
         pendingShake = null
         faceYaw = null
         anglingWalk = false
+        if (training?.stage === 'walk') training = null
         wish.copy(step)
         if (wish.lengthSq() > 1) wish.normalize()
         wish.multiplyScalar(pace)
@@ -840,9 +916,45 @@ export function startVillage(
         } else if (leaving && t >= 1) rest = null
       }
     }
-    cozy = T.MathUtils.damp(cozy, rest?.stage === 'seated' || fishing.active() ? 1 : 0, 1.6, dt)
+    cozy = T.MathUtils.damp(cozy, rest?.stage === 'seated' || fishing.active() || training?.stage === 'power' ? 1 : 0, 1.6, dt)
     const onRug = Math.abs(p.x) < 1.73 && Math.abs(p.z - 0.1) < 1.27
     p.y = (inside ? (inside === 'about' && onRug ? 0.09 : 0.01) : islandFloorHeight(p.x, p.z)) + hopLift
+    // Shrine training: arrive in the centre of the ring, face the camera, power up.
+    if (training && !paused) {
+      training.t += dt
+      if (training.stage === 'walk' && !goal.length) {
+        if (Math.hypot(ringX - p.x, ringZ - p.z) < 0.5) {
+          training = { stage: 'power', t: 0 }
+          faceYaw = Math.atan2(cameraOffset.x, cameraOffset.z)
+          visitor.powerUp?.()
+          play('charge')
+        } else training = null
+      }
+      if (training?.stage === 'power') {
+        const t = training.t
+        const lift = t < 2.8 ? T.MathUtils.smoothstep(t, 0.4, 2.6) : Math.max(0, 1 - (t - 2.8) / 0.9)
+        placePebbles(lift, elapsed)
+        shake = Math.max(shake, t < 2.8 ? 0.12 * lift : 0)
+        ringLight.intensity = (t < 2.8 ? 4 * lift : 14 * Math.max(0, 1 - (t - 2.8) / 1.2)) * (motion.matches ? 0.4 : 1)
+        if (t >= 2.8 && t - dt < 2.8) {
+          play('burst')
+          shake = motion.matches ? 0 : 0.9
+          shockwave.material.opacity = 0.9
+          shockwave.scale.setScalar(0.4)
+          visitor.emote?.('sparkle')
+        }
+        if (t > 4.6) {
+          training = null
+          ringLight.intensity = 0
+          placePebbles(0, elapsed)
+        }
+      }
+    }
+    if (shockwave.material.opacity > 0) {
+      shockwave.scale.multiplyScalar(1 + dt * 4.5)
+      shockwave.material.opacity = Math.max(0, shockwave.material.opacity - dt * 1.1)
+    }
+    shake = Math.max(0, shake - dt * 1.4)
     if (anglingWalk && !goal.length) {
       anglingWalk = false
       if (Math.hypot(fishingSpot[0] - p.x, fishingSpot[1] - p.z) < 0.4) {
@@ -954,7 +1066,10 @@ export function startVillage(
       // Look a little ahead of the visitor, and settle in close by the fire.
       desired.x += velocity.x * 0.16 * intro
       desired.z += velocity.y * 0.12 * intro
-      if (fishing.active()) {
+      if (training?.stage === 'power') {
+        desired.x += (p.x * follow - desired.x) * 0.6 * cozy
+        desired.z += (p.z * 0.84 - desired.z) * 0.6 * cozy
+      } else if (fishing.active()) {
         // Frame the water in front of the pier so the bobber stays in view.
         desired.x += (p.x - desired.x) * 0.85 * cozy
         desired.z += (p.z + 1.3 - desired.z) * 0.85 * cozy
@@ -1010,6 +1125,10 @@ export function startVillage(
     camera.bottom = -shown
     camera.position.copy(focus).add(cameraOffset)
     camera.lookAt(focus)
+    if (shake > 0.001 && !motion.matches) {
+      camera.position.x += Math.sin(elapsed * 63) * 0.12 * shake
+      camera.position.y += Math.cos(elapsed * 57) * 0.08 * shake
+    }
     camera.updateProjectionMatrix()
     camera.updateMatrixWorld()
     view.signs.forEach((sign, index) => {
@@ -1112,7 +1231,7 @@ export function startVillage(
           visitor.settle()
           snapCamera = true
         },
-        state: () => ({ rest: rest?.stage ?? null, fishing: fishing.stage(), reach, x: visitor.group.position.x, z: visitor.group.position.z }),
+        state: () => ({ rest: rest?.stage ?? null, fishing: fishing.stage(), training: training ? training.stage + ':' + training.t.toFixed(2) : null, reach, x: visitor.group.position.x, z: visitor.group.position.z }),
       },
     })
   frame = requestAnimationFrame(tick)
