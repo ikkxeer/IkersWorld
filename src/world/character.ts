@@ -1117,9 +1117,50 @@ export function createVisitor(initialOutfit?: string): IslandCharacter {
       ].map(([r, y]) => new THREE.Vector2(r * scale, y * scale)),
       22,
     )
-  const auraOuter = new THREE.Mesh(flame(1), glow('#ffc93c', 0.3))
-  const auraInner = new THREE.Mesh(flame(0.74), glow('#fff3b8', 0.35))
+  // Flame shells: scrolling noise tongues licking upward, brightest at the
+  // silhouette (fresnel) so the body stays readable inside the glow.
+  const flameMaterial = (core: string, edge: string, speed: number) =>
+    new THREE.ShaderMaterial({
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      side: THREE.DoubleSide,
+      uniforms: { time: { value: 0 }, power: { value: 0 }, core: { value: new THREE.Color(core) }, edge: { value: new THREE.Color(edge) }, speed: { value: speed } },
+      vertexShader: `
+        varying vec2 vUv; varying float vRim;
+        void main() {
+          vUv = uv;
+          vec4 view = modelViewMatrix * vec4(position, 1.0);
+          vec3 n = normalize(normalMatrix * normal);
+          vRim = 1.0 - abs(dot(n, normalize(-view.xyz)));
+          gl_Position = projectionMatrix * view;
+        }`,
+      fragmentShader: `
+        uniform float time, power, speed; uniform vec3 core, edge;
+        varying vec2 vUv; varying float vRim;
+        float h(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+        float n(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+          return mix(mix(h(i), h(i + vec2(1, 0)), f.x), mix(h(i + vec2(0, 1)), h(i + vec2(1, 1)), f.x), f.y); }
+        void main() {
+          vec2 q = vec2(vUv.x * 7.0, vUv.y * 2.6 - time * speed);
+          float f = n(q) * 0.6 + n(q * 2.3 + 4.1) * 0.4;
+          float tongues = smoothstep(0.15, 0.75, f + 0.75 - vUv.y * 1.05);
+          float base = smoothstep(0.0, 0.08, vUv.y);
+          float a = tongues * base * (0.35 + 0.9 * pow(vRim, 1.6)) * power;
+          vec3 c = mix(core, edge, clamp(vUv.y * 1.2 + vRim * 0.4, 0.0, 1.0));
+          gl_FragColor = vec4(c * a, a);
+        }`,
+    })
+  const auraOuter = new THREE.Mesh(flame(1), flameMaterial('#fff1a8', '#ff9a1f', 2.4))
+  const auraInner = new THREE.Mesh(flame(0.74), flameMaterial('#ffffff', '#ffd23f', 3.4))
   aura.add(auraOuter, auraInner)
+  // Light streaks rushing up through the aura.
+  const streakGeometry = new THREE.PlaneGeometry(0.025, 0.5)
+  const streaks = Array.from({ length: 10 }, (_, i) => {
+    const streak = new THREE.Mesh(streakGeometry, glow('#fff2b0', 0.7))
+    aura.add(streak)
+    return { streak, a: i * 0.63 * TAU, r: 0.32 + (i % 3) * 0.07, speed: 1.6 + (i % 4) * 0.5 }
+  })
   const sparkGeometry = new THREE.OctahedronGeometry(0.03, 0)
   const sparks = Array.from({ length: 12 }, (_, i) => {
     const spark = new THREE.Mesh(sparkGeometry, glow('#fff6c8', 0.9))
@@ -1154,6 +1195,48 @@ export function createVisitor(initialOutfit?: string): IslandCharacter {
     return { mesh, age: 1, drift: new THREE.Vector3() }
   })
   let nextPuff = 0
+  // Billowing smoke: a ring that rolls outward on the burst, and dust that
+  // swirls around the feet while the energy gathers.
+  const smokeMaterial = () => new THREE.MeshLambertMaterial({ color: '#efe4cf', emissive: '#4a3a22', transparent: true, opacity: 0, depthWrite: false })
+  const smoke = Array.from({ length: 22 }, () => {
+    const mesh = new THREE.Mesh(puffGeometry, smokeMaterial())
+    mesh.visible = false
+    effects.add(mesh)
+    return { mesh, age: 1, life: 1, size: 1, vel: new THREE.Vector3(), spin: 0 }
+  })
+  let nextSmoke = 0
+  const smokeOrigin = new THREE.Vector3()
+  function puffSmoke(angle: number, speed: number, rise: number, size: number, life: number, radius = 0.15) {
+    const s = smoke[nextSmoke]
+    nextSmoke = (nextSmoke + 1) % smoke.length
+    group.getWorldPosition(smokeOrigin)
+    s.age = 0
+    s.life = life
+    s.size = size
+    s.spin = (random() - 0.5) * 2
+    s.mesh.visible = true
+    s.mesh.position.set(smokeOrigin.x + Math.cos(angle) * radius, smokeOrigin.y + 0.06, smokeOrigin.z + Math.sin(angle) * radius)
+    s.vel.set(Math.cos(angle) * speed, rise, Math.sin(angle) * speed)
+  }
+  function updateSmoke(dt: number) {
+    for (const s of smoke) {
+      if (!s.mesh.visible) continue
+      s.age += dt / s.life
+      if (s.age >= 1) {
+        s.mesh.visible = false
+        continue
+      }
+      const k = 1 - s.age
+      s.vel.multiplyScalar(Math.exp(-dt * 2.6))
+      s.vel.y += dt * 0.25
+      s.mesh.position.addScaledVector(s.vel, dt)
+      s.mesh.rotation.y += s.spin * dt
+      const grow = s.size * (0.35 + 0.9 * Math.sqrt(s.age))
+      s.mesh.scale.set(grow, grow * 0.72, grow)
+      ;(s.mesh.material as THREE.MeshLambertMaterial).opacity = 0.62 * Math.min(1, s.age * 8) * k * k
+    }
+  }
+  let swirlNext = 0
   const footWorld = new THREE.Vector3()
   function kickDust(foot: THREE.Object3D, strength: number) {
     foot.getWorldPosition(footWorld)
@@ -1739,10 +1822,7 @@ export function createVisitor(initialOutfit?: string): IslandCharacter {
     if (powerT < transformationEnd && powerT >= ruptureTime && (lastPowerTime === null || lastPowerTime < ruptureTime)) {
       dress({ ...base, hair: '#f6c63c', hairLight: '#fff09a', hairStyle: 'spiky' })
       golden = 14
-      for (const leg of legs) {
-        kickDust(leg.shoe, 2.6)
-        kickDust(leg.shoe, 2.2)
-      }
+      if (!reduced) for (let i = 0; i < 16; i++) puffSmoke((i / 16) * TAU + random() * 0.3, 3.4 + random() * 1.6, 0.15 + random() * 0.35, 0.22 + random() * 0.1, 1.5 + random() * 0.6, 0.35)
     }
     lastPowerTime = move?.powerTime ?? null
     if (golden > 0) {
@@ -1760,9 +1840,21 @@ export function createVisitor(initialOutfit?: string): IslandCharacter {
       aura.position.y = 0.02
       auraOuter.scale.set(auraW * 1.05 * flick, auraW * (1.1 + 0.15 * Math.sin(time * 23)), auraW * 1.05 * flick)
       auraInner.scale.set(auraW * flick, auraW * (1 + 0.12 * Math.sin(time * 29 + 1)), auraW * flick)
-      auraOuter.rotation.y = time * 2.2
-      ;(auraOuter.material as THREE.MeshBasicMaterial).opacity = 0.18 + 0.16 * Math.min(1, auraW)
-      ;(auraInner.material as THREE.MeshBasicMaterial).opacity = 0.2 + 0.2 * Math.min(1, auraW)
+      auraOuter.rotation.y = time * 0.6
+      auraInner.rotation.y = -time * 0.9
+      for (const m of [auraOuter, auraInner]) {
+        const u = (m.material as THREE.ShaderMaterial).uniforms
+        u.time.value = time
+        u.power.value = Math.min(1.6, 0.55 + auraW * 0.8)
+      }
+      for (const { streak, a, r, speed } of streaks) {
+        const t = (time * speed + a) % 1
+        const ang = a + time * 0.7
+        streak.position.set(Math.cos(ang) * r * auraW, (0.1 + t * 1.9) * auraW, Math.sin(ang) * r * auraW)
+        streak.rotation.y = -ang + Math.PI / 2
+        streak.scale.set(1, 0.6 + auraW, 1)
+        ;(streak.material as THREE.MeshBasicMaterial).opacity = Math.sin(t * Math.PI) * 0.8 * Math.min(1, auraW)
+      }
       for (const { spark, a, r, speed } of sparks) {
         const t = (time * speed + a) % 1
         spark.position.set(Math.cos(a + time) * r * (1 + auraW * 0.4), t * 1.6 * Math.max(0.6, auraW), Math.sin(a + time) * r * (1 + auraW * 0.4))
