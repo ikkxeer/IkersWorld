@@ -2818,3 +2818,12 @@ kbd {
   pointer-events: none;
   transition: opacity 0.3s ease;
 }
+
+.screen:has(.power-cinematic)::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: radial-gradient(ellipse at 50% 49%, transparent 30%, #18132475 100%);
+}

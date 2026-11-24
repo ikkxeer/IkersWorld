@@ -1,3 +1,4 @@
+import { ruptureTime } from './transformation'
 import { outfitDetails } from '../data/outfitDetails'
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
@@ -14,6 +15,7 @@ export interface Locomotion {
   turn: number
   /** Kick up little dust puffs on footfalls (outdoors only). */
   jumpHeight?: number
+  powerTime?: number | null
   dust?: boolean
 }
 
@@ -45,8 +47,6 @@ export interface IslandCharacter {
   /** A friendly wave (the visitor) or a hello back (NPCs). */
   wave?: () => void
   talk?: (speaking: boolean) => void
-  /** Gather energy, burst into a golden aura (shōnen power-up). */
-  powerUp?: () => void
   /** Called on every footfall with the current pace (for footstep sounds). */
   onStep?: (listener: (strength: number) => void) => void
 }
@@ -1097,7 +1097,7 @@ export function createVisitor(initialOutfit?: string): IslandCharacter {
     aura.add(spark)
     return { spark, a: i * 2.4, r: 0.2 + (i % 4) * 0.08, speed: 0.8 + (i % 3) * 0.35 }
   })
-  let powerT = 99
+  let lastPowerTime: number | null = null
   let golden = 0
   let auraW = 0
 
@@ -1503,7 +1503,7 @@ export function createVisitor(initialOutfit?: string): IslandCharacter {
     const dance = Math.sin(actT * TAU * 1.15) * swaying
 
     // Power-up timeline: stance (0–0.4), charge (0.4–2.8), burst (2.8–3.6), relax.
-    powerT += dt
+    const powerT = move?.powerTime ?? 99
     const stance = powerT < 4.4 ? smoothstep01(powerT / 0.35) * smoothstep01((4.4 - powerT) / 0.6) : 0
     const charge = powerT < 2.8 ? smoothstep01((powerT - 0.3) / 2.3) : 0
     const burst = powerT >= 2.8 && powerT < 4.4 ? Math.sin(Math.PI * Math.min(1, (powerT - 2.8) / 1.4)) : 0
@@ -1702,7 +1702,7 @@ export function createVisitor(initialOutfit?: string): IslandCharacter {
     bubbles.update(dt)
 
     /* ---- Aura: grows while charging, flares on the burst, lingers gold ---- */
-    if (powerT >= 2.8 && powerT - dt < 2.8) {
+    if (powerT !== 99 && powerT >= ruptureTime && (lastPowerTime === null || lastPowerTime < ruptureTime)) {
       dress({ ...base, hair: '#f6c63c', hairLight: '#fff09a', hairStyle: 'spiky' })
       golden = 14
       for (const leg of legs) {
@@ -1710,6 +1710,7 @@ export function createVisitor(initialOutfit?: string): IslandCharacter {
         kickDust(leg.shoe, 2.2)
       }
     }
+    lastPowerTime = move?.powerTime ?? null
     if (golden > 0) {
       golden -= dt
       if (golden <= 0) {
@@ -1752,10 +1753,6 @@ export function createVisitor(initialOutfit?: string): IslandCharacter {
         seatPelvis = height + 0.075
         seatBack = seatMode === 'bench' ? 0.12 : 0.2
       }
-    },
-    powerUp() {
-      if (powerT < 4.4) return
-      powerT = 0
     },
     wear(id: string, instant = false) {
       const next = outfitById(id)

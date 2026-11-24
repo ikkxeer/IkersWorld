@@ -1,3 +1,4 @@
+import { createTransformation, frameTransformation, ruptureTime, transformationEnd } from './transformation'
 import { createLookout } from './lookout'
 import { disposeRadio, positionRadio } from '../audio/beachRadio'
 import * as T from 'three'
@@ -286,15 +287,9 @@ export function startVillage(
     h: 0.5 + (i % 5) * 0.18,
   }))
   const pebbleProxy = new T.Object3D()
-  const shockwave = new T.Mesh(
-    new T.RingGeometry(0.85, 1, 48),
-    new T.MeshBasicMaterial({ color: '#ffe08a', transparent: true, opacity: 0, blending: T.AdditiveBlending, depthWrite: false, side: T.DoubleSide }),
-  )
-  shockwave.rotation.x = -Math.PI / 2
-  shockwave.position.set(ringX, 0.26, ringZ)
-  const ringLight = new T.PointLight('#ffcf5a', 0, 7, 1.6)
-  ringLight.position.set(ringX, 1.2, ringZ)
-  scene.add(pebbles, shockwave, ringLight)
+  const ringFloor = islandFloorHeight(ringX, ringZ)
+  const transformation = createTransformation(scene, ringX, ringFloor, ringZ, low)
+  scene.add(pebbles)
   /** Training: walk to the centre of the ring, then the power-up. */
   let training: { stage: 'walk' | 'power'; t: number } | null = null
   function beginTraining() {
@@ -305,22 +300,22 @@ export function startVillage(
     if (!goal.length) goal = [[ringX, ringZ]]
     ring.visible = false
   }
-  function placePebbles(lift: number, time: number) {
+  function placePebbles(lift: number, time: number, scatter: number) {
     pebbleSeeds.forEach(({ a, r, s, h }, i) => {
       const up = lift * h
       pebbleProxy.position.set(
-        ringX + Math.cos(a + up * 0.6) * r,
-        0.25 + up + Math.sin(time * 3 + i) * 0.04 * lift,
-        ringZ + Math.sin(a + up * 0.6) * r,
+        ringX + Math.cos(a + up * 0.6) * (r + scatter * (1 + s * 10)),
+        ringFloor + up + scatter * .23 + Math.sin(time * 3 + i) * 0.04 * lift,
+        ringZ + Math.sin(a + up * 0.6) * (r + scatter * (1 + s * 10)),
       )
       pebbleProxy.rotation.set(time * lift + i, time * 0.7 * lift + i, 0)
-      pebbleProxy.scale.setScalar(s)
+      pebbleProxy.scale.setScalar(s * Math.max(0, 1 - scatter * .43))
       pebbleProxy.updateMatrix()
       pebbles.setMatrixAt(i, pebbleProxy.matrix)
     })
     pebbles.instanceMatrix.needsUpdate = true
   }
-  placePebbles(0, 0)
+  pebbles.visible = false
   let shake = 0
   let catReplyAt = -1
   /** Turn to face an interactive object (e.g. the wardrobe). */
@@ -1007,35 +1002,25 @@ export function startVillage(
       if (training.stage === 'walk' && !goal.length) {
         if (Math.hypot(ringX - p.x, ringZ - p.z) < 0.5) {
           training = { stage: 'power', t: 0 }
+          p.set(ringX, ringFloor, ringZ)
           faceYaw = Math.atan2(cameraOffset.x, cameraOffset.z)
-          visitor.powerUp?.()
           play('charge')
         } else training = null
       }
       if (training?.stage === 'power') {
-        const t = training.t
-        const lift = t < 2.8 ? T.MathUtils.smoothstep(t, 0.4, 2.6) : Math.max(0, 1 - (t - 2.8) / 0.9)
-        placePebbles(lift, elapsed)
-        shake = Math.max(shake, t < 2.8 ? 0.12 * lift : 0)
-        ringLight.intensity = (t < 2.8 ? 4 * lift : 14 * Math.max(0, 1 - (t - 2.8) / 1.2)) * (motion.matches ? 0.4 : 1)
-        if (t >= 2.8 && t - dt < 2.8) {
-          play('burst')
-          shake = motion.matches ? 0 : 0.9
-          shockwave.material.opacity = 0.9
-          shockwave.scale.setScalar(0.4)
-          visitor.emote?.('sparkle')
-        }
-        if (t > 4.6) {
-          training = null
-          ringLight.intensity = 0
-          placePebbles(0, elapsed)
-        }
+        if (training.t >= ruptureTime && training.t - dt < ruptureTime) play('burst')
+        if (training.t >= transformationEnd) training = null
       }
     }
-    if (shockwave.material.opacity > 0) {
-      shockwave.scale.multiplyScalar(1 + dt * 4.5)
-      shockwave.material.opacity = Math.max(0, shockwave.material.opacity - dt * 1.1)
+    const powerTime = training?.stage === 'power' ? training.t : null
+    transformation.update(powerTime, motion.matches)
+    canvas.classList.toggle('power-cinematic', powerTime !== null)
+    if (powerTime !== null) {
+      const charge = T.MathUtils.smoothstep(powerTime, .35, 2.5)
+      const departure = T.MathUtils.smoothstep(powerTime, ruptureTime, ruptureTime + .85)
+      placePebbles(charge * (1 - departure), powerTime, departure * 2.5)
     }
+    pebbles.visible = powerTime !== null && powerTime < ruptureTime + .85
     shake = Math.max(0, shake - dt * 1.4)
     if (anglingWalk && !goal.length) {
       anglingWalk = false
@@ -1064,7 +1049,7 @@ export function startVillage(
       if (Math.abs(delta) < 0.02) faceYaw = null
     }
     if (rest && rest.stage !== 'approach') speed = distance / Math.max(dt, 1e-3)
-    visitor.group.visible = !attract
+    visitor.group.visible = !attract && (powerTime === null || powerTime < 2.41 || powerTime >= ruptureTime)
     landingShadow.visible = !attract && !landed
     if (!landed && !inside) {
       if (fallT === 0) visitor.umbrella?.(true)
@@ -1101,6 +1086,7 @@ export function startVillage(
       turn,
       dust: !inside,
       jumpHeight,
+      powerTime,
     })
     if (catReplyAt > 0 && elapsed > catReplyAt) {
       catReplyAt = -1
@@ -1224,7 +1210,12 @@ export function startVillage(
     // A gentle diorama curve outdoors; rooms stay flat.
     worldCurve.value = inside ? 0 : 0.0072 * (1 - lookout)
     worldCurveFocus.value = cameraOffset.length()
-    const shown = attract ? (aspect < 0.9 ? 22 : 13.5) : T.MathUtils.lerp(T.MathUtils.lerp(span, guideDestination ? (aspect < .9 ? 6.6 : 4.9) : (aspect < .9 ? 4.1 : 3.35), guideFrame), aspect < 0.9 ? 3.1 : 2.45, lookout)
+    let shown = attract ? (aspect < 0.9 ? 22 : 13.5) : T.MathUtils.lerp(T.MathUtils.lerp(span, guideDestination ? (aspect < .9 ? 6.6 : 4.9) : (aspect < .9 ? 4.1 : 3.35), guideFrame), aspect < 0.9 ? 3.1 : 2.45, lookout)
+    if (powerTime !== null && !inside) {
+      shown = frameTransformation(powerTime, motion.matches, ringX, ringFloor, ringZ, focus, cameraOffset, aspect, shown)
+      worldCurve.value *= T.MathUtils.smoothstep(powerTime, 5, transformationEnd)
+      worldCurveFocus.value = cameraOffset.length()
+    }
     camera.left = -shown * aspect
     camera.right = shown * aspect
     camera.top = shown
