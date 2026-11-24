@@ -2865,4 +2865,6 @@ kbd {
 
 .screen:has(.power-cinematic) .hud-bottom,
 .screen:has(.power-cinematic) .game-tools,
-.screen:has(.power-cinematic) .touch-pad { visibility: hidden; }
+.screen:has(.power-cinematic) .touch-pad,
+.screen:has(.power-cinematic) .intro-toast,
+.screen:has(.power-cinematic) .prompt { visibility: hidden; }

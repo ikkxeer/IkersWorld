@@ -1026,7 +1026,7 @@ export function startVillage(
       }
     }
     const powerTime = training?.stage === 'power' ? training.t : null
-    transformation.update(powerTime, motion.matches)
+    transformation.update(powerTime, false)
     canvas.classList.toggle('power-cinematic', powerTime !== null)
     if (powerTime !== null) {
       const charge = T.MathUtils.smoothstep(powerTime, wideTime, vortexTime + 1.8)
@@ -1093,7 +1093,7 @@ export function startVillage(
         landingShadow.visible = false
       }
     } else if (landed && fallT < FALL + 3 && !paused) fallT += dt
-    visitor.animate(elapsed, motion.matches, {
+    visitor.animate(elapsed, motion.matches && powerTime === null, {
       distance,
       speed,
       turn,
@@ -1226,7 +1226,7 @@ export function startVillage(
     let shown = attract ? (aspect < 0.9 ? 22 : 13.5) : T.MathUtils.lerp(T.MathUtils.lerp(span, guideDestination ? (aspect < .9 ? 6.6 : 4.9) : (aspect < .9 ? 4.1 : 3.35), guideFrame), aspect < 0.9 ? 3.1 : 2.45, lookout)
     if (powerTime !== null && !inside) {
       visitor.trainingAnchors?.(trainingFace, trainingFist)
-      shown = frameTransformation(powerTime, motion.matches, ringCenter, trainingFace, trainingFist,
+      shown = frameTransformation(powerTime, false, ringCenter, trainingFace, trainingFist,
         trainingHeading, focus, cameraOffset, aspect, shown)
       worldCurve.value *= T.MathUtils.smoothstep(powerTime, transformationEnd - 1.4, transformationEnd)
       worldCurveFocus.value = cameraOffset.length()
@@ -1237,7 +1237,7 @@ export function startVillage(
     camera.bottom = -shown
     camera.position.copy(focus).add(cameraOffset)
     camera.lookAt(focus)
-    if (shake > 0.001 && !motion.matches) {
+    if (shake > 0.001 && (!motion.matches || powerTime !== null)) {
       camera.position.x += Math.sin(elapsed * 63) * 0.12 * shake
       camera.position.y += Math.cos(elapsed * 57) * 0.08 * shake
     }
@@ -1250,7 +1250,7 @@ export function startVillage(
     atmosphere.revealSky(skyReveal * skyReveal * (3 - 2 * skyReveal))
     if (view.lookout) view.lookout.style.opacity = String(skyReveal)
     lookoutEvents?.update(settled && weather !== 'storm' ? 1 : 0, night, dt, camera, motion.matches, paused)
-    const bolt = cinematicOverlay?.update(powerTime, weather === 'storm' && !inside, dt, motion.matches) ?? 0
+    const bolt = cinematicOverlay?.update(powerTime, weather === 'storm' && !inside, dt, false) ?? 0
     atmosphere.lightning(motion.matches ? 0 : bolt * .55)
     positionRadio(p.x, p.y + 1.25, p.z, Math.atan2(cameraOffset.x, cameraOffset.z), !!inside)
     view.signs.forEach((sign, index) => {
