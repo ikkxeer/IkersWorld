@@ -157,20 +157,58 @@ export function frameTransformation(
   let zoom = mix(wide, .57, zoomIn * (1 - pullOut))
   const target = new T.Vector3(center.x, center.y + 1.03, center.z)
   if (!reduced && time < wideTime) {
+    // Shot 1–2: extreme close-ups, the face, then the clenched fists.
     const faceShot = time < fistTime
     target.copy(faceShot ? face : fists)
     yaw = heading + (faceShot ? .11 : -.48)
     range = faceShot ? 1.28 : 1.15
     height = faceShot ? .08 : .17
     zoom = faceShot ? (aspect < .8 ? .62 : .43) : (aspect < .8 ? .65 : .39)
+  } else if (!reduced && time < vortexTime) {
+    // Shot 3: cut far away, a high wide of the islet as the air starts to stir,
+    // slowly pushing in.
+    const k = smooth(time, wideTime, vortexTime)
+    yaw = heading + 2.2 - k * .35
+    range = 3
+    height = mix(2.6, 2.1, k)
+    zoom = mix(wide * 2.15, wide * 1.6, k)
+    target.y = center.y + .7
   } else if (reduced) {
     zoom = wide
     range = 2
     height = .55
   } else if (time >= ruptureTime) {
-    yaw += pullOut * -.36 + smooth(age, .65, 3.7) * .22
-    target.y = center.y + mix(1.12, 1.04, pullOut)
-    zoom = mix(zoom, wide * .84, pullOut)
+    target.y = center.y + 1.05
+    if (age < 1.05) {
+      // Shot 6: the explosion from one side, low and wide, drifting.
+      yaw = heading + 1.35 + age * .25
+      range = 2.2
+      height = -.25
+      zoom = mix(wide * .9, wide * 1.15, smooth(age, 0, 1.05))
+    } else if (age < 2.1) {
+      // Shot 7: hard cut to the other side, high, looking down into the blast.
+      const k = smooth(age, 1.05, 2.1)
+      yaw = heading - 1.6 - k * .3
+      range = 2
+      height = 2.3
+      zoom = mix(wide * 1.25, wide * 1.05, k)
+    } else if (age < 3.5) {
+      // Shot 8: heroic low angle, close on the transformed visitor.
+      const k = smooth(age, 2.1, 3.5)
+      yaw = heading + .25 - k * .2
+      range = 1.5
+      height = -.42
+      zoom = mix(wide * .62, wide * .74, k)
+      target.y = center.y + 1.12
+    } else {
+      // Shot 9: crane up and away to a high aerial before handing back.
+      const k = smooth(age, 3.5, transformationEnd - ruptureTime)
+      yaw = heading + .25 + k * .6
+      range = 2.6
+      height = mix(.6, 2.6, k)
+      zoom = mix(wide * 1.1, wide * 2.3, k)
+      target.y = center.y + .8
+    }
   }
   focus.lerp(target, weight)
   offset.lerp(target.set(Math.sin(yaw) * range, height, Math.cos(yaw) * range), weight)
