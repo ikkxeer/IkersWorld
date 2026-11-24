@@ -48,7 +48,8 @@ import Arrival from './ui/Arrival'
 const Wardrobe = lazy(() => import('./ui/Wardrobe'))
 import { loadOutfit, saveOutfit } from './data/outfits'
 import { places, type MapPlace } from './data/places'
-import { pipControls, pipStops, pipWelcome } from './data/pipTour'
+import { pipStops } from './data/pipTour'
+import PipTour from './ui/PipTour'
 const Journal = lazy(() => import('./ui/Panel'))
 import VillageMap, { ZoneIcon } from './ui/Map'
 const languageNames = { es: 'Español', ca: 'Català', en: 'English' }
@@ -251,7 +252,6 @@ function App() {
   const touring = panel === 'npc'
   const tourStop = touring && project !== null ? pipStops[project] : undefined
   const tourPlace = tourStop ? places.find(place => place.id === tourStop.id) : undefined
-  const tourFinished = touring && project === pipStops.length
   useEffect(() => {
     ctl.current?.guideTalk(touring)
     if (!touring) return
@@ -262,12 +262,6 @@ function App() {
   useEffect(() => {
     if (touring) ctl.current?.guideFocus(tourPlace?.at ?? null)
   }, [touring, tourPlace])
-  useEffect(() => {
-    if (!touring || tourPaused || tourFinished) return
-    const next = (project ?? -1) + 1
-    const timer = window.setTimeout(() => setProject(next), project === null ? 3200 : 12500)
-    return () => window.clearTimeout(timer)
-  }, [touring, project, tourPaused, tourFinished])
   const events = useMemo<VillageEvents>(
     () => ({
       open,
@@ -421,6 +415,7 @@ function App() {
         'screen playing' +
         (light ? ' light-mode' : '') +
         (photo && !panel ? ' photo-mode' : '') +
+        (panel === 'npc' ? ' pip-talking' : '') +
         (hud === 'hidden' && !light ? ' hud-hidden' : hud === 'enter' ? ' hud-enter' : '')
       }
     >
@@ -694,21 +689,17 @@ function App() {
         </button>
       </footer>
       {panel === 'npc' && (
-        <section className="pip-tour" aria-label={t.guideName}>
-          <header>
-            <strong>{t.guideName}{tourPlace && ' · ' + tourPlace.name[lang]}</strong>
-            <button className="round" aria-label={t.close} onClick={close}><X size={18} /></button>
-          </header>
-          <p aria-live="polite">{tourStop?.[lang] ?? (tourFinished ? pipControls[lang].end : pipWelcome[lang])}</p>
-          <div className="pip-tour-controls">
-            {tourStop && project !== null && (
-              <progress aria-label={pipControls[lang].progress} value={project + 1} max={pipStops.length} />
-            )}
-            {!tourFinished && <button className="list-link" onClick={() => setTourPaused(value => !value)}>
-              {tourPaused ? pipControls[lang].resume : pipControls[lang].pause}
-            </button>}
-          </div>
-        </section>
+        <PipTour
+          lang={lang}
+          name={t.guideName}
+          place={tourPlace?.name[lang]}
+          step={project}
+          paused={tourPaused}
+          closeLabel={t.close}
+          setStep={setProject}
+          setPaused={setTourPaused}
+          close={close}
+        />
       )}
       {panel && panel !== 'npc' && (
         <Suspense fallback={null}>
