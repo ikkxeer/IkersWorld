@@ -53,15 +53,6 @@ import { pipStops, pipWelcome } from './data/pipTour'
 const Journal = lazy(() => import('./ui/Panel'))
 import VillageMap, { ZoneIcon } from './ui/Map'
 const languageNames = { es: 'Español', ca: 'Català', en: 'English' }
-const titleKey = 'ikers-world-title'
-/** The title screen shows once per browser session. */
-function titleSeen() {
-  try {
-    return sessionStorage.getItem(titleKey) === '1'
-  } catch {
-    return false
-  }
-}
 function readLang(): Lang {
   try {
     const s = localStorage.getItem('ikers-world-lang')
@@ -201,9 +192,9 @@ function App() {
   const [ready, setReady] = useState(false),
     [arrivalGone, setArrivalGone] = useState(false),
     [intro, setIntro] = useState(!deep),
-    [titleOn, setTitleOn] = useState(() => !deep && !titleSeen()),
+    [titleOn, setTitleOn] = useState(!deep),
     [titleLeaving, setTitleLeaving] = useState(false),
-    [hud, setHud] = useState<'hidden' | 'enter' | 'shown'>(() => (!deep && !titleSeen() ? 'hidden' : 'shown')),
+    [hud, setHud] = useState<'hidden' | 'enter' | 'shown'>(() => (deep ? 'shown' : 'hidden')),
     [welcome, setWelcome] = useState(false),
     [outfit, setOutfit] = useState(loadOutfit),
     [wardrobe, setWardrobe] = useState(false)
@@ -257,19 +248,24 @@ function App() {
     setPanel(null)
     setProject(null)
   }, [])
+  const touring = panel === 'npc'
   useEffect(() => {
-    ctl.current?.guideTalk(panel === 'npc')
-    if (panel !== 'npc') return
+    ctl.current?.guideTalk(touring)
+    if (!touring) return
     const onEscape = (event: KeyboardEvent) => { if (event.key === 'Escape') close() }
     window.addEventListener('keydown', onEscape)
     return () => window.removeEventListener('keydown', onEscape)
-  }, [panel, close])
-  function tourStop(index: number) {
-    const place = places.find(candidate => candidate.id === pipStops[index].id)
-    if (!place || !ctl.current || ctl.current.transitioning()) return
-    close()
-    ctl.current.guideVisit(place.stand, place.at, () => open('npc', index))
-  }
+  }, [touring, close])
+  useEffect(() => {
+    if (!touring) return
+    const place = project === null ? undefined : places.find(candidate => candidate.id === pipStops[project].id)
+    ctl.current?.guideFocus(place?.at ?? null)
+  }, [touring, project])
+  useEffect(() => {
+    if (!touring || project === null || project + 1 >= pipStops.length) return
+    const timer = window.setTimeout(() => setProject(project + 1), 12500)
+    return () => window.clearTimeout(timer)
+  }, [touring, project])
   const events = useMemo<VillageEvents>(
     () => ({
       open,
@@ -354,11 +350,6 @@ function App() {
     if (!titleOn || titleLeaving) return
     setTitleLeaving(true)
     ctl.current?.start()
-    try {
-      sessionStorage.setItem(titleKey, '1')
-    } catch {
-      /* Private sessions just see the title again. */
-    }
     setTimeout(() => setTitleOn(false), 450)
   }, [titleOn, titleLeaving])
   // Any key (or a tap) leaves the title screen.
@@ -732,13 +723,9 @@ function App() {
           <nav>
             {!light && pipStops.map((stop, index) => (
               <button key={stop.id} className="list-link" aria-current={project === index ? 'step' : undefined}
-                onClick={() => tourStop(index)}>{places.find(place => place.id === stop.id)?.name[lang]}</button>
+                onClick={() => setProject(index)}>{places.find(place => place.id === stop.id)?.name[lang]}</button>
             ))}
-            {!light && project !== null && <button className="list-link" onClick={() => {
-              if (!ctl.current || ctl.current.transitioning()) return
-              close()
-              ctl.current.guideVisit([3.2, 11.8], [3.95, 11.95], () => open('npc'))
-            }}>{t.dock}</button>}
+            {!light && project !== null && <button className="list-link" onClick={() => setProject(null)}>{t.dock}</button>}
             <button className="list-link" onClick={() => open('map')}><MapIcon size={17} />{t.map}</button>
           </nav>
         </section>

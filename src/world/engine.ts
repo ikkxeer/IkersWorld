@@ -185,7 +185,7 @@ export function startVillage(
     landingShadow.visible = false
   }
   /** Teleport to a spot (through the iris), facing a point, with a hop. */
-  function jump(stand: [number, number], look: [number, number], arrived?: () => void, onMove?: () => void) {
+  function jump(stand: [number, number], look: [number, number], arrived?: () => void) {
     const move = () => {
       jumpTime = jumpDuration
       const [x, z] = stand
@@ -201,7 +201,6 @@ export function startVillage(
       snapCamera = true
       setHover(null)
       visitor.group.rotation.y = Math.atan2(look[0] - x, look[1] - z)
-      onMove?.()
       updateReach()
     }
     // A quick hop and sparkle on arrival makes travelling feel magical.
@@ -809,7 +808,7 @@ export function startVillage(
                     : 3.5
       if (rest || fishing.active() || training?.stage === 'power') break
       // The campfire circle is wide: measure from its rim, not its centre.
-      const effective = zone === 'campfire' ? dist - 0.75 : dist + (zone === 'npc' && guideDestination ? 0.5 : 0)
+      const effective = zone === 'campfire' ? dist - 0.75 : dist
       if (dist <= limit && effective < best) {
         nearObject = o
         reach = zone
@@ -1167,7 +1166,8 @@ export function startVillage(
     if (!inside && guideFrame > .001) {
       const g = guide.group.position
       const [x, z] = guideDestination ?? [g.x, g.z]
-      steerTarget.set(g.x * .74 + x * .26 + .35, -.62, g.z * .74 + z * .26 + 2.35)
+      if (guideDestination) steerTarget.set(x + .30, -.50, z + 2.1)
+      else steerTarget.set(g.x + .35, -.62, g.z + 2.35)
       desired.lerp(steerTarget, guideFrame)
     }
     // Around the iris, glide the camera so the visitor sits in the middle of
@@ -1218,7 +1218,7 @@ export function startVillage(
     // A gentle diorama curve outdoors; rooms stay flat.
     worldCurve.value = inside ? 0 : 0.0072 * (1 - lookout)
     worldCurveFocus.value = cameraOffset.length()
-    const shown = attract ? (aspect < 0.9 ? 22 : 13.5) : T.MathUtils.lerp(T.MathUtils.lerp(span, aspect < .9 ? 4.1 : 3.35, guideFrame), aspect < 0.9 ? 3.1 : 2.45, lookout)
+    const shown = attract ? (aspect < 0.9 ? 22 : 13.5) : T.MathUtils.lerp(T.MathUtils.lerp(span, guideDestination ? (aspect < .9 ? 6.6 : 4.9) : (aspect < .9 ? 4.1 : 3.35), guideFrame), aspect < 0.9 ? 3.1 : 2.45, lookout)
     camera.left = -shown * aspect
     camera.right = shown * aspect
     camera.top = shown
@@ -1374,20 +1374,11 @@ export function startVillage(
     },
     guideTalk(value) {
       guideSpeaking = value
+      if (!value) guideDestination = null
       guide.talk?.(value)
     },
-    guideVisit(stand, look, arrived) {
-      if (iris.active()) return
-      skipArrival()
-      jump(stand, look, arrived, () => {
-        const [x, z] = stand
-        const place = [[x - 1.05, z], [x + 1.05, z], [x, z - 1.05], [x, z + 1.05]]
-          .find(([gx, gz]) => walkable(gx, gz))
-        const [gx, gz] = place ?? stand
-        guide.group.position.set(gx, islandFloorHeight(gx, gz), gz)
-        guideDestination = look
-        guide.wave?.()
-      })
+    guideFocus(look) {
+      guideDestination = look
     },
     transitioning: iris.active,
     leave() {

@@ -31,7 +31,7 @@ export interface VillageController {
   /** Travel to any walkable spot, facing `look` (map places and activities). */
   goTo: (stand: [number, number], look: [number, number], arrived?: () => void) => void
   guideTalk: (value: boolean) => void
-  guideVisit: (stand: [number, number], look: [number, number], arrived: () => void) => void
+  guideFocus: (look: [number, number] | null) => void
   transitioning: () => boolean
   touch: (x: number, y: number) => void
   leave: () => void
