@@ -179,6 +179,8 @@ export function play(sound: Sound, strength = 1) {
       break
     }
     case 'burst':
+      tone(c, t, { type: 'triangle', from: 82, to: 27, peak: 0.36, attack: 0.003, release: 0.33 })
+      burst(c, t + 0.028, { type: 'bandpass', from: 580, to: 120, q: 1.1, peak: 0.24, attack: 0.007, release: 0.36 })
       burst(c, t, { type: 'lowpass', from: 6000, to: 200, peak: 0.35, attack: 0.005, release: 1.1 })
       tone(c, t, { type: 'sine', from: 140, to: 40, peak: 0.3, attack: 0.005, release: 0.7 })
       ;[523, 784, 1047].forEach((f, i) => tone(c, t + 0.05 + i * 0.06, { type: 'triangle', from: f, peak: 0.08, attack: 0.01, release: 0.5 }))

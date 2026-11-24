@@ -35,6 +35,7 @@ export default function Game({
   const workshopSign = useRef<HTMLSpanElement>(null)
   const guideSign = useRef<HTMLSpanElement>(null)
   const exhibitSign = useRef<HTMLDivElement>(null)
+  const effects = useRef<HTMLCanvasElement>(null)
   const sky = useRef<HTMLCanvasElement>(null)
   const iris = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -51,6 +52,7 @@ export default function Game({
           exhibit: exhibitSign.current,
           iris: iris.current,
           lookout: sky.current,
+          effects: effects.current,
           skipIntro: skipAtBoot.current,
           outfit: outfitAtBoot.current,
         })
@@ -70,6 +72,7 @@ export default function Game({
     <>
       <canvas ref={canvas} className="game-canvas" aria-hidden="true" />
       <canvas className="lookout-sky" ref={sky} aria-hidden="true" width={0} height={0} />
+      <canvas className="cinematic-overlay" ref={effects} aria-hidden="true" width={0} height={0} />
       <div className="house-iris" ref={iris} hidden aria-hidden="true" />
       <div className="exhibit-anchor" ref={exhibitSign} hidden>
         {exhibit && (

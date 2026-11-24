@@ -1,8 +1,11 @@
 import * as T from 'three'
 import { softDot } from './ambience'
 
-export const ruptureTime = 2.8
-export const transformationEnd = 5.9
+export const fistTime = 1.55
+export const wideTime = 3
+export const vortexTime = 4.65
+export const ruptureTime = 8.6
+export const transformationEnd = 14.2
 const smooth = T.MathUtils.smoothstep
 const mix = T.MathUtils.lerp
 const tau = Math.PI * 2
@@ -84,18 +87,18 @@ export function createTransformation(scene: T.Scene, x: number, floor: number, z
         return
       }
       const age = time - ruptureTime
-      const charge = smooth(time, .25, 2.5)
-      const reveal = smooth(age, .07, .38) * (1 - smooth(time, 4.5, transformationEnd))
-      const cloudOpacity = age < 0 ? charge : 1 - smooth(age, .02, .56)
+      const charge = smooth(time, vortexTime - .35, ruptureTime - .5)
+      const reveal = smooth(age, .07, .38) * (1 - smooth(time, 12.55, transformationEnd))
+      const cloudOpacity = age < 0 ? charge : 1 - smooth(age, .01, .69)
       light.intensity = reduced ? 3 * reveal : 2.2 * charge * cloudOpacity + 6.5 * reveal + 11 * (1 - smooth(Math.abs(age), 0, .24))
       smoke.forEach(({ puff, angle, delay, speed }, i) => {
         puff.visible = cloudOpacity > .01
         if (!puff.visible) return
         const rise = (time * .56 * speed + delay) % 1
-        const scatter = smooth(age, 0, .65) * (2.5 + delay * 2.8)
-        const swirl = angle + Math.min(time, ruptureTime) * (reduced ? .75 : 3.25) + rise
+        const scatter = smooth(age, 0, .72) * (3.7 + delay * 3.8)
+        const swirl = angle + Math.min(time, ruptureTime) * (reduced ? .48 : 3.1 + charge * .46) + rise
         const radius = .27 + rise * .44 + delay * .42 + scatter
-        puff.position.set(Math.cos(swirl) * radius, .18 + rise * 2.15 + scatter * (.05 + delay * .11), Math.sin(swirl) * radius)
+        puff.position.set(Math.cos(swirl) * radius, .14 + rise * (.35 + charge * 1.80) + scatter * (.05 + delay * .11), Math.sin(swirl) * radius)
         puff.scale.setScalar((.77 + rise * .86) * (.55 + charge * .54) * (1 + scatter * .14))
         puff.material.rotation = swirl + i
         puff.material.opacity = cloudOpacity * (.6 + delay * .34) * (reduced ? .68 : 1)
@@ -105,9 +108,9 @@ export function createTransformation(scene: T.Scene, x: number, floor: number, z
       flash.scale.setScalar(2.5 + clamp(age * 6) * 5)
       waves.forEach((wave, i) => {
         const pulse = age - i * .105
-        wave.visible = pulse >= 0 && pulse < .94
-        wave.material.opacity = wave.visible ? (1 - smooth(pulse, .05, .94)) * (reduced ? .28 : .87) : 0
-        wave.scale.setScalar(.18 + Math.max(0, pulse) * (6.7 + i))
+        wave.visible = pulse >= 0 && pulse < 1.22
+        wave.material.opacity = wave.visible ? (1 - smooth(pulse, .08, 1.22)) * (reduced ? .28 : .87) : 0
+        wave.scale.setScalar(.18 + Math.max(0, pulse) * (8.3 + i))
       })
       flames.forEach((flame, i) => {
         const rise = (time * 1.45 + i / flames.length) % 1
@@ -135,20 +138,48 @@ export function createTransformation(scene: T.Scene, x: number, floor: number, z
   }
 }
 
-export function frameTransformation(time: number, reduced: boolean, x: number, y: number, z: number, focus: T.Vector3, offset: T.Vector3, aspect: number, span: number) {
-  const weight = smooth(time, 0, .58) * (1 - smooth(time, 5, transformationEnd))
-  const push = smooth(time, 2.41, ruptureTime)
-  const orbit = smooth(time, 2.94, 4.78)
-  const yaw = Math.atan2(8, 27) + (reduced ? 0 : orbit * tau * .82)
-  const shot = new T.Vector3(Math.sin(yaw) * 2.0, mix(-.56, .36, orbit), Math.cos(yaw) * 2.0)
-  offset.lerp(shot, weight)
-  focus.lerp(shot.set(x, y + mix(1.05, 1.12, push), z), weight)
-  if (!reduced) {
-    const tremor = .031 * smooth(time, .4, 2.55) * (1 - smooth(time, ruptureTime, 3.2))
-    offset.x += Math.sin(time * 73) * tremor
-    offset.y += Math.cos(time * 58) * tremor * .67
+/** The detail shots are cuts. The orbit, punch-in and reveal share a continuous rig. */
+export function frameTransformation(
+  time: number, reduced: boolean, center: T.Vector3, face: T.Vector3, fists: T.Vector3,
+  heading: number, focus: T.Vector3, offset: T.Vector3, aspect: number, span: number,
+) {
+  const entry = smooth(time, 0, .34)
+  const exit = 1 - smooth(time, 12.8, transformationEnd)
+  const weight = entry * exit
+  const age = time - ruptureTime
+  const wide = aspect < .8 ? 2.13 : 1.91
+  const angle = heading + (reduced ? 0 : tau * smooth(time, vortexTime, 8.17))
+  const zoomIn = smooth(time, 8.22, ruptureTime)
+  const pullOut = smooth(age, .055, .63)
+  let yaw = angle
+  let range = mix(2, 1.16, zoomIn * (1 - pullOut))
+  let height = mix(.46, -.78, pullOut)
+  let zoom = mix(wide, .57, zoomIn * (1 - pullOut))
+  const target = new T.Vector3(center.x, center.y + 1.03, center.z)
+  if (!reduced && time < wideTime) {
+    const faceShot = time < fistTime
+    target.copy(faceShot ? face : fists)
+    yaw = heading + (faceShot ? .11 : -.48)
+    range = faceShot ? 1.28 : 1.15
+    height = faceShot ? .08 : .17
+    zoom = faceShot ? (aspect < .8 ? .62 : .43) : (aspect < .8 ? .65 : .39)
+  } else if (reduced) {
+    zoom = wide
+    range = 2
+    height = .55
+  } else if (time >= ruptureTime) {
+    yaw += pullOut * -.36 + smooth(age, .65, 3.7) * .22
+    target.y = center.y + mix(1.12, 1.04, pullOut)
+    zoom = mix(zoom, wide * .84, pullOut)
   }
-  const wide = aspect < .8 ? 2.05 : 1.63
-  const zoom = reduced ? wide : mix(wide, wide * .66, push * (1 - orbit))
+  focus.lerp(target, weight)
+  offset.lerp(target.set(Math.sin(yaw) * range, height, Math.cos(yaw) * range), weight)
+  if (!reduced) {
+    const strain = .010 + .062 * smooth(time, vortexTime, ruptureTime)
+    const shock = age >= 0 ? .113 * (1 - smooth(age, 0, .5)) : 0
+    const tremor = (strain * (1 - smooth(age, 0, .5)) + shock) * entry
+    offset.x += Math.sin(time * 63) * tremor
+    offset.y += Math.cos(time * 51) * tremor * .65
+  }
   return mix(span, zoom, weight)
 }

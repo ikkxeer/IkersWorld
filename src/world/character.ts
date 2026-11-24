@@ -1,4 +1,4 @@
-import { ruptureTime } from './transformation'
+import { ruptureTime, transformationEnd, wideTime } from './transformation'
 import { outfitDetails } from '../data/outfitDetails'
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
@@ -46,6 +46,7 @@ export interface IslandCharacter {
   land?: () => void
   /** A friendly wave (the visitor) or a hello back (NPCs). */
   wave?: () => void
+  trainingAnchors?: (face: THREE.Vector3, fists: THREE.Vector3) => void
   talk?: (speaking: boolean) => void
   /** Called on every footfall with the current pace (for footstep sounds). */
   onStep?: (listener: (strength: number) => void) => void
@@ -397,6 +398,23 @@ const SIT_FOOT = 0.07
 export function createVisitor(initialOutfit?: string): IslandCharacter {
   const group = new THREE.Group()
   const material = clay()
+  const celWeight = { value: 0 }
+  const baseShader = material.onBeforeCompile
+  const cacheKey = material.customProgramCacheKey
+  material.onBeforeCompile = (shader, renderer) => {
+    baseShader.call(material, shader, renderer)
+    shader.uniforms.celWeight = celWeight
+    shader.fragmentShader = 'uniform float celWeight;\n' + shader.fragmentShader.replace(
+      '#include <opaque_fragment>',
+      `float keyLight = dot(normal, normalize(vec3(-.50, .74, .53)));
+      vec3 inkShade = diffuseColor.rgb * mix(vec3(.29,.23,.43), vec3(1.19,1.08,.98), step(.08, keyLight));
+      inkShade += diffuseColor.rgb * step(.76, keyLight) * .30;
+      outgoingLight = mix(outgoingLight, inkShade + outgoingLight * .40, celWeight);
+      #include <opaque_fragment>`,
+    )
+  }
+  material.customProgramCacheKey = () => cacheKey.call(material) + '|training-cel'
+
   const random = chance(11)
 
   /* ----------------------------- Skeleton ------------------------------ */
@@ -412,6 +430,17 @@ export function createVisitor(initialOutfit?: string): IslandCharacter {
     const shoulder = joint(chest, side * 0.148, 0.2, 0.004)
     const elbow = joint(shoulder, 0, -UPPER_ARM, 0)
     return { side, shoulder, elbow }
+  })
+
+  const knuckles = arms.map(({ elbow }) => {
+    const fist = sculpt(material)
+    for (const x of [-.029, -.010, .010, .029]) {
+      fist.oval(skin, [x, -FOREARM + .002, .027], [.016, .029, .032])
+      fist.oval(skinShade, [x + .010, -FOREARM + .004, .049], [.003, .014, .005])
+    }
+    const mesh = fist.mesh(elbow)
+    mesh.visible = false
+    return mesh
   })
 
   /* --------------------------- Expressions ----------------------------- */
@@ -1503,10 +1532,12 @@ export function createVisitor(initialOutfit?: string): IslandCharacter {
     const dance = Math.sin(actT * TAU * 1.15) * swaying
 
     // Power-up timeline: stance (0–0.4), charge (0.4–2.8), burst (2.8–3.6), relax.
-    const powerT = move?.powerTime ?? 99
-    const stance = powerT < 4.4 ? smoothstep01(powerT / 0.35) * smoothstep01((4.4 - powerT) / 0.6) : 0
-    const charge = powerT < 2.8 ? smoothstep01((powerT - 0.3) / 2.3) : 0
-    const burst = powerT >= 2.8 && powerT < 4.4 ? Math.sin(Math.PI * Math.min(1, (powerT - 2.8) / 1.4)) : 0
+    const powerT = move?.powerTime ?? transformationEnd
+    const stance = powerT < transformationEnd ? smoothstep01(powerT / .30) * smoothstep01((transformationEnd - powerT) / .85) : 0
+    const charge = powerT < ruptureTime ? .36 + smoothstep01(powerT / ruptureTime) * .64 : 0
+    const burst = powerT >= ruptureTime && powerT < ruptureTime + 1.25 ? Math.sin(Math.PI * Math.min(1, (powerT - ruptureTime) / 1.25)) : 0
+    celWeight.value = stance * .78
+    knuckles.forEach(fist => { fist.visible = stance > .5 && powerT < ruptureTime })
     pelvis.position.x = reduced ? 0 : -0.02 * s * w * weightSide + 0.012 * shift + 0.03 * dance
     pelvis.rotation.set(
       0.03 * s * w + 0.06 * run - 0.08 * sitting,
@@ -1539,8 +1570,8 @@ export function createVisitor(initialOutfit?: string): IslandCharacter {
       height = Math.min(height, ANKLE_Y + leg.pose.y + allowed + 0.02)
     })
     pelvis.position.y =
-      lerp(height, seatPelvis + 0.006 * breathe, sitting) + (hopLift + changing * 0.07) * (1 - sitting) - 0.045 * stance * (1 - burst)
-    if (!reduced && charge > 0) pelvis.position.x += Math.sin(time * 70) * 0.008 * charge
+      lerp(height, seatPelvis + 0.006 * breathe, sitting) + (hopLift + changing * 0.07) * (1 - sitting) - 0.072 * stance * (1 - burst)
+    if (!reduced && charge > 0) pelvis.position.x += Math.sin(time * 56) * .012 * charge
     pelvis.position.z = -seatBack * sitting
     pelvis.updateMatrix()
 
@@ -1594,10 +1625,12 @@ export function createVisitor(initialOutfit?: string): IslandCharacter {
         elbow.rotation.x = lerp(elbow.rotation.x, -0.25, showW)
       }
       if (stance > 0) {
-        // Fists clenched at the hips while charging, thrown wide on the burst.
-        shoulder.rotation.x = lerp(lerp(shoulder.rotation.x, 0.35, stance), -0.35, burst)
-        shoulder.rotation.z = lerp(lerp(shoulder.rotation.z, side * 0.5, stance), side * 1.35, burst)
-        elbow.rotation.x = lerp(lerp(elbow.rotation.x, -1.85, stance), -0.15, burst)
+        // Elbows tuck in, wrists turn inward and the fists rise to the chest
+        // for the detail shot. The force of the impact throws both arms wide.
+        const clench = 1 - smoothstep01((powerT - wideTime) / .5)
+        shoulder.rotation.x = lerp(lerp(shoulder.rotation.x, .36 - .58 * clench, stance), -0.35, burst)
+        shoulder.rotation.z = lerp(lerp(shoulder.rotation.z, side * (.53 - .20 * clench), stance), side * 1.35, burst)
+        elbow.rotation.x = lerp(lerp(elbow.rotation.x, -1.75 - .38 * clench, stance), -0.15, burst)
       }
       if (hopping > 0 || twirling > 0 || changing > 0) {
         const out = Math.max(twirling, changing)
@@ -1677,7 +1710,8 @@ export function createVisitor(initialOutfit?: string): IslandCharacter {
       happyEyes.visible = false
     }
     smile.visible = !mouthOpen.visible
-    brows.position.y = H + 0.012 * busy + Math.abs(lookTilt) * 0.02
+    brows.position.y = H + 0.012 * busy + Math.abs(lookTilt) * 0.02 - stance * .012
+    brows.rotation.x = stance * -.17
 
     /* ---- Secondary motion: cowlick and scarf tail trail behind ---- */
     if (reduced) {
@@ -1702,7 +1736,7 @@ export function createVisitor(initialOutfit?: string): IslandCharacter {
     bubbles.update(dt)
 
     /* ---- Aura: grows while charging, flares on the burst, lingers gold ---- */
-    if (powerT !== 99 && powerT >= ruptureTime && (lastPowerTime === null || lastPowerTime < ruptureTime)) {
+    if (powerT < transformationEnd && powerT >= ruptureTime && (lastPowerTime === null || lastPowerTime < ruptureTime)) {
       dress({ ...base, hair: '#f6c63c', hairLight: '#fff09a', hairStyle: 'spiky' })
       golden = 14
       for (const leg of legs) {
@@ -1718,7 +1752,7 @@ export function createVisitor(initialOutfit?: string): IslandCharacter {
         bubbles.show('sparkle')
       }
     }
-    const auraTarget = Math.max(charge * 0.9, burst * 1.35, golden > 0 ? 0.42 : 0)
+    const auraTarget = Math.max(charge * .45 * smoothstep01((powerT - wideTime) / 2), burst * 1.08, golden > 0 ? .54 : 0)
     auraW = damp(auraW, auraTarget, 10, dt)
     aura.visible = auraW > 0.02 && !reduced
     if (aura.visible) {
@@ -1753,6 +1787,12 @@ export function createVisitor(initialOutfit?: string): IslandCharacter {
         seatPelvis = height + 0.075
         seatBack = seatMode === 'bench' ? 0.12 : 0.2
       }
+    },
+    trainingAnchors(face, fists) {
+      face.set(0, HEAD + .032, .115)
+      head.localToWorld(face)
+      fists.set(0, -FOREARM, .035)
+      arms[0].elbow.localToWorld(fists)
     },
     wear(id: string, instant = false) {
       const next = outfitById(id)

@@ -1,4 +1,6 @@
-import { createTransformation, frameTransformation, ruptureTime, transformationEnd } from './transformation'
+import { createCinematicOverlay } from './cinematicOverlay'
+import { weatherDate, type Weather } from '../environment/weather'
+import { createTransformation, frameTransformation, ruptureTime, transformationEnd, wideTime, vortexTime } from './transformation'
 import { createLookout } from './lookout'
 import { disposeRadio, positionRadio } from '../audio/beachRadio'
 import * as T from 'three'
@@ -57,6 +59,8 @@ export function startVillage(
   const scene = new T.Scene(),
     camera = new T.OrthographicCamera(-20, 20, 14, -14, 0.1, 160)
   const atmosphere = makeSky(scene, low)
+  const cinematicOverlay = view.effects ? createCinematicOverlay(view.effects, low) : null
+  let weather: Weather = 'auto'
   const lookoutEvents = view.lookout ? createLookout(view.lookout, scene) : null
   const scenery = createScenery(low),
     visitor = createVisitor(view.outfit),
@@ -288,6 +292,10 @@ export function startVillage(
   }))
   const pebbleProxy = new T.Object3D()
   const ringFloor = islandFloorHeight(ringX, ringZ)
+  const ringCenter = new T.Vector3(ringX, ringFloor, ringZ)
+  const trainingFace = new T.Vector3()
+  const trainingFist = new T.Vector3()
+  const trainingHeading = Math.atan2(8, 27)
   const transformation = createTransformation(scene, ringX, ringFloor, ringZ, low)
   scene.add(pebbles)
   /** Training: walk to the centre of the ring, then the power-up. */
@@ -474,7 +482,7 @@ export function startVillage(
   let goal: Point[] = [],
     elapsed = 0,
     last = 0,
-    night = atmosphere.update(new Date()),
+    night = atmosphere.update(new Date(), weather),
     lastLight = 0,
     lastHud = -1,
     frame = 0,
@@ -486,7 +494,8 @@ export function startVillage(
   const post = low ? null : createPostFX(renderer, scene, camera)
   /** 1 around sunrise and sunset: warms the grade and the bloom. */
   const goldenHour = () => {
-    const { hour } = daylight(new Date())
+    if (weather === 'storm') return 0
+    const { hour } = daylight(weatherDate(new Date(), weather))
     return Math.max(0, 1 - Math.abs(hour - 7) / 1.6, 1 - Math.abs(hour - 18.7) / 1.7)
   }
   let golden = goldenHour()
@@ -544,6 +553,7 @@ export function startVillage(
       if (
         paused ||
         !landed ||
+        training?.stage === 'power' ||
         iris.active() ||
         e.button !== 0 ||
         Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 12
@@ -686,7 +696,7 @@ export function startVillage(
     if (!inside && Math.hypot(p.x - guide.group.position.x, p.z - guide.group.position.z) < 5.5) pipReplyAt = elapsed + 0.6
   }
   function interact() {
-    if (paused || iris.active() || !landed) return
+    if (paused || iris.active() || !landed || training?.stage === 'power') return
     if (fishing.active()) fishing.press()
     else if (rest && rest.stage !== 'approach') standUp()
     else if (reach) activate(reach, project)
@@ -710,6 +720,7 @@ export function startVillage(
         if (!e.repeat && jumpTime >= jumpDuration && !rest && !training && !fishing.active() && !anglingWalk)
           jumpTime = 0
       }
+      if (training?.stage === 'power') return
       if (e.key === 'Shift') running = true
       if (movement.includes(e.code)) {
         e.preventDefault()
@@ -849,7 +860,7 @@ export function startVillage(
     last = stamp
     elapsed += dt
     if (stamp - lastLight > 8000) {
-      night = atmosphere.update(new Date())
+      night = atmosphere.update(new Date(), weather)
       golden = goldenHour()
       lastLight = stamp
     }
@@ -1003,11 +1014,13 @@ export function startVillage(
         if (Math.hypot(ringX - p.x, ringZ - p.z) < 0.5) {
           training = { stage: 'power', t: 0 }
           p.set(ringX, ringFloor, ringZ)
-          faceYaw = Math.atan2(cameraOffset.x, cameraOffset.z)
-          play('charge')
+          faceYaw = null
+          visitor.group.rotation.y = trainingHeading
         } else training = null
       }
       if (training?.stage === 'power') {
+        const audioStart = ruptureTime - 2.62
+        if (training.t >= audioStart && training.t - dt < audioStart) play('charge')
         if (training.t >= ruptureTime && training.t - dt < ruptureTime) play('burst')
         if (training.t >= transformationEnd) training = null
       }
@@ -1016,7 +1029,7 @@ export function startVillage(
     transformation.update(powerTime, motion.matches)
     canvas.classList.toggle('power-cinematic', powerTime !== null)
     if (powerTime !== null) {
-      const charge = T.MathUtils.smoothstep(powerTime, .35, 2.5)
+      const charge = T.MathUtils.smoothstep(powerTime, wideTime, vortexTime + 1.8)
       const departure = T.MathUtils.smoothstep(powerTime, ruptureTime, ruptureTime + .85)
       placePebbles(charge * (1 - departure), powerTime, departure * 2.5)
     }
@@ -1049,7 +1062,7 @@ export function startVillage(
       if (Math.abs(delta) < 0.02) faceYaw = null
     }
     if (rest && rest.stage !== 'approach') speed = distance / Math.max(dt, 1e-3)
-    visitor.group.visible = !attract && (powerTime === null || powerTime < 2.41 || powerTime >= ruptureTime)
+    visitor.group.visible = !attract && (powerTime === null || powerTime < ruptureTime - .63 || powerTime >= ruptureTime)
     landingShadow.visible = !attract && !landed
     if (!landed && !inside) {
       if (fallT === 0) visitor.umbrella?.(true)
@@ -1212,8 +1225,10 @@ export function startVillage(
     worldCurveFocus.value = cameraOffset.length()
     let shown = attract ? (aspect < 0.9 ? 22 : 13.5) : T.MathUtils.lerp(T.MathUtils.lerp(span, guideDestination ? (aspect < .9 ? 6.6 : 4.9) : (aspect < .9 ? 4.1 : 3.35), guideFrame), aspect < 0.9 ? 3.1 : 2.45, lookout)
     if (powerTime !== null && !inside) {
-      shown = frameTransformation(powerTime, motion.matches, ringX, ringFloor, ringZ, focus, cameraOffset, aspect, shown)
-      worldCurve.value *= T.MathUtils.smoothstep(powerTime, 5, transformationEnd)
+      visitor.trainingAnchors?.(trainingFace, trainingFist)
+      shown = frameTransformation(powerTime, motion.matches, ringCenter, trainingFace, trainingFist,
+        trainingHeading, focus, cameraOffset, aspect, shown)
+      worldCurve.value *= T.MathUtils.smoothstep(powerTime, transformationEnd - 1.4, transformationEnd)
       worldCurveFocus.value = cameraOffset.length()
     }
     camera.left = -shown * aspect
@@ -1234,7 +1249,9 @@ export function startVillage(
     skyReveal = settled ? Math.min(1, skyReveal + dt / (motion.matches ? 0.01 : 1.6)) : 0
     atmosphere.revealSky(skyReveal * skyReveal * (3 - 2 * skyReveal))
     if (view.lookout) view.lookout.style.opacity = String(skyReveal)
-    lookoutEvents?.update(settled ? 1 : 0, night, dt, camera, motion.matches, paused)
+    lookoutEvents?.update(settled && weather !== 'storm' ? 1 : 0, night, dt, camera, motion.matches, paused)
+    const bolt = cinematicOverlay?.update(powerTime, weather === 'storm' && !inside, dt, motion.matches) ?? 0
+    atmosphere.lightning(motion.matches ? 0 : bolt * .55)
     positionRadio(p.x, p.y + 1.25, p.z, Math.atan2(cameraOffset.x, cameraOffset.z), !!inside)
     view.signs.forEach((sign, index) => {
       if (!sign) return
@@ -1317,7 +1334,7 @@ export function startVillage(
       lastShadow = stamp
     }
     const current = inside ? rooms[inside].scene : scene
-    if (post) post.render(current, { night: inside ? 0.35 : night, golden: inside ? 0 : golden, inside: !!inside, time: elapsed }, dt)
+    if (post) post.render(current, { night: inside ? 0.35 : night, golden: inside ? 0 : golden, inside: !!inside, time: elapsed, cinematic: powerTime !== null }, dt)
     else renderer.render(current, camera)
     perf.cpu = perf.cpu * 0.9 + (performance.now() - started) * 0.1
     perf.calls = renderer.info.render.calls
@@ -1332,7 +1349,7 @@ export function startVillage(
       stick.set(0, 0)
       last = 0
       if (!document.hidden) {
-        night = atmosphere.update(new Date())
+        night = atmosphere.update(new Date(), weather)
         frame = requestAnimationFrame(tick)
       }
     },
@@ -1358,6 +1375,12 @@ export function startVillage(
     })
   frame = requestAnimationFrame(tick)
   return {
+    setWeather(value) {
+      weather = value
+      night = atmosphere.update(new Date(), weather)
+      golden = goldenHour()
+      lastShadow = 0
+    },
     pause(value) {
       paused = value
       running = false
