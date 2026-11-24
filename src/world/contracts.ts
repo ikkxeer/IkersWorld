@@ -1,3 +1,4 @@
+import type { Weather } from '../environment/weather'
 import type { Place, Zone } from '../data/village'
 import type { AnglerUpdate } from './fishing'
 export type { AnglerUpdate }
@@ -25,6 +26,7 @@ export interface VillageEvents {
   wardrobe?: () => void
 }
 export interface VillageController {
+  setWeather: (weather: Weather) => void
   pause: (value: boolean) => void
   zoom: (delta: number) => void
   travel: (place: Zone, arrived?: () => void) => void
@@ -47,6 +49,7 @@ export interface VillageView {
   signs: (HTMLElement | null)[]
   exhibit: HTMLElement | null
   iris: HTMLElement | null
+  effects?: HTMLCanvasElement | null
   lookout?: HTMLCanvasElement | null
   /** Begin on the title screen: the camera circles the island and waits. */
   title?: boolean

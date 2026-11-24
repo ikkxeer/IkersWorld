@@ -1,9 +1,11 @@
+import { weatherCopy, weatherModes, type Weather } from './environment/weather'
 import { stations } from './data/gallery'
 import type { Interior } from './world/contracts'
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import {
   Compass,
+  CloudSun,
   LogOut,
   Map as MapIcon,
   MapPin,
@@ -175,6 +177,7 @@ function App() {
   const [lang, setLang] = useState<Lang>(readLang),
     [menu, setMenu] = useState(false),
     [sound, toggleSound, enableSound] = useAmbience()
+  const [weather, setWeather] = useState<Weather>('auto')
   const [mode, setMode] = useState<'game' | 'light'>('game'),
     [panel, setPanel] = useState<Panel | null>(deep),
     [project, setProject] = useState<number | null>(null),
@@ -483,6 +486,17 @@ function App() {
           </span>
         </button>
         <div className="tools">
+          {!light && ready && <label className="weather-select">
+            <CloudSun size={17} aria-hidden="true" />
+            <select aria-label={weatherCopy[lang].label} value={weather} onChange={event => {
+              const next = event.target.value as Weather
+              setWeather(next)
+              ctl.current?.setWeather(next)
+            }}>
+              {weatherModes.map(mode => <option key={mode} value={mode}>{weatherCopy[lang][mode]}</option>)}
+            </select>
+            <ChevronDown size={13} aria-hidden="true" />
+          </label>}
           <Clock lang={lang} />
           <button
             className="round sound"
