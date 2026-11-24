@@ -1189,13 +1189,15 @@ export function startVillage(
     }
     focus.lerp(
       desired,
-      snapCamera || (motion.matches && !steer)
+      snapCamera || (motion.matches && !steer && cineLook < 0.02 && focus.distanceToSquared(desired) < 0.01)
         ? 1
         : steer > 0
           ? 1 - Math.exp(-dt * 7)
           : inside || intro < 0.02
             ? 1
-            : 1 - Math.exp(-dt * (intro < 1 ? 6 : 3)),
+            // Right after the transformation the follow eases in, so the camera
+            // glides back instead of lurching off the islet.
+            : 1 - Math.exp(-dt * (intro < 1 ? 6 : 3) * (1 - .9 * cineLook)),
     )
     snapCamera = false
     const streetSpan =
