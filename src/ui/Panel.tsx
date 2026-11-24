@@ -1,6 +1,8 @@
+import BeachRadio from './BeachRadio'
 import { stations } from '../data/gallery'
 import { useEffect, useRef, type CSSProperties } from 'react'
 import {
+  Music2,
   X,
   Map,
   Gamepad2,
@@ -52,6 +54,7 @@ export default function Journal({
   position,
   fallback,
   useMap,
+  enableSound,
 }: {
   page: Panel
   lang: Lang
@@ -62,6 +65,7 @@ export default function Journal({
   visitPlace: (place: MapPlace) => void
   position: [number, number]
   fallback: boolean
+  enableSound: () => void
   useMap: () => void
 }) {
   const t = copy[lang],
@@ -80,7 +84,7 @@ export default function Journal({
     }
   }, [])
   const station = page === 'tech' && project !== null ? stations[project] : undefined
-  const title = station ? station[lang] : isZone
+  const title = page === 'radio' ? t.radio : station ? station[lang] : isZone
     ? t[placeKeys[page as Zone]]
     : page === 'map'
       ? t.map
@@ -91,7 +95,7 @@ export default function Journal({
           : page === 'subjects'
             ? t.subjects
             : t.guide
-  const MainIcon =
+  const MainIcon = page === 'radio' ? Music2 :
     page === 'map'
       ? Map
       : page === 'npc'
@@ -130,6 +134,7 @@ export default function Journal({
           </button>
         </header>
         <div className="journal-body" key={page + (project ?? '')}>
+          {page === 'radio' && <BeachRadio enableSound={enableSound} lang={lang} />}
           {(page === 'intro' || page === 'controls') && (
             <>
               {page === 'intro' && <p>{t.introBody}</p>}
@@ -139,6 +144,11 @@ export default function Journal({
                 <span>
                   <kbd>WASD</kbd> <kbd>↑↓←→</kbd>
                 </span>
+              </div>
+              <div className="keyrow">
+                <Footprints />
+                <b>{t.jump}</b>
+                <kbd>{t.space}</kbd>
               </div>
               <div className="keyrow">
                 <Footprints />

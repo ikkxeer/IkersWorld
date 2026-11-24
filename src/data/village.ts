@@ -3,7 +3,7 @@ export type Lang = (typeof languages)[number]
 export type Zone =
   'about' | 'tech' | 'projects' | 'journey' | 'skills' | 'contact'
 export type Place = Zone | 'map' | 'npc'
-export type Panel = Place | 'controls' | 'intro' | 'subjects'
+export type Panel = Place | 'radio' | 'controls' | 'intro' | 'subjects'
 export const zones: Zone[] = [
   'about',
   'tech',
@@ -110,7 +110,10 @@ const es = {
   focus: 'Recorrer los controles',
   home: 'Inicio',
   loading3D: 'Cargando la isla 3D…',
+  radio: 'Altavoz de la cala',
   campfire: 'Fogata · sentarse',
+  jump: 'Saltar',
+  space: 'Espacio',
   run: 'Correr',
   fishing: 'Pescar en el muelle',
   fishWait: 'Espera a que pique…',
@@ -139,6 +142,8 @@ const es = {
   mapRecenter: 'Centrar en mí',
   mapReset: 'Ver toda la isla',
   bench: 'Sentarse en el banco',
+  lookout: 'Sentarse a mirar el cielo',
+  rise: 'Levantarse',
   dojo: 'Santuario · entrenar',
   gong: 'Tocar el gong',
 }
@@ -222,7 +227,10 @@ const ca: Dictionary = {
   focus: 'Recórrer els controls',
   home: 'Inici',
   loading3D: 'Carregant l’illa 3D…',
+  radio: 'Altaveu de la cala',
   campfire: 'Foguera · seure',
+  jump: 'Saltar',
+  space: 'Espai',
   run: 'Córrer',
   fishing: 'Pescar al moll',
   fishWait: 'Espera que piqui…',
@@ -251,6 +259,8 @@ const ca: Dictionary = {
   mapRecenter: 'Centrar en mi',
   mapReset: 'Veure tota l’illa',
   bench: 'Seure al banc',
+  lookout: 'Seure a mirar el cel',
+  rise: 'Aixecar-se',
   dojo: 'Santuari · entrenar',
   gong: 'Tocar el gong',
 }
@@ -334,7 +344,10 @@ const en: Dictionary = {
   focus: 'Navigate the controls',
   home: 'Home',
   loading3D: 'Loading the 3D island…',
+  radio: 'Cove speaker',
   campfire: 'Campfire · sit down',
+  jump: 'Jump',
+  space: 'Space',
   run: 'Run',
   fishing: 'Fish off the pier',
   fishWait: 'Wait for a bite…',
@@ -363,6 +376,8 @@ const en: Dictionary = {
   mapRecenter: 'Centre on me',
   mapReset: 'Whole island',
   bench: 'Sit on the bench',
+  lookout: 'Sit and watch the sky',
+  rise: 'Stand up',
   dojo: 'Shrine · train',
   gong: 'Strike the gong',
 }

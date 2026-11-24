@@ -66,6 +66,14 @@ export function makeSky(scene: T.Scene, low: boolean) {
   const starPos = []
   for (let i = 0; i < 230; i++)
     starPos.push((random() - 0.5) * 150, random() * 36 + 4, -28 - random() * 45)
+  // A southern star field faces the beach lookout across the water.
+  for (let i = 0; i < 480; i++)
+    starPos.push(19.75 + (random() - 0.5) * 45, 0.9 + random() * 18, 28 + random() * 34)
+  for (let i = 0; i < 500; i++) {
+    const forward = 30 + random() * 28
+    const side = (random() - 0.5) * 23
+    starPos.push(19.75 + (forward + side) * 0.707, 1.4 + random() * 10, (forward - side) * 0.707)
+  }
   const sg = new T.BufferGeometry()
   sg.setAttribute('position', new T.Float32BufferAttribute(starPos, 3))
   const starMat = new T.PointsMaterial({
@@ -83,6 +91,36 @@ export function makeSky(scene: T.Scene, low: boolean) {
   )
   orb.material.userData.noBend = true
   scene.add(orb)
+  // Hand-painted waxing moon. The terminator and crater rims stay readable
+  // at the low magnification of the lookout.
+  const lunarDisc = document.createElement('canvas')
+  lunarDisc.width = lunarDisc.height = 256
+  const moonInk = lunarDisc.getContext('2d')!
+  moonInk.beginPath()
+  moonInk.arc(128, 128, 112, -Math.PI / 2, Math.PI / 2)
+  moonInk.bezierCurveTo(63, 240, 63, 16, 128, 16)
+  moonInk.clip()
+  const moonlight = moonInk.createLinearGradient(60, 185, 225, 65)
+  moonlight.addColorStop(0, '#7695bd')
+  moonlight.addColorStop(0.55, '#becfe7')
+  moonlight.addColorStop(1, '#e5efff')
+  moonInk.fillStyle = moonlight
+  moonInk.fillRect(0, 0, 256, 256)
+  for (const [x, y, r] of [[156, 70, 21], [127, 97, 14], [172, 139, 28], [212, 102, 10], [131, 172, 17], [177, 197, 11], [213, 163, 8]]) {
+    moonInk.beginPath()
+    moonInk.ellipse(x, y, r, r * .72, -.35, 0, Math.PI * 2)
+    moonInk.fillStyle = '#506e984f'
+    moonInk.fill()
+    moonInk.strokeStyle = '#e5efff67'
+    moonInk.lineWidth = 2
+    moonInk.stroke()
+  }
+  const moonMap = new T.CanvasTexture(lunarDisc)
+  moonMap.colorSpace = T.SRGBColorSpace
+  const coveMoon = new T.Sprite(new T.SpriteMaterial({ map: moonMap, fog: false, depthWrite: false }))
+  coveMoon.scale.setScalar(1.14)
+  coveMoon.position.set(49.1, 4.15, 32.4)
+  scene.add(coveMoon)
   // Small luminous points hover just above the meadow when the local sun sets.
   const fliesGeometry = new T.BufferGeometry()
   const fireflies = new Float32Array((low ? 12 : 28) * 3)
@@ -157,6 +195,7 @@ export function makeSky(scene: T.Scene, low: boolean) {
     sun.color.lerp(tmp.set('#ffa98a'), golden * 0.5)
     flies.visible = s.night > 0.18
     flyMaterial.opacity = s.night
+    coveMoon.visible = s.night > 0.55
     starMat.opacity = s.night
     nightLevel = s.night
     orb.material.color.set(s.night > 0.55 ? '#e5e9ff' : '#ffebae')

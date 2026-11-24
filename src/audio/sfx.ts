@@ -85,6 +85,15 @@ function tone(c: AudioContext, at: number, options: { type: OscillatorType; from
 }
 
 let lastStep = 0
+export function organNote(hz: number) {
+  if (!enabled) return
+  const c = audio()
+  if (!c) return
+  const t = c.currentTime
+  tone(c, t, { type: 'sine', from: hz, peak: 0.19, attack: 0.045, release: 0.9 })
+  tone(c, t, { type: 'sine', from: hz * 2, peak: 0.045, attack: 0.08, release: 0.6 })
+}
+
 export function play(sound: Sound, strength = 1) {
   const c = audio()
   if (!c || document.hidden) return

@@ -78,11 +78,12 @@ function placeName(
   const t = copy[lang]
   if (place === 'projects' && exhibit !== undefined)
     return portfolio(lang).projects[exhibit].name
+  if (place === 'radio') return t.radio
   if (place === 'exit') return inside === 'tech' ? t.leaveLab : t.leaveHouse
   if (place === 'campfire') return t.campfire
   if (place === 'fishing') return t.fishing
   if (place === 'wardrobe') return t.wardrobe
-  if (place === 'bench') return t.bench
+  if (place === 'bench' || place === 'lookout' || place === 'rise') return t[place]
   if (place === 'dojo') return t.dojo
   if (place === 'gong') return t.gong
   if (place === 'about' && inside) return t.album
@@ -181,7 +182,7 @@ function App() {
           : null
   const [lang, setLang] = useState<Lang>(readLang),
     [menu, setMenu] = useState(false),
-    [sound, toggleSound] = useAmbience()
+    [sound, toggleSound, enableSound] = useAmbience()
   const [mode, setMode] = useState<'game' | 'light'>('game'),
     [panel, setPanel] = useState<Panel | null>(deep),
     [project, setProject] = useState<number | null>(null)
@@ -306,6 +307,7 @@ function App() {
   }, [])
   /** Travel to any place on the map (buildings go through `visit`). */
   function visitPlace(place: MapPlace) {
+    if (light && place.id === 'radio-cove') { open('radio'); return }
     if (place.zone) {
       visit(place.zone)
       return
@@ -709,6 +711,7 @@ function App() {
       {panel && (
         <Suspense fallback={null}>
         <Journal
+          enableSound={enableSound}
           page={panel}
           lang={lang}
           project={project}

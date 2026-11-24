@@ -1,3 +1,5 @@
+import { createLookout } from './lookout'
+import { disposeRadio, positionRadio } from '../audio/beachRadio'
 import * as T from 'three'
 import { makeSky } from '../environment/sky'
 import { makeIris } from './iris'
@@ -5,9 +7,9 @@ import { createPostFX } from './postfx'
 import { daylight } from '../environment/daylight'
 import { bendScene, projectCurved, unbendRay, worldCurve, worldCurveFocus } from './curve'
 import { anchors, destinations } from '../data/village'
-import { benchSites, campfire, fishingSpot, shape, shrine } from '../data/island'
+import { benchSites, campfire, fishingSpot, shape, shrine, radioCove, tideOrgan } from '../data/island'
 import { createFishing } from './fishing'
-import { play } from '../audio/sfx'
+import { organNote, play } from '../audio/sfx'
 import { createVisitor, createGuide, createCat, angleDelta } from './character'
 import { makeGallery, makeInterior } from './interior'
 import { createScenery, islandFloorHeight } from './scenery'
@@ -54,6 +56,7 @@ export function startVillage(
   const scene = new T.Scene(),
     camera = new T.OrthographicCamera(-20, 20, 14, -14, 0.1, 160)
   const atmosphere = makeSky(scene, low)
+  const lookoutEvents = view.lookout ? createLookout(view.lookout, scene) : null
   const scenery = createScenery(low),
     visitor = createVisitor(view.outfit),
     guide = createGuide(),
@@ -106,6 +109,9 @@ export function startVillage(
     play(wood ? 'stepWood' : 'step', strength)
   })
   /** Walking out to the end of the pier before casting. */
+  const jumpDuration = 0.64
+  let jumpTime = jumpDuration
+  let organKey = -1
   let anglingWalk = false
   function beginFishing() {
     if (inside || rest) return
@@ -178,6 +184,7 @@ export function startVillage(
   /** Teleport to a spot (through the iris), facing a point, with a hop. */
   function jump(stand: [number, number], look: [number, number], arrived?: () => void) {
     const move = () => {
+      jumpTime = jumpDuration
       const [x, z] = stand
       visitor.group.position.set(x, islandFloorHeight(x, z), z)
       goal = []
@@ -236,7 +243,7 @@ export function startVillage(
   const benchSpots = benchSites.map(([bx, bz], i) => {
     const spot = new T.Group()
     spot.position.set(bx, 0, bz)
-    spot.userData.zone = 'bench'
+    spot.userData.zone = benchSites[i] === radioCove.bench ? 'lookout' : 'bench'
     spot.userData.project = fireSeats.length + i
     const hit = new T.Mesh(new T.BoxGeometry(1.5, 1, 0.9), new T.MeshBasicMaterial({ visible: false }))
     hit.position.y = 0.5
@@ -325,6 +332,7 @@ export function startVillage(
     timer: number
     from: [number, number]
   } | null = null
+  let lookout = 0
   let cozy = 0
   let running = false
   /** A tree the visitor is walking over to shake, and where to face. */
@@ -391,6 +399,7 @@ export function startVillage(
   }
   function setInside(value: Interior) {
     if (inside === value) return
+    jumpTime = jumpDuration
     if (value) doorstep.copy(visitor.group.position)
     inside = value
     snapCamera = true
@@ -640,10 +649,12 @@ export function startVillage(
     }, arrived)
   }
   function activate(target: Target, exhibit?: number) {
+    if (jumpTime < jumpDuration) return
     if (target === 'wardrobe') {
       faceTowards(target)
       events.wardrobe?.()
-    } else if (target === 'bench') {
+    } else if (target === 'rise') standUp()
+    else if (target === 'bench' || target === 'lookout') {
       if (rest) standUp()
       else beginRest(exhibit)
     } else if (target === 'dojo') {
@@ -691,6 +702,12 @@ export function startVillage(
         e.target instanceof HTMLSelectElement
       )
         return
+      if (e.code === 'Space' && !attract && landed &&
+          !(e.target instanceof HTMLElement && e.target.closest('button, input, textarea, select, a, [contenteditable=true]'))) {
+        e.preventDefault()
+        if (!e.repeat && jumpTime >= jumpDuration && !rest && !training && !fishing.active() && !anglingWalk)
+          jumpTime = 0
+      }
       if (e.key === 'Shift') running = true
       if (movement.includes(e.code)) {
         e.preventDefault()
@@ -772,13 +789,13 @@ export function startVillage(
         : zone === 'projects' ||
             zone === 'npc' ||
             zone === 'map' ||
-            zone === 'contact'
+            zone === 'contact' || zone === 'radio'
           ? 1.8
           : zone === 'campfire'
             ? 2.3
             : zone === 'fishing'
               ? 1.6
-              : zone === 'bench'
+              : zone === 'bench' || zone === 'lookout'
                 ? 1.8
                 : zone === 'dojo'
                   ? 2.7
@@ -795,6 +812,7 @@ export function startVillage(
         project = o.userData.project
       }
     }
+    if (rest?.stage === 'seated') reach = 'rise'
     // Nothing to interact with mid-transition: hide the prompt during wipes.
     if (iris.active()) {
       reach = null
@@ -961,8 +979,21 @@ export function startVillage(
       }
     }
     cozy = T.MathUtils.damp(cozy, rest?.stage === 'seated' || fishing.active() || training?.stage === 'power' ? 1 : 0, 1.6, dt)
+    if (jumpTime < jumpDuration && !paused && !iris.active()) {
+      jumpTime = Math.min(jumpDuration, jumpTime + dt)
+      if (jumpTime === jumpDuration) play('land')
+    }
+    const jumpPhase = jumpTime / jumpDuration
+    const jumpHeight = 3.6 * jumpPhase * (1 - jumpPhase)
+    const key = !inside && !attract && landed && jumpTime === jumpDuration
+      ? tideOrgan.pads.findIndex(pad => Math.hypot(pad.x - p.x, pad.z - p.z) < 0.43) : -1
+    if (key !== organKey) {
+      organKey = key
+      scenery.lightOrganKey(key)
+      if (key >= 0) organNote(tideOrgan.pads[key].hz)
+    }
     const onRug = Math.abs(p.x) < 1.73 && Math.abs(p.z - 0.1) < 1.27
-    p.y = (inside ? (inside === 'about' && onRug ? 0.09 : 0.01) : islandFloorHeight(p.x, p.z)) + hopLift
+    p.y = (inside ? (inside === 'about' && onRug ? 0.09 : 0.01) : islandFloorHeight(p.x, p.z)) + hopLift + jumpHeight
     // Shrine training: arrive in the centre of the ring, face the camera, power up.
     if (training && !paused) {
       training.t += dt
@@ -1059,6 +1090,7 @@ export function startVillage(
       speed,
       turn,
       dust: !inside,
+      jumpHeight,
     })
     if (catReplyAt > 0 && elapsed > catReplyAt) {
       catReplyAt = -1
@@ -1154,7 +1186,16 @@ export function startVillage(
           (streetSpan / zoom) * (1 - 0.2 * cozy),
           intro,
         )
+    const beachSeat = benchSeats[benchSites.indexOf(radioCove.bench)]
+    const watching = rest?.seat === beachSeat && rest.stage === 'seated'
+    lookout = motion.matches ? Number(watching) : T.MathUtils.damp(lookout, Number(watching), 2.4, dt)
     cameraOffset.set(8, 19, 27)
+    if (lookout > 0.001) {
+      const yaw = T.MathUtils.lerp(Math.atan2(8, 27), Math.PI * 1.25, lookout)
+      const radius = T.MathUtils.lerp(Math.hypot(8, 27), 3.75, lookout)
+      cameraOffset.set(radius * Math.sin(yaw), T.MathUtils.lerp(19, 0.13 - night * 0.28, lookout), radius * Math.cos(yaw))
+      focus.lerp(steerTarget.set(p.x + 4, 1.45 + night * 0.6, p.z + 4), lookout)
+    }
     if (attract) {
       // A slow establishing orbit around the whole island.
       const a = motion.matches ? 0.3 : 0.3 + elapsed * 0.05
@@ -1162,9 +1203,9 @@ export function startVillage(
       focus.set(0, 0, 1.5)
     }
     // A gentle diorama curve outdoors; rooms stay flat.
-    worldCurve.value = inside ? 0 : 0.0072
+    worldCurve.value = inside ? 0 : 0.0072 * (1 - lookout)
     worldCurveFocus.value = cameraOffset.length()
-    const shown = attract ? (aspect < 0.9 ? 22 : 13.5) : span
+    const shown = attract ? (aspect < 0.9 ? 22 : 13.5) : T.MathUtils.lerp(span, aspect < 0.9 ? 3.1 : 2.45, lookout)
     camera.left = -shown * aspect
     camera.right = shown * aspect
     camera.top = shown
@@ -1177,6 +1218,8 @@ export function startVillage(
     }
     camera.updateProjectionMatrix()
     camera.updateMatrixWorld()
+    lookoutEvents?.update(lookout, night, dt, camera, motion.matches, paused)
+    positionRadio(p.x, p.y + 1.25, p.z, Math.atan2(cameraOffset.x, cameraOffset.z), !!inside)
     view.signs.forEach((sign, index) => {
       if (!sign) return
       const [x, z] = index === 0 ? anchors.tech : anchors.npc
@@ -1359,6 +1402,7 @@ export function startVillage(
       })
     },
     dispose() {
+      disposeRadio()
       dead = true
       cancelAnimationFrame(frame)
       signal.abort()
@@ -1368,8 +1412,8 @@ export function startVillage(
         textures = new Set<T.Texture>()
       const collect = (root: T.Scene) =>
         root.traverse((o) => {
-          if (o instanceof T.Mesh || o instanceof T.Points) {
-            geometries.add(o.geometry)
+          if (o instanceof T.Mesh || o instanceof T.Points || o instanceof T.Sprite) {
+            if (!(o instanceof T.Sprite)) geometries.add(o.geometry)
             for (const m of [o.material].flat()) {
               materials.add(m)
               for (const v of Object.values(m))

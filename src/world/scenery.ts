@@ -34,6 +34,10 @@ import {
   beach,
   palmSites,
   telescopeSite,
+  tideOrgan,
+  onOrganDeck,
+  onCoveSand,
+  radioCove,
   shrine,
   inShrine,
   shrineFloor,
@@ -219,6 +223,8 @@ export function islandFloorHeight(x: number, z: number) {
     if (across >= 0 && across <= 1) return bridgeTop(across)
   }
   if (z > shape.pierFrom + 0.15 && Math.abs(x - 2.5) < 0.9) return -0.06
+  if (onOrganDeck(x, z)) return 0.17
+  if (onCoveSand(x, z)) return 0.13
   if (onBridge(x, z)) return bridgeDeck(x)
   if (inShrine(x, z)) return shrineFloor(x, z)
   // The bevel rises above the nominal top of the grass extrusion.
@@ -1116,6 +1122,104 @@ function verges(b: Batch, rand: () => number, low: boolean) {
     }
 }
 
+/** Each coloured key feeds a rank of hollow brass pipes at the back of the deck. */
+function buildTideOrgan(b: Batch, group: T.Group) {
+  const [cx, cz] = tideOrgan.center
+  const boards = ['#957356', '#967e64', '#ac8d68', '#896b54', '#a98461', '#8c7966']
+  const pile = (x: number, z: number, top: number) => {
+    const base = -2.15
+    b.cylinder([x, (top + base) / 2, z], 0.135, 0.17, top - base, '#635446', 10)
+    for (const y of [top - 0.13, top - 0.19])
+      b.cylinder([x, y, z], 0.145, 0.145, 0.046, '#bd9c70', 12)
+    b.ball([x, -0.9, z], [0.36, 0.46, 0.31], '#79766b', 1)
+  }
+  // Sills start on dry land. Paired piles and cross-bracing carry the boardwalk.
+  for (const side of [-1, 1]) {
+    const z = cz + side * 0.57
+    b.block([18, -0.07, z], [3.85, 0.23, 0.18], '#625345')
+    for (const x of [16.48, 17.62, 18.76]) pile(x, z, 0.69)
+    for (const x of [16.48, 17.62]) {
+      b.stick([x, -0.73, z], [x + 1.14, 0.01, z], 0.084, timber)
+      b.stick([x, 0.57, z], [x + 0.57, 0.45, z], 0.026, '#bc9b70')
+      b.stick([x + 0.57, 0.45, z], [x + 1.14, 0.57, z], 0.026, '#bc9b70')
+    }
+  }
+  for (let i = 0; i < 11; i++)
+    b.block([tideOrgan.bridgeStart + i * 0.235, 0.105, cz], [0.226, 0.13, tideOrgan.bridgeWidth], boards[i % boards.length])
+  // An old storm lantern marks the abutment on the shore.
+  b.cylinder([17.62, 0.82, cz - 0.57], 0.09, 0.1, 0.23, '#ffcc83', 8, [0,0,0], b.kit.glass)
+  b.cylinder([17.62, 0.97, cz - 0.57], 0.045, 0.14, 0.08, '#5c5043', 8)
+  // Saw-cut planks follow the circular pier head, with seams, grain and nail heads.
+  const count = 19, width = 2 * tideOrgan.radius / count
+  for (let i = 0; i < count; i++) {
+    const dz = -tideOrgan.radius + (i + 0.5) * width
+    const half = Math.sqrt(tideOrgan.radius ** 2 - dz ** 2)
+    b.block([cx, 0.075, cz + dz], [half * 2, 0.19, width - 0.015], boards[(i * 5) % boards.length])
+    b.block([cx + half * 0.11, 0.172, cz + dz + 0.056], [half * 1.34, 0.003, 0.014], '#796452')
+    for (const side of [-1, 1]) b.cylinder([cx + side * (half - 0.1), 0.173, cz + dz], 0.028, 0.028, 0.009, '#605a51', 6)
+  }
+  for (const dz of [-1.55, 0, 1.55]) {
+    const reach = Math.sqrt(tideOrgan.radius ** 2 - dz ** 2) - 0.22
+    b.block([cx, -0.13, cz + dz], [2 * reach + 0.28, 0.26, 0.22], timber)
+    for (const side of [-1, 1]) {
+      const x = cx + side * reach
+      pile(x, cz + dz, dz === 0 && side < 0 ? 0.035 : 0.54)
+      b.stick([x, -0.82, cz + dz], [x - side * 0.92, -0.11, cz + dz], 0.095, '#665242')
+    }
+  }
+  return tideOrgan.pads.map(({x, z, color}, i) => {
+    b.cylinder([x, 0.18, z], 0.48, 0.5, 0.035, '#946e38', 28)
+    const key = new T.Mesh(new T.CylinderGeometry(0.42, 0.43, 0.04, 32),
+      new T.MeshStandardMaterial({color, emissive: color, emissiveIntensity: 0.12}))
+    key.position.set(x, 0.205, z)
+    group.add(key)
+    for (let j = -1; j <= 1; j++) {
+      const px = x + j * 0.19, pz = z - 0.72
+      const h = 0.96 + 0.33 * (2 - i) + 0.24 * (1 - Math.abs(j))
+      b.cylinder([px, 0.17 + h / 2, pz], 0.088, 0.105, h, '#cb9b54', 16)
+      b.cylinder([px, 0.17 + h, pz], 0.128, 0.10, 0.10, '#f2c980', 16)
+      b.cylinder([px, 0.224 + h, pz], 0.09, 0.09, 0.009, '#493c37', 16)
+      b.cylinder([px, 0.48, pz], 0.109, 0.109, 0.12, color, 16)
+    }
+    return key
+  })
+}
+
+function buildRadioCove(b: Batch) {
+  const [x, z] = radioCove.center
+  // A continuous sandbank runs from below the waterline up to the dry beach.
+  const bank = new T.LatheGeometry([
+    new T.Vector2(1.32, -1.4), new T.Vector2(1.20, -0.72),
+    new T.Vector2(1.09, -0.28), new T.Vector2(1, 0.08),
+    new T.Vector2(0.95, 0.13), new T.Vector2(0, 0.13),
+  ], 48)
+  b.put(bank, '#eed7a7', [x, 0, z], [radioCove.rx, 1, radioCove.rz], [0,0,0], b.kit.soil)
+  bank.dispose()
+  palm(b, 18.2, 0.15, -1.2)
+  for (const [tx, tz, dye] of [[18.98, -0.15, '#608f85'], [19.18, 0.65, '#bb795f']] as const) {
+    b.block([tx, 0.138, tz], [1.22, 0.014, 0.49], dye)
+    for (const side of [-1, 1])
+      b.block([tx + side * 0.46, 0.148, tz], [0.055, 0.009, 0.49], '#ece0b9')
+  }
+}
+
+function beachSpeaker(kit: ModelKit) {
+  const b = new Batch(kit)
+  b.block([0, 0.29, 0], [1.09, 0.24, 0.6], '#86715b')
+  b.block([0, 0.76, 0], [0.94, 0.75, 0.43], '#8f593d', [0,0,0], true)
+  b.block([0, 0.77, 0.22], [0.83, 0.61, 0.045], '#353e3b')
+  for (const dx of [-0.22, 0.22]) {
+    for (const [r, z, c] of [[0.17, 0.257, '#c19c66'], [0.138, 0.279, '#49504a'], [0.062, 0.302, '#262d2c']] as const)
+      b.cylinder([dx, 0.72, z], r, r, 0.026, c, 24, [Math.PI/2,0,0])
+  }
+  b.block([0, 0.986, 0.257], [0.63, 0.079, 0.03], '#d6ba7e')
+  b.stick([-0.27,1.12,0], [-0.27,1.25,0], 0.033, timber)
+  b.stick([-0.27,1.25,0], [0.27,1.25,0], 0.033, timber)
+  b.stick([0.27,1.25,0], [0.27,1.12,0], 0.033, timber)
+  b.stick([0.35,1.11,-0.12], [0.57,1.67,-0.12], 0.014, '#b9b7a4')
+  return pickable(b.finish(), 'radio', ...radioCove.speaker)
+}
+
 export function createScenery(low: boolean) {
   const kit = new ModelKit(),
     group = new T.Group(),
@@ -1124,6 +1228,7 @@ export function createScenery(low: boolean) {
     rand = seeded(602)
   leafDetail = low ? 1 : 2
   routes.length = 0
+  const organKeys = buildTideOrgan(staticParts, group)
   terrain(staticParts)
   meadow(staticParts)
   for (const { pts, width } of pathways) path(staticParts, pts, width)
@@ -1170,6 +1275,7 @@ export function createScenery(low: boolean) {
   // The new corners of the island.
   tulipBed(staticParts)
   pondDressing(staticParts)
+  buildRadioCove(staticParts)
   beachDressing(staticParts)
   palmSites.forEach(([x, z], i) => palm(staticParts, x, z, 0.6 + i * 2.1))
   telescope(staticParts, ...telescopeSite)
@@ -1281,6 +1387,7 @@ export function createScenery(low: boolean) {
     ([x, z], i) =>
       (add(pickable(exhibit(kit, i), 'projects', x, z, i)).position.y = 0.08),
   )
+  add(beachSpeaker(kit))
   add(pickable(mailbox(kit), 'contact', 2, 5.5))
   add(pickable(sign(kit), 'map', 0, 2))
   group.add(staticParts.finish())
@@ -1348,6 +1455,12 @@ export function createScenery(low: boolean) {
   return {
     group,
     interactives: objects,
+    lightOrganKey(index: number) {
+      organKeys.forEach((key, i) => {
+        key.material.emissiveIntensity = i === index ? 1.8 : 0.12
+        key.position.y = i === index ? 0.19 : 0.205
+      })
+    },
     crowns,
     balloon: ambience.balloon,
     popBalloon: ambience.popBalloon,
