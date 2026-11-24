@@ -1,5 +1,6 @@
 import * as T from 'three'
 import { daylight } from './daylight'
+import { weatherDate, type Weather } from './weather'
 import { paintSea } from '../world/water'
 import { softDot } from '../world/ambience'
 
@@ -63,9 +64,32 @@ export function makeSky(scene: T.Scene, low: boolean) {
     clouds.add(group)
   }
   scene.add(clouds)
+  const stormClouds = new T.Group()
+  stormClouds.visible = false
+  scene.add(stormClouds)
+  const bankMaterial = new T.MeshBasicMaterial({color: '#353d55', fog: false})
+  const litBankMaterial = new T.MeshBasicMaterial({color: '#555d76', fog: false})
+  for (let i = 0; i < 20; i++) {
+    const angle = i / 20 * Math.PI * 2
+    const bank = new T.Group()
+    bank.position.set(Math.sin(angle) * 68, 11 + random() * 6, Math.cos(angle) * 68)
+    bank.rotation.y = angle
+    for (let j = 0; j < 4; j++) {
+      const puff = new T.Mesh(cloudGeo, j < 2 ? bankMaterial : litBankMaterial)
+      puff.position.set(j * 6 - 8, Math.sin(j + i) * 1.6, j % 2 * 2)
+      puff.scale.set(8 + random() * 3, 2.7 + random() * 2.4, 4.5)
+      bank.add(puff)
+    }
+    stormClouds.add(bank)
+  }
   const starPos = []
   for (let i = 0; i < 230; i++)
     starPos.push((random() - 0.5) * 150, random() * 36 + 4, -28 - random() * 45)
+  for (let i = 0; i < 520; i++) {
+    const angle = random() * Math.PI * 2
+    const radius = 42 + random() * 36
+    starPos.push(Math.cos(angle) * radius, 4 + random() * 36, Math.sin(angle) * radius)
+  }
   // A southern star field faces the beach lookout across the water. It is
   // its own layer so it only fades in once the view has settled on the sky.
   const southPos: number[] = []
@@ -183,18 +207,28 @@ export function makeSky(scene: T.Scene, low: boolean) {
   let streakStart = -10
   const streakFrom = new T.Vector3(),
     streakDir = new T.Vector3()
-  function update(date: Date) {
-    const s = daylight(date)
+  let storm = false
+  let ambientSun = 0
+  function update(date: Date, weather: Weather = 'auto') {
+    const s = daylight(weatherDate(date, weather))
+    storm = weather === 'storm'
     sky.set(s.a[1]).lerp(tmp.set(s.b[1]), s.mix)
+    if (storm) sky.set('#414b65')
     fog.color.copy(sky)
+    fog.near = storm ? 19 : 43
+    fog.far = storm ? 67 : 118
     seaColor.set(s.a[2]).lerp(tmp.set(s.b[2]), s.mix)
+    if (storm) seaColor.set('#34546b')
     sea.material.color.copy(seaColor)
     sun.color.set(s.a[3]).lerp(tmp.set(s.b[3]), s.mix)
-    sun.intensity = s.intensity
+    ambientSun = storm ? .36 : s.intensity
+    sun.intensity = ambientSun
     const angle = ((s.hour - 6) / 12) * Math.PI
     // Direction only: the engine places the light (and its shadow box)
     // around whatever the camera is looking at.
     sunOffset.set(-Math.cos(angle) * 19, 7 + Math.abs(Math.sin(angle)) * 24, -10)
+    if (weather === 'sunset') sunOffset.set(-30, 7.2, 9)
+    if (weather === 'night') sunOffset.set(16, 21, -9)
     sun.position.copy(sun.target.position).add(sunOffset)
     hemi.intensity = 1.65 - s.night * 0.94
     hemi.color.set('#fff3d8').lerp(tmp.set('#b6cfff'), s.night)
@@ -204,6 +238,15 @@ export function makeSky(scene: T.Scene, low: boolean) {
     hemi.color.lerp(tmp.set('#ffc0c8'), golden * 0.7)
     hemi.groundColor.set('#b7d08c').lerp(tmp.set('#9d86bd'), golden * 0.75 + s.night * 0.3)
     sun.color.lerp(tmp.set('#ffa98a'), golden * 0.5)
+    if (storm) {
+      sun.color.set('#becdf5')
+      hemi.intensity = .78
+      hemi.color.set('#a0acce')
+      hemi.groundColor.set('#4a5865')
+    }
+    clouds.visible = !storm
+    stormClouds.visible = storm
+    orb.visible = !storm
     flies.visible = s.night > 0.18
     flyMaterial.opacity = s.night
     coveMoon.visible = s.night > 0.55
@@ -222,6 +265,10 @@ export function makeSky(scene: T.Scene, low: boolean) {
   scene.add(sun.target)
   return {
     update,
+    lightning(amount: number) {
+      sun.intensity = ambientSun + (storm ? amount * 1.1 : 0)
+      bankMaterial.color.set('#353d55').lerp(tmp.set('#808db1'), amount * .55)
+    },
     /** 0–1: how far the lookout's southern stars have faded in. */
     revealSky(amount: number) {
       skyReveal = amount
