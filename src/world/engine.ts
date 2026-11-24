@@ -333,6 +333,7 @@ export function startVillage(
     from: [number, number]
   } | null = null
   let lookout = 0
+  let skyReveal = 0
   let cozy = 0
   let running = false
   /** A tree the visitor is walking over to shake, and where to face. */
@@ -1218,7 +1219,13 @@ export function startVillage(
     }
     camera.updateProjectionMatrix()
     camera.updateMatrixWorld()
-    lookoutEvents?.update(lookout, night, dt, camera, motion.matches, paused)
+    // The lookout's stars wait until the camera has finished turning to the
+    // sky, then fade in; they vanish at once when you get up.
+    const settled = watching && lookout > 0.985
+    skyReveal = settled ? Math.min(1, skyReveal + dt / (motion.matches ? 0.01 : 1.6)) : 0
+    atmosphere.revealSky(skyReveal * skyReveal * (3 - 2 * skyReveal))
+    if (view.lookout) view.lookout.style.opacity = String(skyReveal)
+    lookoutEvents?.update(settled ? 1 : 0, night, dt, camera, motion.matches, paused)
     positionRadio(p.x, p.y + 1.25, p.z, Math.atan2(cameraOffset.x, cameraOffset.z), !!inside)
     view.signs.forEach((sign, index) => {
       if (!sign) return
@@ -1337,7 +1344,7 @@ export function startVillage(
           snapCamera = true
         },
         perf: () => ({ ...perf, cpu: +perf.cpu.toFixed(2), ratio: pixelRatio }),
-        state: () => ({ rest: rest?.stage ?? null, fishing: fishing.stage(), training: training ? training.stage + ':' + training.t.toFixed(2) : null, reach, x: visitor.group.position.x, z: visitor.group.position.z }),
+        state: () => ({ rest: rest?.stage ?? null, fishing: fishing.stage(), training: training ? training.stage + ':' + training.t.toFixed(2) : null, lookout: +lookout.toFixed(3), skyReveal: +skyReveal.toFixed(3), reach, x: visitor.group.position.x, z: visitor.group.position.z }),
       },
     })
   frame = requestAnimationFrame(tick)
