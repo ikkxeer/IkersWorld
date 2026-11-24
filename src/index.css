@@ -2573,21 +2573,248 @@ kbd {
 .radio-volume input { grid-column: 1 / -1; width: 100%; accent-color: #36775e; }
 .lookout-sky { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 
+
+/* ------------------------------ Pip's tour ------------------------------- */
 .pip-tour {
   position: absolute;
   z-index: 9;
-  bottom: 1rem;
+  bottom: 1.1rem;
   left: 50%;
+  display: flex;
+  align-items: flex-end;
+  gap: 0;
+  width: min(760px, calc(100% - 20px));
   transform: translateX(-50%);
-  width: min(680px, calc(100% - 24px));
-  border-radius: 18px;
-  padding: .85rem 1rem;
-  border: 2px solid #527255;
-  background: #fff8e4;
-  box-shadow: 0 5px 0 #223e36b0;
+  cursor: pointer;
+  animation: pip-in 0.55s cubic-bezier(0.2, 1.5, 0.4, 1) both;
 }
-.pip-tour header, .pip-tour-controls { display: flex; gap: .45rem; align-items: center; flex-wrap: wrap; }
-.pip-tour header { justify-content: space-between; }
-.pip-tour p { margin: .4rem 0 .65rem; }
-.pip-tour .list-link { width: auto; padding: .38rem .58rem; margin: 0; font-size: .875rem; }
-.pip-tour-controls progress { width: min(120px, 35%); accent-color: #527255; }
+@keyframes pip-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(40px) scale(0.92);
+  }
+}
+.pip-portrait {
+  position: relative;
+  z-index: 2;
+  flex: none;
+  width: 118px;
+  height: 118px;
+  margin-right: -26px;
+  margin-bottom: 18px;
+  padding: 6px;
+  background: radial-gradient(circle at 50% 40%, #fff9e8, #ffe9b8);
+  border: 4px solid #fffaf0;
+  border-radius: 50%;
+  box-shadow: 0 5px 0 #2c483f55, 0 0 0 3px #e65b4c;
+  animation: pip-bob 2.4s ease-in-out infinite;
+}
+@keyframes pip-bob {
+  50% {
+    transform: translateY(-5px) rotate(-3deg);
+  }
+}
+.pip-face {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.pip-face .pip-beak {
+  transform-origin: 60px 82px;
+}
+.pip-face.talking .pip-beak {
+  animation: pip-chat 0.18s ease-in-out infinite alternate;
+}
+@keyframes pip-chat {
+  to {
+    transform: scaleY(0.25);
+  }
+}
+.pip-face .pip-eye {
+  transform-origin: 60px 66px;
+  animation: pip-blink 4.2s infinite;
+}
+@keyframes pip-blink {
+  0%,
+  94%,
+  100% {
+    transform: scaleY(1);
+  }
+  97% {
+    transform: scaleY(0.1);
+  }
+}
+.pip-bubble {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  padding: 14px 18px 12px 40px;
+  color: #3a3226;
+  background: #fffaf0;
+  border-radius: 34px 38px 32px 36px / 30px 34px 36px 30px;
+  box-shadow: 0 6px 0 #2c483f44, 0 18px 40px #18352c40;
+}
+.pip-bubble header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: -32px;
+  margin-bottom: 6px;
+}
+.pip-name {
+  padding: 5px 16px 6px;
+  font-family: 'Lilita One', system-ui, sans-serif;
+  font-size: 1.05rem;
+  letter-spacing: 0.02em;
+  color: #fffaf0;
+  background: #3f6690;
+  border-radius: 999px;
+  box-shadow: 0 3px 0 #263d5c;
+  transform: rotate(-2deg);
+}
+.pip-stop {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px 4px 6px;
+  font-weight: 900;
+  font-size: 0.85rem;
+  color: #2f4a3c;
+  background: #ffe9a8;
+  border-radius: 999px;
+  box-shadow: 0 3px 0 #d9b558;
+  animation: pip-stamp 0.45s cubic-bezier(0.2, 1.8, 0.4, 1) both;
+}
+.pip-stop i {
+  font-style: normal;
+  font-size: 1.15rem;
+  line-height: 1;
+}
+@keyframes pip-stamp {
+  from {
+    opacity: 0;
+    transform: scale(0.4) rotate(-12deg);
+  }
+}
+.pip-close {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  margin-left: auto;
+  color: #6b5e48;
+  background: #f3e8cf;
+  border: 0;
+  border-radius: 50%;
+  cursor: pointer;
+}
+.pip-bubble p {
+  min-height: 3.2em;
+  margin: 0 0 8px;
+  font-size: 1.08rem;
+  font-weight: 700;
+  line-height: 1.45;
+}
+.pip-bubble p b {
+  color: #e2573f;
+  font-weight: 900;
+}
+.pip-caret {
+  display: inline-block;
+  width: 0.45em;
+  height: 0.45em;
+  margin-left: 3px;
+  background: #e2573f;
+  border-radius: 50%;
+  animation: atlas-blink 0.4s ease-in-out infinite alternate;
+}
+.pip-bubble footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  cursor: default;
+}
+.pip-dots {
+  display: flex;
+  gap: 6px;
+}
+.pip-dot {
+  width: 11px;
+  height: 11px;
+  padding: 0;
+  background: #e7dcc1;
+  border: 0;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: transform 0.2s ease, background 0.2s ease, width 0.25s ease;
+}
+.pip-dot.done {
+  background: #8fbf8a;
+}
+.pip-dot.on {
+  width: 26px;
+  background: #e2573f;
+  border-radius: 999px;
+}
+.pip-buttons {
+  display: flex;
+  gap: 6px;
+}
+.pip-buttons button {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  color: #2f4a3c;
+  background: #f3e8cf;
+  border: 0;
+  border-radius: 50%;
+  cursor: pointer;
+}
+.pip-buttons button:hover {
+  background: #ffe3a3;
+}
+.pip-buttons .pip-next {
+  color: #fffaf0;
+  background: #3f6690;
+  box-shadow: 0 3px 0 #263d5c;
+}
+.pip-more {
+  position: absolute;
+  right: 22px;
+  bottom: -14px;
+  color: #e2573f;
+  font-size: 1.1rem;
+  text-shadow: 0 2px 0 #fffaf0;
+  animation: pip-more 0.7s ease-in-out infinite alternate;
+}
+@keyframes pip-more {
+  to {
+    transform: translateY(5px);
+  }
+}
+@media (max-width: 620px) {
+  .pip-portrait {
+    width: 84px;
+    height: 84px;
+    margin-right: -22px;
+  }
+  .pip-bubble {
+    padding-left: 30px;
+  }
+  .pip-bubble p {
+    font-size: 0.98rem;
+  }
+}
+
+/* While Pip talks, the bottom HUD steps aside for the dialogue. */
+.pip-talking .hud-bottom,
+.pip-talking .touch-pad,
+.pip-talking .prompt,
+.pip-talking .intro-toast {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}

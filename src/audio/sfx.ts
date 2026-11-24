@@ -23,6 +23,7 @@ export type Sound =
   | 'charge'
   | 'burst'
   | 'gong'
+  | 'blip'
 
 let ctx: AudioContext | null = null
 let master: GainNode | null = null
@@ -182,6 +183,11 @@ export function play(sound: Sound, strength = 1) {
       tone(c, t, { type: 'sine', from: 140, to: 40, peak: 0.3, attack: 0.005, release: 0.7 })
       ;[523, 784, 1047].forEach((f, i) => tone(c, t + 0.05 + i * 0.06, { type: 'triangle', from: f, peak: 0.08, attack: 0.01, release: 0.5 }))
       break
+    case 'blip': {
+      // Pip's chatter: a tiny pitched chirp per syllable, Animalese-style.
+      tone(c, t, { type: 'square', from: 520 + strength * 260, to: 460 + strength * 240, peak: 0.022, attack: 0.004, release: 0.05 })
+      break
+    }
     case 'gong':
       for (const [f, peak] of [
         [110, 0.18],
