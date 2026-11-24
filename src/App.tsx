@@ -48,7 +48,8 @@ import Arrival from './ui/Arrival'
 import Title from './ui/Title'
 const Wardrobe = lazy(() => import('./ui/Wardrobe'))
 import { loadOutfit, saveOutfit } from './data/outfits'
-import type { MapPlace } from './data/places'
+import { places, type MapPlace } from './data/places'
+import { pipStops, pipWelcome } from './data/pipTour'
 const Journal = lazy(() => import('./ui/Panel'))
 import VillageMap, { ZoneIcon } from './ui/Map'
 const languageNames = { es: 'Español', ca: 'Català', en: 'English' }
@@ -256,6 +257,19 @@ function App() {
     setPanel(null)
     setProject(null)
   }, [])
+  useEffect(() => {
+    ctl.current?.guideTalk(panel === 'npc')
+    if (panel !== 'npc') return
+    const onEscape = (event: KeyboardEvent) => { if (event.key === 'Escape') close() }
+    window.addEventListener('keydown', onEscape)
+    return () => window.removeEventListener('keydown', onEscape)
+  }, [panel, close])
+  function tourStop(index: number) {
+    const place = places.find(candidate => candidate.id === pipStops[index].id)
+    if (!place || !ctl.current || ctl.current.transitioning()) return
+    close()
+    ctl.current.guideVisit(place.stand, place.at, () => open('npc', index))
+  }
   const events = useMemo<VillageEvents>(
     () => ({
       open,
@@ -708,7 +722,28 @@ function App() {
           </span>
         </button>
       </footer>
-      {panel && (
+      {panel === 'npc' && (
+        <section className="pip-tour" aria-label={t.guideName}>
+          <header>
+            <strong>{t.guideName}{project !== null && ' · ' + places.find(place => place.id === pipStops[project].id)?.name[lang]}</strong>
+            <button className="round" aria-label={t.close} onClick={close}><X size={18} /></button>
+          </header>
+          <p aria-live="polite">{project === null ? pipWelcome[lang] : pipStops[project][lang]}</p>
+          <nav>
+            {!light && pipStops.map((stop, index) => (
+              <button key={stop.id} className="list-link" aria-current={project === index ? 'step' : undefined}
+                onClick={() => tourStop(index)}>{places.find(place => place.id === stop.id)?.name[lang]}</button>
+            ))}
+            {!light && project !== null && <button className="list-link" onClick={() => {
+              if (!ctl.current || ctl.current.transitioning()) return
+              close()
+              ctl.current.guideVisit([3.2, 11.8], [3.95, 11.95], () => open('npc'))
+            }}>{t.dock}</button>}
+            <button className="list-link" onClick={() => open('map')}><MapIcon size={17} />{t.map}</button>
+          </nav>
+        </section>
+      )}
+      {panel && panel !== 'npc' && (
         <Suspense fallback={null}>
         <Journal
           enableSound={enableSound}

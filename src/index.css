@@ -2572,3 +2572,22 @@ kbd {
 .radio-volume { display: grid; grid-template-columns: 1fr auto; gap: .55rem 1rem; font-weight: 800; }
 .radio-volume input { grid-column: 1 / -1; width: 100%; accent-color: #36775e; }
 .lookout-sky { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+
+.pip-tour {
+  position: absolute;
+  z-index: 9;
+  bottom: 1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(680px, calc(100% - 24px));
+  border-radius: 18px;
+  padding: .85rem 1rem;
+  border: 2px solid #527255;
+  background: #fff8e4;
+  box-shadow: 0 5px 0 #223e36b0;
+}
+.pip-tour header, .pip-tour nav { display: flex; gap: .45rem; align-items: center; flex-wrap: wrap; }
+.pip-tour header { justify-content: space-between; }
+.pip-tour p { margin: .4rem 0 .65rem; }
+.pip-tour .list-link { width: auto; padding: .38rem .58rem; margin: 0; font-size: .875rem; }
+.pip-tour [aria-current="step"] { background: #d8ead2; }

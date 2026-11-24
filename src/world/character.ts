@@ -44,6 +44,7 @@ export interface IslandCharacter {
   land?: () => void
   /** A friendly wave (the visitor) or a hello back (NPCs). */
   wave?: () => void
+  talk?: (speaking: boolean) => void
   /** Gather energy, burst into a golden aura (shōnen power-up). */
   powerUp?: () => void
   /** Called on every footfall with the current pace (for footstep sounds). */
@@ -1866,6 +1867,15 @@ export function createGuide(): IslandCharacter {
     0.62,
     [Math.PI * 0.5, 0, 0],
   )
+  const lowerBill = joint(head, 0, .068, .20)
+  const bill = sculpt(material)
+  bill.oval('#d6803d', [0,-.012,.028], [.042,.015,.045])
+  bill.mesh(lowerBill)
+  const brows = [-1,1].map(side => {
+    const brow = sculpt(material)
+    brow.oval('#365174', [0,0,0], [.027,.006,.007], [0, 0, side * -.24])
+    return brow.mesh(head, [side * .073,.183,.196])
+  })
   face.mesh(head)
   const eyeShapes = sculpt(material)
   for (const side of [-1, 1]) {
@@ -1914,6 +1924,8 @@ export function createGuide(): IslandCharacter {
   group.add(shadow)
   group.name = 'guide'
 
+  let talking = false
+  let speechAge = 0
   let previous = 0
   let home: number | null = null
   let yaw = 0
@@ -1938,6 +1950,10 @@ export function createGuide(): IslandCharacter {
     group,
     settle() {},
     emote: (kind: Emote) => bubbles.show(kind),
+    talk(speaking) {
+      talking = speaking
+      speechAge = 0
+    },
     wave() {
       greet = 0
       bubbles.show('heart')
@@ -1954,10 +1970,10 @@ export function createGuide(): IslandCharacter {
       if (attention) {
         toPlayer.subVectors(attention, group.position)
         distance = Math.hypot(toPlayer.x, toPlayer.z)
-        if (distance < 4.6) {
+        if (distance < 4.6 || talking) {
           const bearing = Math.atan2(toPlayer.x, toPlayer.z)
           const offset = angleDelta(home, bearing)
-          bodyTarget = home + clamp(offset, -1.3, 1.3)
+          bodyTarget = talking ? bearing : home + clamp(offset, -1.3, 1.3)
           lookTarget = clamp(angleDelta(yaw, bearing), -0.8, 0.8)
         }
       }
@@ -2019,7 +2035,20 @@ export function createGuide(): IslandCharacter {
       headPitch = damp(headPitch, reduced ? 0 : near ? -0.1 : 0.03 * Math.sin(time * 0.9), 4, dt)
       head.rotation.set(headPitch - hop * 0.15, headYaw, headTilt - rock * 0.6)
       cap.rotation.x = -0.12 + (reduced ? 0 : capBounce.step(clamp(-hop * 0.5, -0.4, 0), dt))
-      const happy = !reduced && (greet < 1 || spin < 1)
+      speechAge += dt
+      const emphasis = Math.max(0, Math.sin(speechAge * 3.2))
+      const syllable = talking ? Math.max(0, Math.sin(speechAge * 17) * Math.sin(speechAge * 5.4)) : 0
+      lowerBill.rotation.x = syllable * .66
+      for (const [i, brow] of brows.entries()) {
+        brow.position.y = .183 + (talking ? .016 * emphasis * (i === 0 ? .64 : 1) : 0)
+        brow.rotation.z = talking ? (i === 0 ? -.19 : .19) * emphasis : 0
+      }
+      if (talking && !reduced) {
+        head.rotation.x -= .12 * emphasis
+        wings[1].rotation.z = .21 + 1.25 * emphasis
+        wings[0].rotation.x = -.45 * (1 - emphasis)
+      } else wings[0].rotation.x = 0
+      const happy = !talking && !reduced && (greet < 1 || spin < 1)
       eyes.visible = !happy
       happyEyes.visible = happy
       eyes.scale.y = reduced ? 1 : blink(time)

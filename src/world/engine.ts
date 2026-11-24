@@ -65,6 +65,9 @@ export function startVillage(
   cat.group.position.set(-6.2, 0.47, -0.22)
   cat.group.scale.setScalar(1.25)
   scene.add(cat.group)
+  let guideSpeaking = false
+  let guideFrame = 0
+  let guideDestination: Point | null = null
   const [guideX, guideZ] = anchors.npc
   guide.group.position.set(guideX, islandFloorHeight(guideX, guideZ), guideZ)
   // Pip waits beside the path at the foot of the pier, watching new arrivals.
@@ -182,7 +185,7 @@ export function startVillage(
     landingShadow.visible = false
   }
   /** Teleport to a spot (through the iris), facing a point, with a hop. */
-  function jump(stand: [number, number], look: [number, number], arrived?: () => void) {
+  function jump(stand: [number, number], look: [number, number], arrived?: () => void, onMove?: () => void) {
     const move = () => {
       jumpTime = jumpDuration
       const [x, z] = stand
@@ -198,6 +201,7 @@ export function startVillage(
       snapCamera = true
       setHover(null)
       visitor.group.rotation.y = Math.atan2(look[0] - x, look[1] - z)
+      onMove?.()
       updateReach()
     }
     // A quick hop and sparkle on arrival makes travelling feel magical.
@@ -805,7 +809,7 @@ export function startVillage(
                     : 3.5
       if (rest || fishing.active() || training?.stage === 'power') break
       // The campfire circle is wide: measure from its rim, not its centre.
-      const effective = zone === 'campfire' ? dist - 0.75 : dist
+      const effective = zone === 'campfire' ? dist - 0.75 : dist + (zone === 'npc' && guideDestination ? 0.5 : 0)
       if (dist <= limit && effective < best) {
         nearObject = o
         reach = zone
@@ -1101,7 +1105,7 @@ export function startVillage(
       pipReplyAt = -1
       guide.wave?.()
     }
-    guide.animate(elapsed, motion.matches, undefined, inside ? null : p)
+    guide.animate(elapsed, motion.matches, undefined, guideSpeaking ? camera.position : inside ? null : p)
     if (!inside) cat.animate(elapsed, motion.matches, undefined, p)
     if (!motion.matches) {
       guideMarker.position.y = 1.34 + Math.sin(elapsed * 2.4) * 0.045
@@ -1158,6 +1162,14 @@ export function startVillage(
         desired.z += (sz * 0.84 - desired.z) * 0.45 * cozy
       }
     }
+    guideFrame = motion.matches ? Number(guideSpeaking) :
+      T.MathUtils.damp(guideFrame, Number(guideSpeaking && !inside), 3.7, dt)
+    if (!inside && guideFrame > .001) {
+      const g = guide.group.position
+      const [x, z] = guideDestination ?? [g.x, g.z]
+      steerTarget.set(g.x * .74 + x * .26 + .35, -.62, g.z * .74 + z * .26 + 2.35)
+      desired.lerp(steerTarget, guideFrame)
+    }
     // Around the iris, glide the camera so the visitor sits in the middle of
     // the screen, right where the circle shrinks to and reopens from.
     // With reduced motion the camera stays put and the circle closes on the
@@ -1190,7 +1202,7 @@ export function startVillage(
     const beachSeat = benchSeats[benchSites.indexOf(radioCove.bench)]
     const watching = rest?.seat === beachSeat && rest.stage === 'seated'
     lookout = motion.matches ? Number(watching) : T.MathUtils.damp(lookout, Number(watching), 2.4, dt)
-    cameraOffset.set(8, 19, 27)
+    cameraOffset.set(8, T.MathUtils.lerp(19, 12, guideFrame), 27)
     if (lookout > 0.001) {
       const yaw = T.MathUtils.lerp(Math.atan2(8, 27), Math.PI * 1.25, lookout)
       const radius = T.MathUtils.lerp(Math.hypot(8, 27), 3.75, lookout)
@@ -1206,7 +1218,7 @@ export function startVillage(
     // A gentle diorama curve outdoors; rooms stay flat.
     worldCurve.value = inside ? 0 : 0.0072 * (1 - lookout)
     worldCurveFocus.value = cameraOffset.length()
-    const shown = attract ? (aspect < 0.9 ? 22 : 13.5) : T.MathUtils.lerp(span, aspect < 0.9 ? 3.1 : 2.45, lookout)
+    const shown = attract ? (aspect < 0.9 ? 22 : 13.5) : T.MathUtils.lerp(T.MathUtils.lerp(span, aspect < .9 ? 4.1 : 3.35, guideFrame), aspect < 0.9 ? 3.1 : 2.45, lookout)
     camera.left = -shown * aspect
     camera.right = shown * aspect
     camera.top = shown
@@ -1229,7 +1241,7 @@ export function startVillage(
     positionRadio(p.x, p.y + 1.25, p.z, Math.atan2(cameraOffset.x, cameraOffset.z), !!inside)
     view.signs.forEach((sign, index) => {
       if (!sign) return
-      const [x, z] = index === 0 ? anchors.tech : anchors.npc
+      const [x, z] = index === 0 ? anchors.tech : [guide.group.position.x, guide.group.position.z]
       projectCurved(projected.set(x, index === 0 ? 3.46 : 2.1, z), camera)
       const visible =
         !inside &&
@@ -1359,6 +1371,23 @@ export function startVillage(
     },
     zoom(delta) {
       if (!iris.active()) changeZoom(delta)
+    },
+    guideTalk(value) {
+      guideSpeaking = value
+      guide.talk?.(value)
+    },
+    guideVisit(stand, look, arrived) {
+      if (iris.active()) return
+      skipArrival()
+      jump(stand, look, arrived, () => {
+        const [x, z] = stand
+        const place = [[x - 1.05, z], [x + 1.05, z], [x, z - 1.05], [x, z + 1.05]]
+          .find(([gx, gz]) => walkable(gx, gz))
+        const [gx, gz] = place ?? stand
+        guide.group.position.set(gx, islandFloorHeight(gx, gz), gz)
+        guideDestination = look
+        guide.wave?.()
+      })
     },
     transitioning: iris.active,
     leave() {
