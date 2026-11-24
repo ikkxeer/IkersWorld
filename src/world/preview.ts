@@ -7,6 +7,8 @@ import { outfits } from '../data/outfits'
  * slowly spinning so each outfit can be seen from every side, plus
  * pre-rendered thumbnails for the outfit grid.
  */
+const portraitCache = new Map<string, string>()
+
 export function createOutfitStage(canvas: HTMLCanvasElement, reduced: boolean) {
   const renderer = new T.WebGLRenderer({ canvas, antialias: true, alpha: true })
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2))
@@ -124,6 +126,13 @@ export function createOutfitStage(canvas: HTMLCanvasElement, reduced: boolean) {
     },
     /** Render a front-facing portrait of every outfit, one per idle frame. */
     async thumbnails(size = 160, done: (id: string, url: string) => void) {
+      // Portraits never change: render them once per page load.
+      const missing = outfits.filter((o) => {
+        const url = portraitCache.get(o.id)
+        if (url) done(o.id, url)
+        return !url
+      })
+      if (!missing.length) return
       const shot = new T.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true })
       shot.setSize(size, size, false)
       shot.outputColorSpace = T.SRGBColorSpace
@@ -138,12 +147,14 @@ export function createOutfitStage(canvas: HTMLCanvasElement, reduced: boolean) {
       model.group.rotation.y = 0.32
       studio.add(model.group)
       try {
-        for (const outfit of outfits) {
+        for (const outfit of missing) {
           if (dead) break
-          if (outfit !== outfits[0]) model.wear?.(outfit.id, true)
+          model.wear?.(outfit.id, true)
           model.animate(1, true)
           shot.render(studio, portrait)
-          done(outfit.id, shot.domElement.toDataURL('image/png'))
+          const url = shot.domElement.toDataURL('image/webp', 0.9)
+          portraitCache.set(outfit.id, url)
+          done(outfit.id, url)
           await new Promise((resolve) => setTimeout(resolve, 16))
         }
       } finally {

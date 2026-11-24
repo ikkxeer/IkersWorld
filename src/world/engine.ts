@@ -45,6 +45,8 @@ export function startVillage(
   // refreshed a couple of dozen times a second instead of every frame.
   renderer.shadowMap.autoUpdate = false
   let lastShadow = 0
+  let pendingHover: PointerEvent | null = null
+  let lastShade: [number, number, number] = [NaN, NaN, NaN]
   renderer.shadowMap.type = T.PCFShadowMap
   renderer.outputColorSpace = T.SRGBColorSpace
   // Neutral tone mapping keeps pastel colours bright and clean instead of
@@ -331,6 +333,7 @@ export function startVillage(
     from: [number, number]
   } | null = null
   let lookout = 0
+  let skyReveal = 0
   let cozy = 0
   let running = false
   /** A tree the visitor is walking over to shake, and where to face. */
@@ -518,12 +521,12 @@ export function startVillage(
   canvas.addEventListener(
     'pointermove',
     (e) => {
-      if (!paused && !attract && !iris.active() && e.pointerType !== 'touch')
-        setHover(resolve(e))
+      // Picking is done once per frame in tick, not for every mouse event.
+      if (!paused && !attract && !iris.active() && e.pointerType !== 'touch') pendingHover = e
     },
     { signal: signal.signal },
   )
-  canvas.addEventListener('pointerleave', () => setHover(null), {
+  canvas.addEventListener('pointerleave', () => ((pendingHover = null), setHover(null)), {
     signal: signal.signal,
   })
   let down: [number, number] = [0, 0]
@@ -825,11 +828,20 @@ export function startVillage(
         project,
       )
   }
+  // Per-frame cost, read by the development hook (window.__island.perf).
+  renderer.info.autoReset = false
+  const perf = { cpu: 0, calls: 0, triangles: 0, frames: 0 }
   function tick(stamp: number) {
     if (dead || document.hidden) return
     frame = requestAnimationFrame(tick)
     if (last && stamp - last < (paused && !iris.active() ? 100 : low ? 31 : 15))
       return
+    const started = performance.now()
+    renderer.info.reset()
+    if (pendingHover) {
+      if (!paused && !iris.active()) setHover(resolve(pendingHover))
+      pendingHover = null
+    }
     iris.advance(stamp)
     adapt(stamp)
     const dt = Math.min(0.14, Math.max(0, (stamp - (last || stamp)) / 1000))
@@ -1207,7 +1219,13 @@ export function startVillage(
     }
     camera.updateProjectionMatrix()
     camera.updateMatrixWorld()
-    lookoutEvents?.update(lookout, night, dt, camera, motion.matches, paused)
+    // The lookout's stars wait until the camera has finished turning to the
+    // sky, then fade in; they vanish at once when you get up.
+    const settled = watching && lookout > 0.985
+    skyReveal = settled ? Math.min(1, skyReveal + dt / (motion.matches ? 0.01 : 1.6)) : 0
+    atmosphere.revealSky(skyReveal * skyReveal * (3 - 2 * skyReveal))
+    if (view.lookout) view.lookout.style.opacity = String(skyReveal)
+    lookoutEvents?.update(settled ? 1 : 0, night, dt, camera, motion.matches, paused)
     positionRadio(p.x, p.y + 1.25, p.z, Math.atan2(cameraOffset.x, cameraOffset.z), !!inside)
     view.signs.forEach((sign, index) => {
       if (!sign) return
@@ -1273,6 +1291,18 @@ export function startVillage(
         )
       } else iris.draw(width, height)
     }
+    // The shadow box follows the view (snapped to a coarse grid so it does
+    // not shimmer), so shadows stay crisp and only nearby things are drawn
+    // into the shadow map.
+    const viewHalf = (attract ? 30 : Math.min(34, Math.max(15, span * Math.max(1, aspect) * 1.25 + 3)))
+    const shadeRadius = Math.ceil(viewHalf / 4) * 4
+    const shadeX = Math.round(focus.x / 2) * 2,
+      shadeZ = Math.round(focus.z / 2) * 2
+    if (shadeX !== lastShade[0] || shadeZ !== lastShade[1] || shadeRadius !== lastShade[2]) {
+      atmosphere.shadeAround(shadeX, shadeZ, shadeRadius)
+      lastShade = [shadeX, shadeZ, shadeRadius]
+      lastShadow = 0
+    }
     if (stamp - lastShadow > (low ? 66 : 40)) {
       renderer.shadowMap.needsUpdate = true
       lastShadow = stamp
@@ -1280,6 +1310,10 @@ export function startVillage(
     const current = inside ? rooms[inside].scene : scene
     if (post) post.render(current, { night: inside ? 0.35 : night, golden: inside ? 0 : golden, inside: !!inside, time: elapsed }, dt)
     else renderer.render(current, camera)
+    perf.cpu = perf.cpu * 0.9 + (performance.now() - started) * 0.1
+    perf.calls = renderer.info.render.calls
+    perf.triangles = renderer.info.render.triangles
+    perf.frames++
   }
   document.addEventListener(
     'visibilitychange',
@@ -1309,7 +1343,8 @@ export function startVillage(
           visitor.settle()
           snapCamera = true
         },
-        state: () => ({ rest: rest?.stage ?? null, fishing: fishing.stage(), training: training ? training.stage + ':' + training.t.toFixed(2) : null, reach, x: visitor.group.position.x, z: visitor.group.position.z }),
+        perf: () => ({ ...perf, cpu: +perf.cpu.toFixed(2), ratio: pixelRatio }),
+        state: () => ({ rest: rest?.stage ?? null, fishing: fishing.stage(), training: training ? training.stage + ':' + training.t.toFixed(2) : null, lookout: +lookout.toFixed(3), skyReveal: +skyReveal.toFixed(3), reach, x: visitor.group.position.x, z: visitor.group.position.z }),
       },
     })
   frame = requestAnimationFrame(tick)

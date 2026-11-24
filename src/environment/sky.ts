@@ -12,6 +12,7 @@ export function makeSky(scene: T.Scene, low: boolean) {
   scene.fog = fog
   const hemi = new T.HemisphereLight(0xfff6d8, 0xb7d08c, 1.75)
   const sun = new T.DirectionalLight(0xffecc6, 2.6)
+  const sunOffset = new T.Vector3(0, 30, -10)
   sun.castShadow = true
   sun.shadow.mapSize.set(low ? 1024 : 2048, low ? 1024 : 2048)
   Object.assign(sun.shadow.camera, {
@@ -65,13 +66,15 @@ export function makeSky(scene: T.Scene, low: boolean) {
   const starPos = []
   for (let i = 0; i < 230; i++)
     starPos.push((random() - 0.5) * 150, random() * 36 + 4, -28 - random() * 45)
-  // A southern star field faces the beach lookout across the water.
+  // A southern star field faces the beach lookout across the water. It is
+  // its own layer so it only fades in once the view has settled on the sky.
+  const southPos: number[] = []
   for (let i = 0; i < 480; i++)
-    starPos.push(19.75 + (random() - 0.5) * 45, 0.9 + random() * 18, 28 + random() * 34)
+    southPos.push(19.75 + (random() - 0.5) * 45, 0.9 + random() * 18, 28 + random() * 34)
   for (let i = 0; i < 500; i++) {
     const forward = 30 + random() * 28
     const side = (random() - 0.5) * 23
-    starPos.push(19.75 + (forward + side) * 0.707, 1.4 + random() * 10, (forward - side) * 0.707)
+    southPos.push(19.75 + (forward + side) * 0.707, 1.4 + random() * 10, (forward - side) * 0.707)
   }
   const sg = new T.BufferGeometry()
   sg.setAttribute('position', new T.Float32BufferAttribute(starPos, 3))
@@ -84,6 +87,15 @@ export function makeSky(scene: T.Scene, low: boolean) {
   starMat.userData.noBend = true
   const stars = new T.Points(sg, starMat)
   scene.add(stars)
+  const southGeometry = new T.BufferGeometry()
+  southGeometry.setAttribute('position', new T.Float32BufferAttribute(southPos, 3))
+  const southMat = starMat.clone()
+  southMat.userData.noBend = true
+  southMat.opacity = 0
+  const southStars = new T.Points(southGeometry, southMat)
+  southStars.visible = false
+  scene.add(southStars)
+  let skyReveal = 0
   const orb = new T.Mesh(
     new T.SphereGeometry(2.2, 20, 12),
     new T.MeshBasicMaterial({ color: '#fff6c4', fog: false }),
@@ -180,11 +192,10 @@ export function makeSky(scene: T.Scene, low: boolean) {
     sun.color.set(s.a[3]).lerp(tmp.set(s.b[3]), s.mix)
     sun.intensity = s.intensity
     const angle = ((s.hour - 6) / 12) * Math.PI
-    sun.position.set(
-      -Math.cos(angle) * 19,
-      7 + Math.abs(Math.sin(angle)) * 24,
-      -10,
-    )
+    // Direction only: the engine places the light (and its shadow box)
+    // around whatever the camera is looking at.
+    sunOffset.set(-Math.cos(angle) * 19, 7 + Math.abs(Math.sin(angle)) * 24, -10)
+    sun.position.copy(sun.target.position).add(sunOffset)
     hemi.intensity = 1.65 - s.night * 0.94
     hemi.color.set('#fff3d8').lerp(tmp.set('#b6cfff'), s.night)
     // Golden hour: rosy sky light, violet bounce from the ground and a
@@ -197,6 +208,8 @@ export function makeSky(scene: T.Scene, low: boolean) {
     flyMaterial.opacity = s.night
     coveMoon.visible = s.night > 0.55
     starMat.opacity = s.night
+    southMat.opacity = s.night * skyReveal
+    southStars.visible = southMat.opacity > 0.005
     nightLevel = s.night
     orb.material.color.set(s.night > 0.55 ? '#e5e9ff' : '#ffebae')
     orb.position.set(
@@ -206,8 +219,26 @@ export function makeSky(scene: T.Scene, low: boolean) {
     )
     return s.night
   }
+  scene.add(sun.target)
   return {
     update,
+    /** 0–1: how far the lookout's southern stars have faded in. */
+    revealSky(amount: number) {
+      skyReveal = amount
+      southMat.opacity = nightLevel * amount
+      southStars.visible = southMat.opacity > 0.005
+    },
+    /** Centre the sun's shadow box on (x, z) with the given half-size. */
+    shadeAround(x: number, z: number, radius: number) {
+      sun.target.position.set(x, 0, z)
+      sun.position.copy(sun.target.position).add(sunOffset)
+      const cam = sun.shadow.camera
+      if (cam.right !== radius) {
+        cam.left = cam.bottom = -radius
+        cam.right = cam.top = radius
+        cam.updateProjectionMatrix()
+      }
+    },
     animate: (t: number) => {
       if (nightLevel > 0.6 && t > nextStreak) {
         streakStart = t
