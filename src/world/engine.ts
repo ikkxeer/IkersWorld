@@ -8,7 +8,7 @@ import { makeSky } from '../environment/sky'
 import { makeIris } from './iris'
 import { createPostFX } from './postfx'
 import { daylight } from '../environment/daylight'
-import { bendScene, projectCurved, unbendRay, worldCurve, worldCurveFocus } from './curve'
+import { bendScene, cutaway, projectCurved, unbendRay, worldCurve, worldCurveFocus } from './curve'
 import { anchors, destinations } from '../data/village'
 import { benchSites, campfire, fishingSpot, shape, shrine, radioCove, tideOrgan } from '../data/island'
 import { createFishing } from './fishing'
@@ -1252,6 +1252,14 @@ export function startVillage(
     camera.lookAt(focus)
     camera.updateProjectionMatrix()
     camera.updateMatrixWorld()
+    // Props near the lens or in front of the visitor dissolve during the
+    // transformation instead of being sliced by the near plane.
+    cutaway.on.value = powerTime !== null && !inside ? 1 - T.MathUtils.smoothstep(powerTime, 12.8, transformationEnd) : 0
+    if (cutaway.on.value > 0) {
+      cutaway.target.value.set(ringCenter.x, ringCenter.y + 0.85, ringCenter.z).applyMatrix4(camera.matrixWorldInverse)
+      cutaway.viewToWorld.value.copy(camera.matrixWorld)
+      cutaway.ring.value.copy(ringCenter)
+    }
     // The lookout's stars wait until the camera has finished turning to the
     // sky, then fade in; they vanish at once when you get up.
     const settled = watching && lookout > 0.985
