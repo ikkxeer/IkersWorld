@@ -90,7 +90,7 @@ export function createTransformation(scene: T.Scene, x: number, floor: number, z
       const charge = smooth(time, vortexTime - .35, ruptureTime - .5)
       const reveal = smooth(age, .07, .38) * (1 - smooth(time, 12.55, transformationEnd))
       const cloudOpacity = age < 0 ? charge : 1 - smooth(age, .01, .69)
-      light.intensity = reduced ? 3 * reveal : 2.2 * charge * cloudOpacity + 6.5 * reveal + 11 * (1 - smooth(Math.abs(age), 0, .24))
+      light.intensity = reduced ? 3 * reveal : 2.2 * charge * cloudOpacity + 4.8 * reveal + 11 * (1 - smooth(Math.abs(age), 0, .24))
       smoke.forEach(({ puff, angle, delay, speed }, i) => {
         puff.visible = cloudOpacity > .01
         if (!puff.visible) return
@@ -153,7 +153,7 @@ export function frameTransformation(
   const pullOut = smooth(age, .055, .63)
   let yaw = angle
   let range = mix(2, 1.16, zoomIn * (1 - pullOut))
-  let height = mix(.46, -.78, pullOut)
+  let height = mix(.46, -.38, pullOut)
   let zoom = mix(wide, .57, zoomIn * (1 - pullOut))
   const target = new T.Vector3(center.x, center.y + 1.03, center.z)
   if (!reduced && time < wideTime) {
