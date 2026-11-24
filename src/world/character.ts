@@ -1795,7 +1795,7 @@ export function createVisitor(initialOutfit?: string): IslandCharacter {
     }
     const auraTarget = Math.max(charge * .45 * smoothstep01((powerT - wideTime) / 2), burst * 1.08, golden > 0 ? .54 : 0)
     auraW = damp(auraW, auraTarget, 10, dt)
-    aura.visible = auraW > 0.02 && !reduced
+    aura.visible = auraW > 0.02
     if (aura.visible) {
       const flick = 1 + Math.sin(time * 31) * 0.06 + Math.sin(time * 17.3) * 0.05
       aura.position.y = 0.02

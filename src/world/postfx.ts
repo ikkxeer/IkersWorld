@@ -61,7 +61,8 @@ export interface PostLook {
   golden: number
   inside: boolean
   time: number
-  cinematic?: boolean
+  /** 0–1 blend into the transformation's crisp cinematic look. */
+  cinematic?: number
 }
 
 /**
@@ -101,11 +102,12 @@ export function createPostFX(renderer: T.WebGLRenderer, scene: T.Scene, camera: 
       render.scene = current
       // Outdoors the blur at the top and bottom makes the island feel like a
       // tiny model; rooms keep it subtle.
-      const tilt = look.cinematic ? 0 : look.inside ? 1.6 : 3.4
+      const cine = look.cinematic ?? 0
+      const tilt = (look.inside ? 1.6 : 3.4) * (1 - cine)
       tiltH.uniforms.h.value = tilt / width
       tiltV.uniforms.v.value = tilt / height
       tiltH.uniforms.r.value = tiltV.uniforms.r.value = 0.5
-      bloom.strength = (look.cinematic ? 0.16 : 0.26) + 0.5 * look.night + 0.12 * look.golden
+      bloom.strength = 0.26 - 0.1 * cine + 0.5 * look.night + 0.12 * look.golden
       bloom.threshold = 0.9 - 0.25 * look.night
       grade.uniforms.golden.value = look.golden
       grade.uniforms.night.value = look.night
