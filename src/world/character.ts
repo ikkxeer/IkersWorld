@@ -1131,8 +1131,14 @@ export function createVisitor(initialOutfit?: string): IslandCharacter {
         void main() {
           vUv = uv;
           vec4 view = modelViewMatrix * vec4(position, 1.0);
-          vec3 n = normalize(normalMatrix * normal);
-          vRim = 1.0 - abs(dot(n, normalize(-view.xyz)));
+          // The lathe's tips have zero-length normals: normalising those
+          // gives NaN on real GPUs, which the bloom then smears into
+          // flickering blotches. Treat them as facing the camera.
+          vec3 n = normalMatrix * normal;
+          float nl = length(n);
+          vec3 eye = -view.xyz;
+          float el = length(eye);
+          vRim = nl > 1e-5 && el > 1e-5 ? 1.0 - abs(dot(n / nl, eye / el)) : 0.0;
           gl_Position = projectionMatrix * view;
         }`,
       fragmentShader: `
@@ -1146,7 +1152,7 @@ export function createVisitor(initialOutfit?: string): IslandCharacter {
           float f = n(q) * 0.6 + n(q * 2.3 + 4.1) * 0.4;
           float tongues = smoothstep(0.15, 0.75, f + 0.75 - vUv.y * 1.05);
           float base = smoothstep(0.0, 0.08, vUv.y);
-          float a = tongues * base * (0.35 + 0.9 * pow(vRim, 1.6)) * power;
+          float a = clamp(tongues * base * (0.35 + 0.9 * pow(clamp(vRim, 0.0, 1.0), 1.6)) * power, 0.0, 1.5);
           vec3 c = mix(core, edge, clamp(vUv.y * 1.2 + vRim * 0.4, 0.0, 1.0));
           gl_FragColor = vec4(c * a, a);
         }`,
