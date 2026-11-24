@@ -45,7 +45,6 @@ import type {
 } from './world/contracts'
 import Game from './ui/Game'
 import Arrival from './ui/Arrival'
-import Title from './ui/Title'
 const Wardrobe = lazy(() => import('./ui/Wardrobe'))
 import { loadOutfit, saveOutfit } from './data/outfits'
 import { places, type MapPlace } from './data/places'
@@ -193,8 +192,7 @@ function App() {
   const [ready, setReady] = useState(false),
     [arrivalGone, setArrivalGone] = useState(false),
     [intro, setIntro] = useState(!deep),
-    [titleOn, setTitleOn] = useState(!deep),
-    [titleLeaving, setTitleLeaving] = useState(false),
+    [arrivalShown, setArrivalShown] = useState(false),
     [hud, setHud] = useState<'hidden' | 'enter' | 'shown'>(() => (deep ? 'shown' : 'hidden')),
     [welcome, setWelcome] = useState(false),
     [outfit, setOutfit] = useState(loadOutfit),
@@ -350,23 +348,6 @@ function App() {
     }
   }
   const closeWardrobe = useCallback(() => setWardrobe(false), [])
-  const start = useCallback(() => {
-    if (!titleOn || titleLeaving) return
-    setTitleLeaving(true)
-    ctl.current?.start()
-    setTimeout(() => setTitleOn(false), 450)
-  }, [titleOn, titleLeaving])
-  // Any key (or a tap) leaves the title screen.
-  useEffect(() => {
-    if (!titleOn || !ready) return
-    const press = (e: KeyboardEvent) => {
-      if (e.ctrlKey || e.altKey || e.metaKey || e.key === 'Tab' || e.key === 'Shift') return
-      e.preventDefault()
-      start()
-    }
-    window.addEventListener('keydown', press)
-    return () => window.removeEventListener('keydown', press)
-  }, [titleOn, ready, start])
   useEffect(() => {
     if (!welcome) return
     const id = setTimeout(() => setWelcome(false), 4900)
@@ -375,7 +356,7 @@ function App() {
   useEffect(() => {
     const action = (e: KeyboardEvent) => {
       if (
-        titleOn ||
+        (hud === 'hidden' && !light) ||
         wardrobe ||
         ctl.current?.transitioning() ||
         e.repeat ||
@@ -411,18 +392,27 @@ function App() {
     }
     window.addEventListener('keydown', action)
     return () => window.removeEventListener('keydown', action)
-  }, [menu, panel, intro, open, inside, ready, titleOn, wardrobe])
+  }, [menu, panel, intro, open, inside, ready, hud, light, wardrobe])
   useEffect(() => {
     if (gift === null) return
     const id = setTimeout(() => setGift(null), 9000)
     return () => clearTimeout(id)
   }, [gift])
-  // Let the loading screen fade out while the 3D arrival takes over.
+  // Give the illustrated descent time to read even on a warm cache. As
+  // the clouds fade, release the paused 3D visitor into the same descent.
   useEffect(() => {
-    if (!ready) return
-    const id = setTimeout(() => setArrivalGone(true), 800)
-    return () => clearTimeout(id)
-  }, [ready])
+    if (deep) return
+    const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches
+    const id = window.setTimeout(() => setArrivalShown(true), reduced ? 0 : 1850)
+    return () => window.clearTimeout(id)
+  }, [deep])
+  const arrivalHandoff = ready && arrivalShown
+  useEffect(() => {
+    if (!arrivalHandoff) return
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) setHud('shown')
+    const id = window.setTimeout(() => setArrivalGone(true), 800)
+    return () => window.clearTimeout(id)
+  }, [arrivalHandoff])
   // The painted cover only shows in light (map-only) mode; while the 3D
   // island loads, the arrival screen is on top anyway.
   const hasCover = light
@@ -432,22 +422,9 @@ function App() {
         'screen playing' +
         (light ? ' light-mode' : '') +
         (photo && !panel ? ' photo-mode' : '') +
-        (titleOn && !light ? ' title-mode' : '') +
         (hud === 'hidden' && !light ? ' hud-hidden' : hud === 'enter' ? ' hud-enter' : '')
       }
     >
-      {titleOn && ready && !light && (
-        <Title
-          subtitle={t.brand}
-          prompt={matchMedia('(pointer: coarse)').matches ? t.tapStart : t.pressStart}
-          credits={t.credits}
-          leaving={titleLeaving}
-          sound={sound}
-          soundLabel={sound ? t.soundOff : t.soundOn}
-          onStart={start}
-          onSound={toggleSound}
-        />
-      )}
       {wardrobe && (
         <Suspense fallback={null}>
         <Wardrobe
@@ -488,9 +465,9 @@ function App() {
           controller={ctl}
           events={events}
           ready={loaded}
-          paused={!!panel || menu || wardrobe}
+          paused={!!panel || menu || wardrobe || (!deep && !arrivalHandoff)}
           workshop={t.workshopSign}
-          title={titleOn}
+          skipIntro={!!deep}
           outfit={outfit}
           guide={t.guideName}
           exhibit={exhibit}
@@ -553,7 +530,7 @@ function App() {
           </div>
         </div>
       </header>
-      {!arrivalGone && !light && <Arrival label={t.loading3D} leaving={ready} />}
+      {!arrivalGone && !light && (!deep || !ready) && <Arrival label={t.loading3D} leaving={arrivalHandoff} />}
       {light && !panel && (
         <section className="light-home">
           <h1>{t.light}</h1>

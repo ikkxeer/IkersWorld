@@ -50,6 +50,7 @@ export interface VillageView {
   lookout?: HTMLCanvasElement | null
   /** Begin on the title screen: the camera circles the island and waits. */
   title?: boolean
+  skipIntro?: boolean
   /** Outfit to start in. */
   outfit?: string
 }

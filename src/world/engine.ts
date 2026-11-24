@@ -137,8 +137,8 @@ export function startVillage(
   const FALL = 4.8
   const FALL_HEIGHT = 24
   const landingSpot = new T.Vector3(2.5, islandFloorHeight(2.5, shape.pierFrom + 1.7), shape.pierFrom + 1.7)
-  let fallT = motion.matches ? FALL + 3 : 0
-  let landed = motion.matches
+  let landed = motion.matches || !!view.skipIntro
+  let fallT = landed ? FALL + 3 : 0
   /** Title screen ("attract mode"): the island turns slowly until start. */
   let attract = !!view.title
   const cloudBank = new T.Group()

@@ -12,7 +12,7 @@ export default function Game({
   guide,
   exhibit,
   openLabel,
-  title = false,
+  skipIntro = false,
   outfit,
 }: {
   controller: RefObject<VillageController | null>
@@ -23,14 +23,14 @@ export default function Game({
   guide: string
   exhibit?: { index: number; name: string; tags: string[]; nearby: boolean }
   openLabel: string
-  /** Start on the title screen (read once, when the engine boots). */
-  title?: boolean
+  /** Start on the ground for portfolio links that open a specific panel. */
+  skipIntro?: boolean
   /** Outfit to start in (read once, when the engine boots). */
   outfit?: string
 }) {
   const canvas = useRef<HTMLCanvasElement>(null),
     blocked = useRef(paused),
-    titleAtBoot = useRef(title),
+    skipAtBoot = useRef(skipIntro),
     outfitAtBoot = useRef(outfit)
   const workshopSign = useRef<HTMLSpanElement>(null)
   const guideSign = useRef<HTMLSpanElement>(null)
@@ -51,7 +51,7 @@ export default function Game({
           exhibit: exhibitSign.current,
           iris: iris.current,
           lookout: sky.current,
-          title: titleAtBoot.current,
+          skipIntro: skipAtBoot.current,
           outfit: outfitAtBoot.current,
         })
         controller.current.pause(blocked.current)
