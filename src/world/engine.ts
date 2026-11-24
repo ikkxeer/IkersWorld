@@ -764,7 +764,14 @@ export function startVillage(
     samples = 0,
     lastAdapt = 0
   function adapt(stamp: number) {
-    if (paused || document.hidden) return
+    // The transformation is the heaviest scene: don't let it knock the
+    // resolution down (and then step it back up, resizing the canvas over
+    // and over afterwards), so frames aren't sampled while it plays.
+    if (paused || document.hidden || training?.stage === 'power' || cineLook > 0.02) {
+      sampleStart = 0
+      samples = 0
+      return
+    }
     if (!sampleStart) sampleStart = stamp
     samples++
     const elapsedMs = stamp - sampleStart
@@ -776,7 +783,9 @@ export function startVillage(
     if (stamp - lastAdapt < 3000) return
     let next = pixelRatio
     if (average > target * 1.45) next = Math.max(minRatio, pixelRatio - 0.2)
-    else if (average < target * 1.1) next = Math.min(maxRatio, pixelRatio + 0.1)
+    // Win resolution back only after a long smooth stretch, so it settles
+    // instead of oscillating (each change resizes the canvas).
+    else if (average < target * 1.05 && stamp - lastAdapt > 10000) next = Math.min(maxRatio, pixelRatio + 0.1)
     if (Math.abs(next - pixelRatio) > 0.01) {
       pixelRatio = next
       lastAdapt = stamp
