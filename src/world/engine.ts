@@ -1,6 +1,6 @@
 import { createCinematicOverlay } from './cinematicOverlay'
 import { weatherDate, type Weather } from '../environment/weather'
-import { createTransformation, frameTransformation, ruptureTime, transformationEnd, wideTime, vortexTime } from './transformation'
+import { createTransformation, frameTransformation, transformationShake, ruptureTime, transformationEnd, wideTime, vortexTime } from './transformation'
 import { createLookout } from './lookout'
 import { disposeRadio, positionRadio } from '../audio/beachRadio'
 import * as T from 'three'
@@ -1231,16 +1231,20 @@ export function startVillage(
       worldCurve.value *= T.MathUtils.smoothstep(powerTime, transformationEnd - 1.4, transformationEnd)
       worldCurveFocus.value = cameraOffset.length()
     }
-    camera.left = -shown * aspect
-    camera.right = shown * aspect
-    camera.top = shown
-    camera.bottom = -shown
+    // Shake slides the frame on screen instead of moving the camera, so the
+    // near clipping plane (and what it cuts) stays still.
+    let jitterX = powerTime !== null && !inside ? transformationShake.x : 0
+    let jitterY = powerTime !== null && !inside ? transformationShake.y : 0
+    if (shake > 0.001 && (!motion.matches || powerTime !== null)) {
+      jitterX += Math.sin(elapsed * 63) * 0.12 * shake
+      jitterY += Math.cos(elapsed * 57) * 0.08 * shake
+    }
+    camera.left = -shown * aspect + jitterX
+    camera.right = shown * aspect + jitterX
+    camera.top = shown + jitterY
+    camera.bottom = -shown + jitterY
     camera.position.copy(focus).add(cameraOffset)
     camera.lookAt(focus)
-    if (shake > 0.001 && (!motion.matches || powerTime !== null)) {
-      camera.position.x += Math.sin(elapsed * 63) * 0.12 * shake
-      camera.position.y += Math.cos(elapsed * 57) * 0.08 * shake
-    }
     camera.updateProjectionMatrix()
     camera.updateMatrixWorld()
     // The lookout's stars wait until the camera has finished turning to the

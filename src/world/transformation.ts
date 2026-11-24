@@ -138,12 +138,17 @@ export function createTransformation(scene: T.Scene, x: number, floor: number, z
   }
 }
 
+/** Screen-space camera tremor for the current frame, in world units. */
+export const transformationShake = { x: 0, y: 0 }
+
 /** The detail shots are cuts. The orbit, punch-in and reveal share a continuous rig. */
 export function frameTransformation(
   time: number, reduced: boolean, center: T.Vector3, face: T.Vector3, fists: T.Vector3,
   heading: number, focus: T.Vector3, offset: T.Vector3, aspect: number, span: number,
 ) {
-  const entry = smooth(time, 0, .34)
+  // A hard cut in: flying the camera in would sweep its near clipping plane
+  // through the trees around the ring and make them blink.
+  const entry = time > 0 ? 1 : 0
   const exit = 1 - smooth(time, 12.8, transformationEnd)
   const weight = entry * exit
   const age = time - ruptureTime
@@ -204,20 +209,25 @@ export function frameTransformation(
       // Shot 9: crane up and away to a high aerial before handing back.
       const k = smooth(age, 3.5, transformationEnd - ruptureTime)
       yaw = heading + .25 + k * .6
-      range = 2.6
-      height = mix(.6, 2.6, k)
+      // Pull out above the rock stacks so the hand-back never slices them.
+      range = mix(2.6, 9, k)
+      height = mix(.6, 8, k)
       zoom = mix(wide * 1.1, wide * 2.3, k)
       target.y = center.y + .8
     }
   }
   focus.lerp(target, weight)
   offset.lerp(target.set(Math.sin(yaw) * range, height, Math.cos(yaw) * range), weight)
+  // The tremor is applied to the projection, not the camera position: the
+  // camera sits so close that moving it would slide the near clipping plane
+  // back and forth through the props around the ring, making them blink.
+  transformationShake.x = transformationShake.y = 0
   if (!reduced) {
     const strain = .010 + .062 * smooth(time, vortexTime, ruptureTime)
     const shock = age >= 0 ? .113 * (1 - smooth(age, 0, .5)) : 0
     const tremor = (strain * (1 - smooth(age, 0, .5)) + shock) * entry
-    offset.x += Math.sin(time * 63) * tremor
-    offset.y += Math.cos(time * 51) * tremor * .65
+    transformationShake.x = Math.sin(time * 63) * tremor
+    transformationShake.y = Math.cos(time * 51) * tremor * .65
   }
   const shown = mix(span, zoom, weight)
   // Never let the bottom edge of the frame dip under the islet's floor: the
