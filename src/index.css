@@ -2586,8 +2586,8 @@ kbd {
   background: #fff8e4;
   box-shadow: 0 5px 0 #223e36b0;
 }
-.pip-tour header, .pip-tour nav { display: flex; gap: .45rem; align-items: center; flex-wrap: wrap; }
+.pip-tour header, .pip-tour-controls { display: flex; gap: .45rem; align-items: center; flex-wrap: wrap; }
 .pip-tour header { justify-content: space-between; }
 .pip-tour p { margin: .4rem 0 .65rem; }
 .pip-tour .list-link { width: auto; padding: .38rem .58rem; margin: 0; font-size: .875rem; }
-.pip-tour [aria-current="step"] { background: #d8ead2; }
+.pip-tour-controls progress { width: min(120px, 35%); accent-color: #527255; }

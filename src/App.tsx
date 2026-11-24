@@ -49,7 +49,7 @@ import Title from './ui/Title'
 const Wardrobe = lazy(() => import('./ui/Wardrobe'))
 import { loadOutfit, saveOutfit } from './data/outfits'
 import { places, type MapPlace } from './data/places'
-import { pipStops, pipWelcome } from './data/pipTour'
+import { pipControls, pipStops, pipWelcome } from './data/pipTour'
 const Journal = lazy(() => import('./ui/Panel'))
 import VillageMap, { ZoneIcon } from './ui/Map'
 const languageNames = { es: 'Español', ca: 'Català', en: 'English' }
@@ -177,7 +177,8 @@ function App() {
     [sound, toggleSound, enableSound] = useAmbience()
   const [mode, setMode] = useState<'game' | 'light'>('game'),
     [panel, setPanel] = useState<Panel | null>(deep),
-    [project, setProject] = useState<number | null>(null)
+    [project, setProject] = useState<number | null>(null),
+    [tourPaused, setTourPaused] = useState(false)
   const [pos, setPos] = useState<[number, number]>([2.5, 14.65]),
     [near, setNear] = useState<{ target: Target; exhibit?: number } | null>(
       null,
@@ -242,6 +243,7 @@ function App() {
     setMenu(false)
     setIntro(false)
     setProject(i ?? null)
+    setTourPaused(false)
     setPanel(p)
   }, [])
   const close = useCallback(() => {
@@ -249,6 +251,9 @@ function App() {
     setProject(null)
   }, [])
   const touring = panel === 'npc'
+  const tourStop = touring && project !== null ? pipStops[project] : undefined
+  const tourPlace = tourStop ? places.find(place => place.id === tourStop.id) : undefined
+  const tourFinished = touring && project === pipStops.length
   useEffect(() => {
     ctl.current?.guideTalk(touring)
     if (!touring) return
@@ -257,15 +262,14 @@ function App() {
     return () => window.removeEventListener('keydown', onEscape)
   }, [touring, close])
   useEffect(() => {
-    if (!touring) return
-    const place = project === null ? undefined : places.find(candidate => candidate.id === pipStops[project].id)
-    ctl.current?.guideFocus(place?.at ?? null)
-  }, [touring, project])
+    if (touring) ctl.current?.guideFocus(tourPlace?.at ?? null)
+  }, [touring, tourPlace])
   useEffect(() => {
-    if (!touring || project === null || project + 1 >= pipStops.length) return
-    const timer = window.setTimeout(() => setProject(project + 1), 12500)
+    if (!touring || tourPaused || tourFinished) return
+    const next = (project ?? -1) + 1
+    const timer = window.setTimeout(() => setProject(next), project === null ? 3200 : 12500)
     return () => window.clearTimeout(timer)
-  }, [touring, project])
+  }, [touring, project, tourPaused, tourFinished])
   const events = useMemo<VillageEvents>(
     () => ({
       open,
@@ -716,18 +720,18 @@ function App() {
       {panel === 'npc' && (
         <section className="pip-tour" aria-label={t.guideName}>
           <header>
-            <strong>{t.guideName}{project !== null && ' · ' + places.find(place => place.id === pipStops[project].id)?.name[lang]}</strong>
+            <strong>{t.guideName}{tourPlace && ' · ' + tourPlace.name[lang]}</strong>
             <button className="round" aria-label={t.close} onClick={close}><X size={18} /></button>
           </header>
-          <p aria-live="polite">{project === null ? pipWelcome[lang] : pipStops[project][lang]}</p>
-          <nav>
-            {!light && pipStops.map((stop, index) => (
-              <button key={stop.id} className="list-link" aria-current={project === index ? 'step' : undefined}
-                onClick={() => setProject(index)}>{places.find(place => place.id === stop.id)?.name[lang]}</button>
-            ))}
-            {!light && project !== null && <button className="list-link" onClick={() => setProject(null)}>{t.dock}</button>}
-            <button className="list-link" onClick={() => open('map')}><MapIcon size={17} />{t.map}</button>
-          </nav>
+          <p aria-live="polite">{tourStop?.[lang] ?? (tourFinished ? pipControls[lang].end : pipWelcome[lang])}</p>
+          <div className="pip-tour-controls">
+            {tourStop && project !== null && (
+              <progress aria-label={pipControls[lang].progress} value={project + 1} max={pipStops.length} />
+            )}
+            {!tourFinished && <button className="list-link" onClick={() => setTourPaused(value => !value)}>
+              {tourPaused ? pipControls[lang].resume : pipControls[lang].pause}
+            </button>}
+          </div>
         </section>
       )}
       {panel && panel !== 'npc' && (

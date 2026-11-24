@@ -1,7 +1,12 @@
 export const pipWelcome = {
-  es: '¡Soy Pip! Elige un lugar para empezar. Te iré mostrando la isla y lo que puedes hacer en cada rincón.',
-  ca: 'Soc en Pip! Tria un lloc per començar. Et mostraré l’illa i què pots fer a cada racó.',
-  en: 'I’m Pip! Choose a place to begin. I’ll show you around the island and explain what you can do there.',
+  es: '¡Soy Pip! Ven, te enseño la isla y lo que puedes hacer en cada rincón.',
+  ca: 'Soc en Pip! Vine, t’ensenyo l’illa i què pots fer a cada racó.',
+  en: 'I’m Pip! Come see the island and find out what you can do at each stop.',
+}
+export const pipControls = {
+  es: { pause: 'Pausar recorrido', resume: 'Continuar recorrido', progress: 'Progreso del recorrido', end: '¡Hasta aquí el recorrido! Ya puedes explorar la isla a tu aire.' },
+  ca: { pause: 'Pausa el recorregut', resume: 'Continua el recorregut', progress: 'Progrés del recorregut', end: 'Aquí acaba el recorregut! Ara pots explorar l’illa al teu aire.' },
+  en: { pause: 'Pause tour', resume: 'Resume tour', progress: 'Tour progress', end: 'That’s the end of the tour! Go explore the island at your own pace.' },
 }
 
 export const pipStops = [
