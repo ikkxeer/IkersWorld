@@ -133,12 +133,15 @@ export function startVillage(
 
   /* ------------------------- Arrival from the sky ------------------------ */
   // The visitor drifts down through a cloud bank under an umbrella and lands
-  // softly on the pier. Skipped with reduced motion or a deep link.
+  // softly on the pier. Always played (only a deep link skips it).
   const FALL = 4.8
   const FALL_HEIGHT = 24
   const landingSpot = new T.Vector3(2.5, islandFloorHeight(2.5, shape.pierFrom + 1.7), shape.pierFrom + 1.7)
-  let landed = motion.matches || !!view.skipIntro
+  let landed = !!view.skipIntro
   let fallT = landed ? FALL + 3 : 0
+  // Without the title screen, wait for the loading screen to fade first so
+  // the whole descent is on screen.
+  let fallDelay = view.title ? 0 : 0.6
   /** Title screen ("attract mode"): the island turns slowly until start. */
   let attract = !!view.title
   const cloudBank = new T.Group()
@@ -1065,7 +1068,10 @@ export function startVillage(
     landingShadow.visible = !attract && !landed
     if (!landed && !inside) {
       if (fallT === 0) visitor.umbrella?.(true)
-      if (!paused && !attract) fallT += dt
+      if (!paused && !attract) {
+        if (fallDelay > 0) fallDelay -= dt
+        else fallT += dt
+      }
       const u = Math.min(1, fallT / FALL)
       const left = 1 - u
       p.set(
@@ -1127,7 +1133,7 @@ export function startVillage(
       if (!goal.length) ring.visible = false
     }
     // 0 while drifting down, easing to 1 after touchdown.
-    const intro = motion.matches || inside ? 1 : T.MathUtils.smoothstep(fallT, FALL + 0.35, FALL + 2.1)
+    const intro = inside ? 1 : T.MathUtils.smoothstep(fallT, FALL + 0.35, FALL + 2.1)
     const aspect = canvas.clientWidth / Math.max(1, canvas.clientHeight)
     const closeToPlaza =
       1 - T.MathUtils.smoothstep(Math.hypot(p.x + 5.7, p.z - 4.6), 2.6, 7.9)
@@ -1415,7 +1421,6 @@ export function startVillage(
     start() {
       if (!attract || iris.active()) return
       if (landed) {
-        // Reduced motion: no fall, straight onto the pier.
         attract = false
         snapCamera = true
         events.landed?.()
