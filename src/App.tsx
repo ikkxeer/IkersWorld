@@ -402,14 +402,13 @@ function App() {
   // the clouds fade, release the paused 3D visitor into the same descent.
   useEffect(() => {
     if (deep) return
-    const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches
-    const id = window.setTimeout(() => setArrivalShown(true), reduced ? 0 : 1850)
+    // Always shown in full, reduced motion included: it is the welcome.
+    const id = window.setTimeout(() => setArrivalShown(true), 1850)
     return () => window.clearTimeout(id)
   }, [deep])
   const arrivalHandoff = ready && arrivalShown
   useEffect(() => {
     if (!arrivalHandoff) return
-    if (matchMedia('(prefers-reduced-motion: reduce)').matches) setHud('shown')
     const id = window.setTimeout(() => setArrivalGone(true), 800)
     return () => window.clearTimeout(id)
   }, [arrivalHandoff])
