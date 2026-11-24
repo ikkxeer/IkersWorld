@@ -219,5 +219,16 @@ export function frameTransformation(
     offset.x += Math.sin(time * 63) * tremor
     offset.y += Math.cos(time * 51) * tremor * .65
   }
-  return mix(span, zoom, weight)
+  const shown = mix(span, zoom, weight)
+  // Never let the bottom edge of the frame dip under the islet's floor: the
+  // ground has no underside, so the blue background would flash through
+  // (worst with the shake on the low-angle shots).
+  for (let i = 0; i < 4; i++) {
+    const length = offset.length()
+    const level = Math.hypot(offset.x, offset.z) / Math.max(1e-4, length)
+    const deficit = center.y + .14 - (focus.y + offset.y - shown * level)
+    if (deficit <= 0) break
+    offset.y += deficit * 1.1
+  }
+  return shown
 }
