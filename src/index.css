@@ -2819,14 +2819,17 @@ kbd {
   transition: opacity 0.3s ease;
 }
 
-.screen:has(.power-cinematic)::after {
+.screen::after {
   content: '';
   position: absolute;
   inset: 0;
   z-index: 1;
   pointer-events: none;
   background: radial-gradient(ellipse at 50% 49%, transparent 30%, #18132475 100%);
+  opacity: 0;
+  transition: opacity .7s ease !important;
 }
+.screen:has(.power-cinematic)::after { opacity: 1; }
 
 .cinematic-overlay { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1; }
 .weather-select {

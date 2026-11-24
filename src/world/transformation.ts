@@ -226,8 +226,10 @@ export function frameTransformation(
     const strain = .010 + .062 * smooth(time, vortexTime, ruptureTime)
     const shock = age >= 0 ? .113 * (1 - smooth(age, 0, .5)) : 0
     const tremor = (strain * (1 - smooth(age, 0, .5)) + shock) * entry
-    transformationShake.x = Math.sin(time * 63) * tremor
-    transformationShake.y = Math.cos(time * 51) * tremor * .65
+    // Two slow-ish waves: a rumble rather than a strobe, and smooth at any
+    // refresh rate (a single fast sine aliases into visible jumps).
+    transformationShake.x = (Math.sin(time * 23) * .65 + Math.sin(time * 37 + 1.3) * .35) * tremor
+    transformationShake.y = (Math.cos(time * 19) * .6 + Math.cos(time * 31 + .7) * .4) * tremor * .65
   }
   const shown = mix(span, zoom, weight)
   // Never let the bottom edge of the frame dip under the islet's floor: the

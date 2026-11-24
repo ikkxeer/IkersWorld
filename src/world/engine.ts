@@ -300,6 +300,7 @@ export function startVillage(
   scene.add(pebbles)
   /** Training: walk to the centre of the ring, then the power-up. */
   let training: { stage: 'walk' | 'power'; t: number } | null = null
+  let cineLook = 0
   function beginTraining() {
     if (training || inside || rest) return
     const p = visitor.group.position
@@ -1028,6 +1029,8 @@ export function startVillage(
     const powerTime = training?.stage === 'power' ? training.t : null
     transformation.update(powerTime, false)
     canvas.classList.toggle('power-cinematic', powerTime !== null)
+    // Ease the crisp cinematic grade in and out instead of popping it.
+    cineLook = T.MathUtils.damp(cineLook, Number(powerTime !== null), 3, dt)
     if (powerTime !== null) {
       const charge = T.MathUtils.smoothstep(powerTime, wideTime, vortexTime + 1.8)
       const departure = T.MathUtils.smoothstep(powerTime, ruptureTime, ruptureTime + .85)
@@ -1093,7 +1096,7 @@ export function startVillage(
         landingShadow.visible = false
       }
     } else if (landed && fallT < FALL + 3 && !paused) fallT += dt
-    visitor.animate(elapsed, motion.matches && powerTime === null, {
+    visitor.animate(elapsed, motion.matches && powerTime === null && cineLook < 0.02, {
       distance,
       speed,
       turn,
@@ -1186,13 +1189,15 @@ export function startVillage(
     }
     focus.lerp(
       desired,
-      snapCamera || (motion.matches && !steer)
+      snapCamera || (motion.matches && !steer && cineLook < 0.02 && focus.distanceToSquared(desired) < 0.01)
         ? 1
         : steer > 0
           ? 1 - Math.exp(-dt * 7)
           : inside || intro < 0.02
             ? 1
-            : 1 - Math.exp(-dt * (intro < 1 ? 6 : 3)),
+            // Right after the transformation the follow eases in, so the camera
+            // glides back instead of lurching off the islet.
+            : 1 - Math.exp(-dt * (intro < 1 ? 6 : 3) * (1 - .9 * cineLook)),
     )
     snapCamera = false
     const streetSpan =
@@ -1338,7 +1343,7 @@ export function startVillage(
       lastShadow = stamp
     }
     const current = inside ? rooms[inside].scene : scene
-    if (post) post.render(current, { night: inside ? 0.35 : night, golden: inside ? 0 : golden, inside: !!inside, time: elapsed, cinematic: powerTime !== null }, dt)
+    if (post) post.render(current, { night: inside ? 0.35 : night, golden: inside ? 0 : golden, inside: !!inside, time: elapsed, cinematic: cineLook }, dt)
     else renderer.render(current, camera)
     perf.cpu = perf.cpu * 0.9 + (performance.now() - started) * 0.1
     perf.calls = renderer.info.render.calls
