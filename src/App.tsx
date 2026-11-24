@@ -1,6 +1,6 @@
 import { stations } from './data/gallery'
 import type { Interior } from './world/contracts'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import {
   Compass,
@@ -46,10 +46,10 @@ import type {
 import Game from './ui/Game'
 import Arrival from './ui/Arrival'
 import Title from './ui/Title'
-import Wardrobe from './ui/Wardrobe'
+const Wardrobe = lazy(() => import('./ui/Wardrobe'))
 import { loadOutfit, saveOutfit } from './data/outfits'
 import type { MapPlace } from './data/places'
-import Journal from './ui/Panel'
+const Journal = lazy(() => import('./ui/Panel'))
 import VillageMap, { ZoneIcon } from './ui/Map'
 const languageNames = { es: 'Español', ca: 'Català', en: 'English' }
 const titleKey = 'ikers-world-title'
@@ -412,7 +412,9 @@ function App() {
     const id = setTimeout(() => setArrivalGone(true), 800)
     return () => clearTimeout(id)
   }, [ready])
-  const hasCover = light || !ready
+  // The painted cover only shows in light (map-only) mode; while the 3D
+  // island loads, the arrival screen is on top anyway.
+  const hasCover = light
   return (
     <main
       className={
@@ -436,6 +438,7 @@ function App() {
         />
       )}
       {wardrobe && (
+        <Suspense fallback={null}>
         <Wardrobe
           lang={lang}
           current={outfit}
@@ -453,6 +456,7 @@ function App() {
             ctl.current?.wear(id)
           }}
         />
+        </Suspense>
       )}
       {welcome && !panel && (
         <div className="welcome-banner" role="status">
@@ -703,6 +707,7 @@ function App() {
         </button>
       </footer>
       {panel && (
+        <Suspense fallback={null}>
         <Journal
           page={panel}
           lang={lang}
@@ -720,6 +725,7 @@ function App() {
             setPanel('map')
           }}
         />
+        </Suspense>
       )}
     </main>
   )

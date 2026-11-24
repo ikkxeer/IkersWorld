@@ -33,7 +33,7 @@ const blocks: [Zone, number, number][] = [
   ['skills', 2.03, 1.52],
 ]
 export function walkable(x: number, z: number) {
-  if (Math.abs(x - 2.5) < 0.63 && z > shape.pierFrom - 0.4 && z < shape.pierTo - 0.3) return true
+  if (Math.abs(x - 2.5) < 0.78 && z > shape.pierFrom - 1.2 && z < shape.pierTo - 0.3) return true
   const nearby = cells.get(cellKey(Math.floor(x), Math.floor(z)))
   if (nearby?.some(([ox, oz, r]) => (x - ox) ** 2 + (z - oz) ** 2 < r ** 2))
     return false

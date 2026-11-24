@@ -316,7 +316,7 @@ function bush(b: Batch, x: number, z: number, s: number, c: string, bloom?: stri
         s * 0.43,
       ],
       c,
-      leafDetail,
+      1,
       [0, i + 0.4, 0],
       b.kit.leaf,
     )
@@ -378,7 +378,7 @@ function tree(
           [cx + Math.cos(a) * r * 0.78, y - h * 0.4, z + Math.sin(a) * r * 0.78],
           [0.34 * s * (1 - j * 0.15), 0.1 * s, 0.26 * s * (1 - j * 0.15)],
           tiers[j],
-          1,
+          0,
           [0, -a, 0.38],
           b.kit.leaf,
         )
@@ -436,7 +436,7 @@ function tree(
         [cx + dx, (1.75 + (j % 3) * 0.22) * s, z + dz],
         blossom ? [0.1 * s, 0.09 * s, 0.1 * s] : [0.14 * s, 0.15 * s, 0.14 * s],
         blossom ? '#fff1f3' : j % 2 ? '#f29a5e' : '#e2784f',
-        1,
+        0,
       )
     }
 }
@@ -444,42 +444,23 @@ function tree(
 function tulip(b: Batch, x: number, z: number, c: string, r: number) {
   const h = 0.27 + 0.1 * r
   b.stick([x, 0.1, z], [x, h, z], 0.014, '#6e9256', 4)
-  b.ball([x + 0.04, h * 0.55, z], [0.1, 0.03, 0.035], '#7ba561', 0, [0, r * 3, 0.5], b.kit.petals)
+  b.ball([x + 0.04, h * 0.55, z], [0.1, 0.03, 0.035], '#7ba561', -1, [0, r * 3, 0.5], b.kit.petals)
   for (let j = 0; j < 3; j++) {
     const a = (j * Math.PI * 2) / 3 + r
-    b.ball([x + Math.cos(a) * 0.03, h + 0.04, z + Math.sin(a) * 0.03], [0.05, 0.075, 0.05], c, 0, [0, a, 0], b.kit.petals)
+    b.ball([x + Math.cos(a) * 0.03, h + 0.04, z + Math.sin(a) * 0.03], [0.05, 0.075, 0.05], c, -1, [0, a, 0], b.kit.petals)
   }
 }
 function flower(b: Batch, x: number, z: number, c: string, r: number) {
+  // Tiny at this camera distance: octahedral petals read as soft blobs at a
+  // fraction of the triangles.
   const h = 0.24 + 0.11 * r
-  b.stick([x, 0.1, z], [x, h, z], 0.014, '#6e9256', 4)
-  b.ball(
-    [x - 0.045, h * 0.6, z],
-    [0.1, 0.034, 0.035],
-    '#7ba561',
-    0,
-    [0, 0, -0.5],
-    b.kit.petals,
-  )
+  b.stick([x, 0.1, z], [x, h, z], 0.014, '#6e9256', 3)
+  b.ball([x - 0.045, h * 0.6, z], [0.1, 0.034, 0.035], '#7ba561', -1, [0, 0, -0.5], b.kit.petals)
   for (let j = 0; j < 5; j++) {
     const a = (j * Math.PI * 2) / 5 + r
-    b.ball(
-      [x + Math.cos(a) * 0.065, h, z + Math.sin(a) * 0.065],
-      [0.08, 0.042, 0.072],
-      c,
-      0,
-      [0, a, 0],
-      b.kit.petals,
-    )
+    b.ball([x + Math.cos(a) * 0.065, h, z + Math.sin(a) * 0.065], [0.08, 0.042, 0.072], c, -1, [0, a, 0], b.kit.petals)
   }
-  b.ball(
-    [x, h + 0.028, z],
-    [0.053, 0.046, 0.053],
-    '#efc45a',
-    0,
-    [0, 0, 0],
-    b.kit.petals,
-  )
+  b.ball([x, h + 0.028, z], [0.053, 0.046, 0.053], '#efc45a', -1, [0, 0, 0], b.kit.petals)
 }
 function sign(kit: ModelKit) {
   const b = new Batch(kit)

@@ -203,3 +203,6 @@ export const kindNames: Record<PlaceKind, Record<Lang, string>> = {
   activity: { es: 'Actividades', ca: 'Activitats', en: 'Activities' },
   nook: { es: 'Rincones', ca: 'Racons', en: 'Nooks' },
 }
+
+/** The world's extent on the map (x across, z down). */
+export const WORLD = { x: -31.5, z: -16.5, w: 54, h: 36 }

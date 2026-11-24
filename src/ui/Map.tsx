@@ -1,6 +1,6 @@
 import { House, FlaskConical, PanelsTopLeft, TrainFront, Coffee, Mail } from 'lucide-react'
 import type { Lang, Zone } from '../data/village'
-import { AtlasMini } from './Atlas'
+import { AtlasMini } from './AtlasArt'
 
 const icons = {
   about: House,

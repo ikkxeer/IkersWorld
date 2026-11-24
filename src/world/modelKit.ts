@@ -242,8 +242,30 @@ function paintGround(
   material.customProgramCacheKey = () => 'island-' + kind
 }
 
+const CELL = 12
+
 export class Batch {
-  private parts = new Map<T.Material, T.BufferGeometry[]>()
+  /** Parts grouped by material and by 8×8 world cell, so the merged
+   * meshes stay local and the renderer can skip those out of view. */
+  private parts = new Map<string, { material: T.Material; geometries: T.BufferGeometry[] }>()
+  private materialIds = new Map<T.Material, number>()
+  private store(geo: T.BufferGeometry, material: T.Material) {
+    geo.computeBoundingBox()
+    const box = geo.boundingBox!
+    const sizeX = box.max.x - box.min.x,
+      sizeZ = box.max.z - box.min.z
+    // Big pieces (terrain, long paths) go in a shared bucket; the rest by cell.
+    const cell =
+      Math.max(sizeX, sizeZ) > CELL
+        ? 'big'
+        : Math.floor((box.min.x + box.max.x) / 2 / CELL) + ':' + Math.floor((box.min.z + box.max.z) / 2 / CELL)
+    let id = this.materialIds.get(material)
+    if (id === undefined) this.materialIds.set(material, (id = this.materialIds.size))
+    const key = id + '|' + cell
+    const bucket = this.parts.get(key) ?? { material, geometries: [] }
+    bucket.geometries.push(geo)
+    this.parts.set(key, bucket)
+  }
   readonly kit: ModelKit
   readonly group = new T.Group()
   constructor(kit: ModelKit) {
@@ -281,9 +303,7 @@ export class Batch {
         new T.Vector3(...s),
       ),
     )
-    const items = this.parts.get(material) ?? []
-    items.push(geo)
-    this.parts.set(material, items)
+    this.store(geo, material)
   }
   block(
     p: XYZ,
@@ -307,7 +327,8 @@ export class Batch {
         () => {
           // Smooth (radial) normals everywhere, so shared corners can be
           // welded into an index and small blobs shade softly.
-          const g = new T.IcosahedronGeometry(1, detail)
+          // detail -1: an octahedron, plenty for tiny petals and pebbles.
+          const g = detail < 0 ? new T.OctahedronGeometry(1, 0) : new T.IcosahedronGeometry(1, detail)
           const p = g.attributes.position
           const n = new T.Vector3()
           for (let i = 0; i < p.count; i++) {
@@ -425,10 +446,14 @@ export class Batch {
     )
   }
   finish() {
-    for (const [material, parts] of this.parts) {
+    for (const { material, geometries: parts } of this.parts.values()) {
       const geometry = mergeGeometries(parts)
       parts.forEach((g) => g.dispose())
       if (geometry) {
+        // The diorama bend lowers distant things into view, so cull with a
+        // little slack to avoid popping at the screen edges.
+        geometry.computeBoundingSphere()
+        geometry.boundingSphere!.radius += 3
         const mesh = new T.Mesh(geometry, material)
         // Ground and tiny flowers only receive shadows: casting them would
         // re-render the whole lawn and hundreds of petals in the shadow pass.

@@ -69,7 +69,8 @@ export interface PostLook {
  * then the grade and tone mapping.
  */
 export function createPostFX(renderer: T.WebGLRenderer, scene: T.Scene, camera: T.Camera) {
-  const target = new T.WebGLRenderTarget(1, 1, { type: T.HalfFloatType, samples: 4 })
+  // On dense screens the extra pixels already smooth edges: fewer MSAA samples.
+  const target = new T.WebGLRenderTarget(1, 1, { type: T.HalfFloatType, samples: devicePixelRatio > 1.4 ? 2 : 4 })
   const composer = new EffectComposer(renderer, target)
   const render = new RenderPass(scene, camera)
   const bloom = new UnrealBloomPass(new T.Vector2(256, 256), 0.3, 0.6, 0.9)
@@ -86,6 +87,9 @@ export function createPostFX(renderer: T.WebGLRenderer, scene: T.Scene, camera: 
     height = 1
   return {
     setSize(w: number, h: number, ratio: number) {
+      // The tilt-shift and bloom soften the image anyway: past 1.5× extra
+      // resolution costs a lot of fill rate for little visible gain.
+      ratio = Math.min(ratio, 1.5)
       composer.setPixelRatio(ratio)
       composer.setSize(w, h)
       width = w * ratio

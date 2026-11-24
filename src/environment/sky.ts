@@ -12,6 +12,7 @@ export function makeSky(scene: T.Scene, low: boolean) {
   scene.fog = fog
   const hemi = new T.HemisphereLight(0xfff6d8, 0xb7d08c, 1.75)
   const sun = new T.DirectionalLight(0xffecc6, 2.6)
+  const sunOffset = new T.Vector3(0, 30, -10)
   sun.castShadow = true
   sun.shadow.mapSize.set(low ? 1024 : 2048, low ? 1024 : 2048)
   Object.assign(sun.shadow.camera, {
@@ -142,11 +143,10 @@ export function makeSky(scene: T.Scene, low: boolean) {
     sun.color.set(s.a[3]).lerp(tmp.set(s.b[3]), s.mix)
     sun.intensity = s.intensity
     const angle = ((s.hour - 6) / 12) * Math.PI
-    sun.position.set(
-      -Math.cos(angle) * 19,
-      7 + Math.abs(Math.sin(angle)) * 24,
-      -10,
-    )
+    // Direction only: the engine places the light (and its shadow box)
+    // around whatever the camera is looking at.
+    sunOffset.set(-Math.cos(angle) * 19, 7 + Math.abs(Math.sin(angle)) * 24, -10)
+    sun.position.copy(sun.target.position).add(sunOffset)
     hemi.intensity = 1.65 - s.night * 0.94
     hemi.color.set('#fff3d8').lerp(tmp.set('#b6cfff'), s.night)
     // Golden hour: rosy sky light, violet bounce from the ground and a
@@ -167,8 +167,20 @@ export function makeSky(scene: T.Scene, low: boolean) {
     )
     return s.night
   }
+  scene.add(sun.target)
   return {
     update,
+    /** Centre the sun's shadow box on (x, z) with the given half-size. */
+    shadeAround(x: number, z: number, radius: number) {
+      sun.target.position.set(x, 0, z)
+      sun.position.copy(sun.target.position).add(sunOffset)
+      const cam = sun.shadow.camera
+      if (cam.right !== radius) {
+        cam.left = cam.bottom = -radius
+        cam.right = cam.top = radius
+        cam.updateProjectionMatrix()
+      }
+    },
     animate: (t: number) => {
       if (nightLevel > 0.6 && t > nextStreak) {
         streakStart = t

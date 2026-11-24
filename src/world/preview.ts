@@ -7,6 +7,8 @@ import { outfits } from '../data/outfits'
  * slowly spinning so each outfit can be seen from every side, plus
  * pre-rendered thumbnails for the outfit grid.
  */
+const portraitCache = new Map<string, string>()
+
 export function createOutfitStage(canvas: HTMLCanvasElement, reduced: boolean) {
   const renderer = new T.WebGLRenderer({ canvas, antialias: true, alpha: true })
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2))
@@ -114,6 +116,13 @@ export function createOutfitStage(canvas: HTMLCanvasElement, reduced: boolean) {
     },
     /** Render a front-facing portrait of every outfit, one per idle frame. */
     async thumbnails(size = 160, done: (id: string, url: string) => void) {
+      // Portraits never change: render them once per page load.
+      const missing = outfits.filter((o) => {
+        const url = portraitCache.get(o.id)
+        if (url) done(o.id, url)
+        return !url
+      })
+      if (!missing.length) return
       const shot = new T.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true })
       shot.setSize(size, size, false)
       shot.outputColorSpace = T.SRGBColorSpace
@@ -123,7 +132,7 @@ export function createOutfitStage(canvas: HTMLCanvasElement, reduced: boolean) {
       portrait.lookAt(0, 0.85, 0)
       const studio = new T.Scene()
       studio.add(new T.HemisphereLight('#fff6e4', '#b7a6d6', 2), key.clone(), rim.clone())
-      for (const outfit of outfits) {
+      for (const outfit of missing) {
         if (dead) break
         const model = createVisitor(outfit.id)
         model.group.scale.setScalar(1.36)
@@ -131,7 +140,9 @@ export function createOutfitStage(canvas: HTMLCanvasElement, reduced: boolean) {
         model.animate(1, true, { distance: 0, speed: 0, turn: 0 }, null)
         studio.add(model.group)
         shot.render(studio, portrait)
-        done(outfit.id, shot.domElement.toDataURL('image/png'))
+        const url = shot.domElement.toDataURL('image/webp', 0.9)
+        portraitCache.set(outfit.id, url)
+        done(outfit.id, url)
         studio.remove(model.group)
         model.group.traverse((o) => {
           if (o instanceof T.Mesh) o.geometry.dispose()
