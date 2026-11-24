@@ -1195,48 +1195,6 @@ export function createVisitor(initialOutfit?: string): IslandCharacter {
     return { mesh, age: 1, drift: new THREE.Vector3() }
   })
   let nextPuff = 0
-  // Billowing smoke: a ring that rolls outward on the burst, and dust that
-  // swirls around the feet while the energy gathers.
-  const smokeMaterial = () => new THREE.MeshLambertMaterial({ color: '#efe4cf', emissive: '#4a3a22', transparent: true, opacity: 0, depthWrite: false })
-  const smoke = Array.from({ length: 22 }, () => {
-    const mesh = new THREE.Mesh(puffGeometry, smokeMaterial())
-    mesh.visible = false
-    effects.add(mesh)
-    return { mesh, age: 1, life: 1, size: 1, vel: new THREE.Vector3(), spin: 0 }
-  })
-  let nextSmoke = 0
-  const smokeOrigin = new THREE.Vector3()
-  function puffSmoke(angle: number, speed: number, rise: number, size: number, life: number, radius = 0.15) {
-    const s = smoke[nextSmoke]
-    nextSmoke = (nextSmoke + 1) % smoke.length
-    group.getWorldPosition(smokeOrigin)
-    s.age = 0
-    s.life = life
-    s.size = size
-    s.spin = (random() - 0.5) * 2
-    s.mesh.visible = true
-    s.mesh.position.set(smokeOrigin.x + Math.cos(angle) * radius, smokeOrigin.y + 0.06, smokeOrigin.z + Math.sin(angle) * radius)
-    s.vel.set(Math.cos(angle) * speed, rise, Math.sin(angle) * speed)
-  }
-  function updateSmoke(dt: number) {
-    for (const s of smoke) {
-      if (!s.mesh.visible) continue
-      s.age += dt / s.life
-      if (s.age >= 1) {
-        s.mesh.visible = false
-        continue
-      }
-      const k = 1 - s.age
-      s.vel.multiplyScalar(Math.exp(-dt * 2.6))
-      s.vel.y += dt * 0.25
-      s.mesh.position.addScaledVector(s.vel, dt)
-      s.mesh.rotation.y += s.spin * dt
-      const grow = s.size * (0.35 + 0.9 * Math.sqrt(s.age))
-      s.mesh.scale.set(grow, grow * 0.72, grow)
-      ;(s.mesh.material as THREE.MeshLambertMaterial).opacity = 0.62 * Math.min(1, s.age * 8) * k * k
-    }
-  }
-  let swirlNext = 0
   const footWorld = new THREE.Vector3()
   function kickDust(foot: THREE.Object3D, strength: number) {
     foot.getWorldPosition(footWorld)
@@ -1822,7 +1780,10 @@ export function createVisitor(initialOutfit?: string): IslandCharacter {
     if (powerT < transformationEnd && powerT >= ruptureTime && (lastPowerTime === null || lastPowerTime < ruptureTime)) {
       dress({ ...base, hair: '#f6c63c', hairLight: '#fff09a', hairStyle: 'spiky' })
       golden = 14
-      if (!reduced) for (let i = 0; i < 16; i++) puffSmoke((i / 16) * TAU + random() * 0.3, 3.4 + random() * 1.6, 0.15 + random() * 0.35, 0.22 + random() * 0.1, 1.5 + random() * 0.6, 0.35)
+      for (const leg of legs) {
+        kickDust(leg.shoe, 2.6)
+        kickDust(leg.shoe, 2.2)
+      }
     }
     lastPowerTime = move?.powerTime ?? null
     if (golden > 0) {

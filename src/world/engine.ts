@@ -344,9 +344,6 @@ export function startVillage(
   let lookout = 0
   let skyReveal = 0
   let cozy = 0
-  /** Power-up cinematic: camera blend and the last timeline moment seen. */
-  let cine = 0
-  let cineT = 0
   let running = false
   /** A tree the visitor is walking over to shake, and where to face. */
   let pendingShake: [number, number] | null = null
@@ -1217,26 +1214,6 @@ export function startVillage(
       cameraOffset.set(radius * Math.sin(yaw), T.MathUtils.lerp(19, 0.13 - night * 0.28, lookout), radius * Math.cos(yaw))
       focus.lerp(steerTarget.set(p.x + 4, 1.45 + night * 0.6, p.z + 4), lookout)
     }
-    // Power-up cinematic: drop to a heroic low angle, sweep a full 360 around
-    // the visitor while the energy gathers, punch in, then pull up high on the burst.
-    if (training?.stage === 'power') cineT = training.t
-    cine = motion.matches ? 0 : T.MathUtils.damp(cine, Number(training?.stage === 'power' && cineT < 4.2), cineT < 4.2 ? 3.2 : 1.6, dt)
-    let cineZoom = 1
-    if (cine > 0.001) {
-      const t = cineT
-      const sweep = T.MathUtils.smootherstep(t, 0.15, 3.3)
-      const yaw = Math.atan2(8, 27) + Math.PI * 2 * sweep
-      const low = t < 2.8 ? T.MathUtils.smoothstep(t, 0.1, 1.2) * (1 - 0.35 * T.MathUtils.smoothstep(t, 1.9, 2.8)) : 1 - T.MathUtils.smoothstep(t, 2.8, 3.5)
-      const height = T.MathUtils.lerp(t < 2.8 ? 9 : 14, 0.75, low)
-      const radius = T.MathUtils.lerp(20, 3.3, low)
-      steerTarget.set(radius * Math.sin(yaw), height, radius * Math.cos(yaw))
-      cameraOffset.lerp(steerTarget, cine)
-      focus.lerp(steerTarget.set(p.x, p.y + 0.85 + 0.25 * low, p.z), cine)
-      // Tighten as power builds, a sharp punch-in at the burst, then breathe out.
-      const punch = t >= 2.8 ? Math.exp(-(t - 2.8) * 7) : 0
-      const zoom = t < 2.8 ? T.MathUtils.lerp(1.15, 0.62, T.MathUtils.smoothstep(t, 0.3, 2.75)) : T.MathUtils.lerp(0.62, 1.25, T.MathUtils.smoothstep(t, 2.85, 3.7)) - 0.18 * punch
-      cineZoom = T.MathUtils.lerp(1, zoom, cine)
-    }
     if (attract) {
       // A slow establishing orbit around the whole island.
       const a = motion.matches ? 0.3 : 0.3 + elapsed * 0.05
@@ -1244,10 +1221,16 @@ export function startVillage(
       focus.set(0, 0, 1.5)
     }
     // A gentle diorama curve outdoors; rooms stay flat.
-    worldCurve.value = inside ? 0 : 0.0072 * (1 - lookout) * (1 - 0.8 * cine)
+    worldCurve.value = inside ? 0 : 0.0072 * (1 - lookout)
     worldCurveFocus.value = cameraOffset.length()
-    const shownBase = attract ? (aspect < 0.9 ? 22 : 13.5) : T.MathUtils.lerp(T.MathUtils.lerp(span, guideDestination ? (aspect < .9 ? 6.6 : 4.9) : (aspect < .9 ? 4.1 : 3.35), guideFrame), aspect < 0.9 ? 3.1 : 2.45, lookout)
-    const shown = shownBase * (cine > 0.001 ? T.MathUtils.lerp(1, (aspect < 0.9 ? 3.6 : 2.6) / Math.max(0.01, shownBase), cine) * cineZoom : 1)
+    let shown = attract ? (aspect < 0.9 ? 22 : 13.5) : T.MathUtils.lerp(T.MathUtils.lerp(span, guideDestination ? (aspect < .9 ? 6.6 : 4.9) : (aspect < .9 ? 4.1 : 3.35), guideFrame), aspect < 0.9 ? 3.1 : 2.45, lookout)
+    if (powerTime !== null && !inside) {
+      visitor.trainingAnchors?.(trainingFace, trainingFist)
+      shown = frameTransformation(powerTime, motion.matches, ringCenter, trainingFace, trainingFist,
+        trainingHeading, focus, cameraOffset, aspect, shown)
+      worldCurve.value *= T.MathUtils.smoothstep(powerTime, transformationEnd - 1.4, transformationEnd)
+      worldCurveFocus.value = cameraOffset.length()
+    }
     camera.left = -shown * aspect
     camera.right = shown * aspect
     camera.top = shown
